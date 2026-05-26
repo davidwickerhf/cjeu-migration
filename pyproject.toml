@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cjeu-migration"
+version = "0.1.0"
+description = "Orchestrates full-corpus CJEU/CELLAR extraction and publishes the result as a HuggingFace dataset."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Maastricht Law & Tech Lab" },
+]
+
+dependencies = [
+    # Live wire to the upstream extractor's dev branch. Once a release tag
+    # lands on PyPI we'll pin to that instead.
+    "cellar-extractor @ git+https://github.com/maastrichtlawtech/cellar-extractor.git@dev",
+    "pandas>=2.0",
+    "pyarrow>=14.0",                # parquet writer / reader
+    "huggingface_hub>=0.24",
+    "datasets>=2.18",
+    "python-dotenv>=1.0",
+    "tenacity>=8.2",                # retries with exponential backoff
+    "structlog>=24.1",              # structured JSON logging for long runs
+    "click>=8.1",                   # CLI
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-cov>=5.0",
+]
+
+[project.scripts]
+cjeu-migrate = "cjeu_migration.cli:main"
+
+[tool.setuptools]
+packages = ["cjeu_migration"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "smoke: live end-to-end smoke test against CELLAR (gated by RUN_SMOKE=1)",
+]

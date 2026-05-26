@@ -1,0 +1,24 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtualenv ---
+.venv/
+venv/
+.env
+
+# --- Project state ---
+workspace/
+out/
+
+# --- Tooling ---
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- OS ---
+.DS_Store
