@@ -20,6 +20,7 @@ from typing import Callable, List, Optional
 
 from cjeu_migration.config import Config
 from cjeu_migration.consolidate import (
+    compute_coverage_stats,
     consolidate_cases,
     consolidate_fulltexts,
     copy_fields_md,
@@ -199,6 +200,7 @@ def _consolidate(config: Config):
         c for c in cases_df.columns
         if c not in canonical_columns and not c.startswith("__")
     )
+    coverage_stats = compute_coverage_stats(cases_df, fulltexts_df)
     write_dataset_card(
         config.consolidated_dir / "README.md",
         cases_rows=len(cases_df),
@@ -208,6 +210,7 @@ def _consolidate(config: Config):
         canonical_columns=canonical_columns,
         discovered_columns=discovered_columns,
         hf_dataset_repo=config.hf_dataset_repo,
+        coverage_stats=coverage_stats,
     )
     copy_fields_md(config.consolidated_dir / "FIELDS.md")
     return cases_df, fulltexts_df

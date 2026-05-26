@@ -21,9 +21,57 @@ from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 
 log = logging.getLogger(__name__)
+
+# Row-group sizing for the published parquet files.
+#
+# The HuggingFace dataset viewer streams a parquet file by row group, with a
+# hard 300 MB scan cap per request. A single 300 k+ row, 100+ column corpus
+# with one row group quickly blows past that and the viewer dies with
+# `TooBigContentError`. Splitting the file into many small row groups lets
+# the viewer (and `datasets.load_dataset(streaming=True)`) pull just what
+# they need without loading the whole table.
+#
+# At ~50 KB / case row, 2_000 rows ≈ 100 MB uncompressed → ~25 MB on disk
+# with zstd. For fulltexts (~30 KB plain text average), 500 rows ≈ 15 MB.
+# Both stay comfortably under the 300 MB viewer cap with headroom.
+CASES_ROW_GROUP_SIZE = 2_000
+FULLTEXTS_ROW_GROUP_SIZE = 500
+
+
+def _write_parquet(df: pd.DataFrame, output_path: Path, row_group_size: int) -> None:
+    """Persist *df* as a viewer-friendly parquet file.
+
+    Three switches matter for downstream tooling:
+
+    * ``row_group_size`` — many small groups instead of one giant one, so
+      tools that scan-by-row-group (HF viewer, ``datasets`` streaming) can
+      do random access.
+    * ``write_page_index=True`` — adds the column + offset indexes so a
+      reader can seek directly to the row group it needs without scanning
+      the row-group footer first.
+    * ``compression="zstd"`` — smaller files and faster decode than the
+      pandas default (``snappy``). Roughly 30-40 % smaller on this data.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if df.empty:
+        # Pandas + pyarrow won't write a row_group_size'd file for an empty
+        # frame, so just emit the header. The HF viewer is fine with empties.
+        df.to_parquet(output_path, index=False, compression="zstd")
+        return
+
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(
+        table,
+        output_path,
+        row_group_size=row_group_size,
+        compression="zstd",
+        write_page_index=True,
+    )
 
 
 def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
@@ -36,8 +84,7 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     if not csv_files:
         log.warning("no window CSV files found in %s", window_csv_dir)
         df = pd.DataFrame()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(output_path, index=False)
+        _write_parquet(df, output_path, CASES_ROW_GROUP_SIZE)
         return df
 
     frames: List[pd.DataFrame] = []
@@ -57,8 +104,7 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     else:
         df = pd.concat(frames, ignore_index=True, sort=False)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_path, index=False)
+    _write_parquet(df, output_path, CASES_ROW_GROUP_SIZE)
     log.info("wrote %d cases rows -> %s", len(df), output_path)
     return df
 
@@ -74,8 +120,7 @@ def consolidate_fulltexts(window_json_dir: Path, output_path: Path) -> pd.DataFr
     if not json_files:
         log.warning("no fulltext JSON files found in %s", window_json_dir)
         df = pd.DataFrame()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(output_path, index=False)
+        _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
         return df
 
     rows: List[dict] = []
@@ -100,10 +145,169 @@ def consolidate_fulltexts(window_json_dir: Path, output_path: Path) -> pd.DataFr
             rows.append(entry)
 
     df = pd.DataFrame(rows) if rows else pd.DataFrame()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_path, index=False)
+    _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
     log.info("wrote %d fulltext rows -> %s", len(df), output_path)
     return df
+
+
+def compute_coverage_stats(
+    cases_df: pd.DataFrame,
+    fulltexts_df: pd.DataFrame,
+) -> dict:
+    """Return summary statistics for the dataset card's Coverage section.
+
+    Built from the *already consolidated* DataFrames so it costs one pass and
+    can be unit-tested without round-tripping through parquet. Empty inputs
+    yield a structured "no data" result rather than raising — important for
+    the empty-corpus path.
+
+    Returned dict shape::
+
+        {
+            "decade_table":   [(decade, cases, with_text, coverage_pct), ...],
+            "sector_table":   [(sector, cases, pct), ...],
+            "fulltext_total":      int,
+            "fulltext_with_text":  int,
+            "fulltext_languages":  [(lang, count), ...],   # top 10
+            "missing_reason_top":  [(reason, count), ...], # top 5
+            "dup_ecli_count":      int,
+        }
+    """
+    out: dict = {
+        "decade_table": [],
+        "sector_table": [],
+        "fulltext_total": int(len(fulltexts_df)),
+        "fulltext_with_text": 0,
+        "fulltext_languages": [],
+        "missing_reason_top": [],
+        "dup_ecli_count": 0,
+    }
+
+    if cases_df.empty:
+        return out
+
+    # ---- decade coverage (uses date_publication = CDM work_date_document) ----
+    if "date_publication" in cases_df.columns and "ecli" in cases_df.columns:
+        # Multi-valued cells (";" separated). Take the earliest token.
+        def _first(v):
+            if pd.isna(v):
+                return None
+            parts = [p.strip() for p in str(v).split(";") if p.strip()]
+            return min(parts) if parts else None
+
+        dt = pd.to_datetime(
+            cases_df["date_publication"].map(_first),
+            errors="coerce",
+            utc=True,
+        )
+        decade = (dt.dt.year // 10 * 10).astype("Int64")
+
+        # text presence — derived from the case's matching fulltext row.
+        if not fulltexts_df.empty and "text" in fulltexts_df.columns:
+            has_text_ecli = set(
+                fulltexts_df.loc[
+                    fulltexts_df["text"].astype("string").str.len().fillna(0) >= 200,
+                    "ecli",
+                ].dropna()
+            )
+        else:
+            has_text_ecli = set()
+        with_text = cases_df["ecli"].isin(has_text_ecli)
+
+        grouped = (
+            pd.DataFrame({"decade": decade, "with_text": with_text})
+            .dropna(subset=["decade"])
+            .groupby("decade", observed=True)
+        )
+        for dec, sub in grouped:
+            n = len(sub)
+            wt = int(sub["with_text"].sum())
+            pct = round(100 * wt / n, 1) if n else 0.0
+            out["decade_table"].append((int(dec), n, wt, pct))
+        out["decade_table"].sort()
+
+    # ---- sector split (split multi-sector cells like "6;8" into atoms) ----
+    if "sector" in cases_df.columns:
+        atoms = (
+            cases_df["sector"]
+            .astype("string")
+            .fillna("")
+            .str.split(";")
+            .explode()
+            .str.strip()
+        )
+        atoms = atoms[atoms != ""]
+        total = len(atoms) or 1
+        for sec, n in atoms.value_counts().items():
+            out["sector_table"].append((str(sec), int(n), round(100 * n / total, 1)))
+
+    # ---- fulltext-side stats ----
+    if not fulltexts_df.empty:
+        if "text" in fulltexts_df.columns:
+            txt_len = fulltexts_df["text"].astype("string").str.len().fillna(0)
+            out["fulltext_with_text"] = int((txt_len >= 200).sum())
+        if "text_language" in fulltexts_df.columns:
+            lang = fulltexts_df["text_language"].astype("string").fillna("")
+            lang = lang[lang.str.len() > 0]
+            out["fulltext_languages"] = [
+                (str(k), int(v)) for k, v in lang.value_counts().head(10).items()
+            ]
+        if "missing_reasons" in fulltexts_df.columns:
+            reasons = (
+                fulltexts_df["missing_reasons"]
+                .astype("string")
+                .fillna("")
+                .str.split(";")
+                .explode()
+                .str.strip()
+            )
+            reasons = reasons[reasons != ""]
+            out["missing_reason_top"] = [
+                (str(k), int(v)) for k, v in reasons.value_counts().head(5).items()
+            ]
+
+    # ---- ECLI-duplicate count (post-consolidation) ----
+    if "ecli" in cases_df.columns:
+        dup_eclis = cases_df["ecli"].dropna()
+        out["dup_ecli_count"] = int(
+            len(dup_eclis) - dup_eclis.nunique()
+        )
+
+    return out
+
+
+def _format_decade_table(rows: list) -> str:
+    if not rows:
+        return "_(no date_publication data available)_"
+    lines = [
+        "| Decade | Cases | With fulltext | Coverage |",
+        "|---|---:|---:|---:|",
+    ]
+    for dec, n, wt, pct in rows:
+        lines.append(f"| {dec}s | {n:,} | {wt:,} | {pct}% |")
+    return "\n".join(lines)
+
+
+def _format_sector_table(rows: list) -> str:
+    if not rows:
+        return "_(no sector data)_"
+    label = {"6": "EU courts (CJEU / GC / CST)", "8": "National case law citing EU law"}
+    lines = ["| Sector | Description | Cases | Share |", "|---|---|---:|---:|"]
+    for sec, n, pct in rows:
+        lines.append(f"| {sec} | {label.get(sec, '—')} | {n:,} | {pct}% |")
+    return "\n".join(lines)
+
+
+def _format_language_table(rows: list) -> str:
+    if not rows:
+        return "_(no language data)_"
+    return ", ".join(f"**{k}** ({v:,})" for k, v in rows)
+
+
+def _format_missing_reasons(rows: list) -> str:
+    if not rows:
+        return "_(no missing-reason data)_"
+    return "\n".join(f"- `{k}` — {v:,} rows" for k, v in rows)
 
 
 def write_dataset_card(
@@ -116,12 +320,81 @@ def write_dataset_card(
     canonical_columns: List[str],
     discovered_columns: List[str],
     hf_dataset_repo: str,
+    coverage_stats: Optional[dict] = None,
 ) -> None:
-    """Write the HuggingFace dataset card (README.md)."""
+    """Write the HuggingFace dataset card (README.md).
+
+    When ``coverage_stats`` is provided (build it via
+    :func:`compute_coverage_stats`), the card includes a detailed Coverage
+    section with per-decade fulltext rates, sector breakdown, top languages,
+    and the citation-graph URI caveat. Without it the card falls back to the
+    minimal headline numbers — useful for unit tests where round-tripping
+    the data isn't necessary.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     canonical_md = "\n".join(f"- `{c}`" for c in canonical_columns) or "_(none)_"
     discovered_md = "\n".join(f"- `{c}`" for c in discovered_columns) or "_(none populated)_"
+
+    # --- Coverage section: only emitted when stats are supplied ---
+    if coverage_stats:
+        ft_total = coverage_stats.get("fulltext_total", 0)
+        ft_with = coverage_stats.get("fulltext_with_text", 0)
+        ft_pct = (round(100 * ft_with / ft_total, 1) if ft_total else 0.0)
+        coverage_section = f"""## Coverage and caveats
+
+### Per-decade fulltext availability
+
+CELLAR's body-text coverage rises sharply with the move from analogue to
+digital court archives. Pre-2000 cases are largely metadata-only — the
+decision text exists in print but was never digitised into CELLAR.
+
+{_format_decade_table(coverage_stats.get("decade_table", []))}
+
+In total, **{ft_with:,} of {ft_total:,} ({ft_pct}%)** documents have a
+non-trivial body text (≥200 characters). The remainder carry a populated
+``missing_reasons`` column explaining why:
+
+{_format_missing_reasons(coverage_stats.get("missing_reason_top", []))}
+
+### Sector split
+
+{_format_sector_table(coverage_stats.get("sector_table", []))}
+
+### Languages
+
+The dataset preserves each document's original procedural language. The
+top 10 by row count (within ``fulltexts.parquet``):
+
+{_format_language_table(coverage_stats.get("fulltext_languages", []))}
+
+### Known quirks
+
+- **Citation graph in URI form.** ``work_cites_work`` currently stores
+  raw CELLAR URIs (e.g.
+  ``http://publications.europa.eu/resource/cellar/<uuid>``) instead of
+  CELEX identifiers. Use ``cited_by`` (which is CELEX-form) for in-place
+  joins, or resolve the URIs via
+  ``cellar_extractor.sparql.resolve_celexes_for_cellar_uris``.
+- **ECLI duplicates.** {coverage_stats.get('dup_ecli_count', 0)} rows
+  share an ECLI with another row. These are the same legal decision
+  scraped through two overlapping windows; columns other than
+  ``__source_window`` agree, so a ``drop_duplicates(subset='ecli')`` is
+  lossless.
+- **Multi-window dedup.** Raw scrape volume (~185 k ECLIs across windows)
+  collapses to the unique ECLI set (~46 k) at consolidation. CELLAR can
+  return the same record from adjacent date windows, especially for
+  pre-2000 backfilled entries.
+- **Schema-union columns.** A handful of columns in ``cases.parquet``
+  exist for cross-sector parity (legislation-only fields, or
+  text-describing fields that properly live in ``fulltexts.parquet``)
+  and are always null for case law. See ``FIELDS.md`` for the
+  per-field reference.
+
+"""
+    else:
+        coverage_section = ""
+
     content = f"""---
 license: apache-2.0
 language:
@@ -150,14 +423,14 @@ and consolidated into two Parquet tables:
 | `cases.parquet` | one row per ECLI | All canonical CJEU metadata fields (court formation, judicial procedure type, language, origin country, advocate general, judge rapporteur, subject matter, eurovoc concepts, citing / cited_by graph, etc.). Per-field documentation in [`FIELDS.md`](FIELDS.md). |
 | `fulltexts.parquet` | one row per `(celex, language)` | Plain-text body of each document, with provenance flags (`text_source`, `text_format`, `text_language`, `missing_reasons`). |
 
-## Coverage
+## Headline numbers
 
 - Date window: **{start_date} → {end_date}**
 - Cases: **{cases_rows:,}**
 - Fulltexts: **{fulltexts_rows:,}**
 - Last refreshed: {now}
 
-## Usage
+{coverage_section}## Usage
 
 ```python
 from datasets import load_dataset

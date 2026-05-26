@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from cjeu_migration.consolidate import (
+    compute_coverage_stats,
     consolidate_cases,
     consolidate_fulltexts,
     write_dataset_card,
@@ -149,6 +150,72 @@ def test_consolidate_fulltexts_empty_dir(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Viewer-friendly parquet layout (regression guards for HF dataset viewer)
+# ---------------------------------------------------------------------------
+
+
+def test_cases_parquet_uses_small_row_groups_for_hf_viewer(tmp_path):
+    """One giant row group blows past HF's 300 MB scan cap.
+
+    Force enough rows that the row-group cap kicks in, then check the
+    resulting file has multiple row groups (random access works) and a
+    page index (seek without scanning).
+    """
+    import pyarrow.parquet as pq
+
+    from cjeu_migration.consolidate import CASES_ROW_GROUP_SIZE
+
+    # 2.5× the row-group size — guaranteed to split into at least 3 groups.
+    n_rows = CASES_ROW_GROUP_SIZE * 2 + 100
+    win_dir = tmp_path / "windows"
+    _write_window_csv(
+        win_dir / "2020-01.csv",
+        ["celex", "ecli", "sector"],
+        [(f"62020CJ{i:04d}", f"ECLI:EU:C:2020:{i}", "6") for i in range(n_rows)],
+    )
+    out = tmp_path / "out" / "cases.parquet"
+    consolidate_cases(win_dir, out)
+
+    pf = pq.ParquetFile(out)
+    assert pf.num_row_groups >= 3, (
+        f"expected multi-row-group layout, got {pf.num_row_groups}"
+    )
+    # Every group should respect the configured cap.
+    for i in range(pf.num_row_groups):
+        rg = pf.metadata.row_group(i)
+        assert rg.num_rows <= CASES_ROW_GROUP_SIZE, (
+            f"row group {i} has {rg.num_rows} rows, cap is {CASES_ROW_GROUP_SIZE}"
+        )
+    # Page index is required for the viewer to seek without scanning.
+    first_col = pf.metadata.row_group(0).column(0)
+    assert first_col.has_offset_index, "page-offset index missing — HF viewer needs it"
+    # zstd compression — smaller and faster than the pandas default.
+    assert first_col.compression.lower() == "zstd"
+
+
+def test_fulltexts_parquet_uses_small_row_groups_for_hf_viewer(tmp_path):
+    import pyarrow.parquet as pq
+
+    from cjeu_migration.consolidate import FULLTEXTS_ROW_GROUP_SIZE
+
+    n_rows = FULLTEXTS_ROW_GROUP_SIZE * 2 + 50
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    entries = [
+        {"celex": f"62020CJ{i:04d}", "ecli": f"ECLI:EU:C:2020:{i}", "text": "x" * 100}
+        for i in range(n_rows)
+    ]
+    (win_dir / "2020-01.json").write_text(json.dumps(entries), encoding="utf-8")
+    out = tmp_path / "out" / "fulltexts.parquet"
+    consolidate_fulltexts(win_dir, out)
+
+    pf = pq.ParquetFile(out)
+    assert pf.num_row_groups >= 3
+    assert pf.metadata.row_group(0).column(0).has_offset_index
+    assert pf.metadata.row_group(0).column(0).compression.lower() == "zstd"
+
+
+# ---------------------------------------------------------------------------
 # Dataset card
 # ---------------------------------------------------------------------------
 
@@ -241,3 +308,162 @@ def test_write_dataset_card_handles_no_discovered_columns(tmp_path):
     )
     body = out.read_text("utf-8")
     assert "_(none populated)_" in body
+
+
+# ---------------------------------------------------------------------------
+# Coverage statistics + dataset-card Coverage section
+# ---------------------------------------------------------------------------
+
+
+def _make_coverage_fixture():
+    """Two small frames covering decades, sectors, languages, dupes, and
+    missing-reason cases — everything compute_coverage_stats touches."""
+    cases = pd.DataFrame([
+        # 1960s, sector 6, no fulltext (pre-CELLAR-digitisation)
+        {"ecli": "ECLI:EU:C:1965:1",  "celex": "61965CJ0001", "sector": "6",
+         "date_publication": "1965-04-01"},
+        # 2000s, sector 6, with fulltext
+        {"ecli": "ECLI:EU:C:2005:10", "celex": "62005CJ0010", "sector": "6",
+         "date_publication": "2005-04-01"},
+        # 2020s, sector 6, with fulltext
+        {"ecli": "ECLI:EU:C:2022:50", "celex": "62022CJ0050", "sector": "6",
+         "date_publication": "2022-06-15"},
+        # 2020s, sector 8 (national case law), with fulltext
+        {"ecli": "ECLI:DE:BVerwG:2023:1", "celex": "82023DE0001", "sector": "8",
+         "date_publication": "2023-01-12"},
+        # 2020s, multi-sector cell
+        {"ecli": "ECLI:EU:C:2024:99", "celex": "62024CJ0099", "sector": "6;8",
+         "date_publication": "2024-02-22"},
+        # duplicate ECLI (same as 2022:50) — should bump dup_ecli_count
+        {"ecli": "ECLI:EU:C:2022:50", "celex": "62022CJ0050", "sector": "6",
+         "date_publication": "2022-06-15"},
+    ])
+    fulltexts = pd.DataFrame([
+        # The 1965 case has no fulltext — empty body and a missing reason.
+        {"ecli": "ECLI:EU:C:1965:1",  "celex": "61965CJ0001", "text": "",
+         "text_language": "", "missing_reasons": "FULLTEXT_UNAVAILABLE_UPSTREAM"},
+        {"ecli": "ECLI:EU:C:2005:10", "celex": "62005CJ0010", "text": "x" * 500,
+         "text_language": "FR", "missing_reasons": ""},
+        {"ecli": "ECLI:EU:C:2022:50", "celex": "62022CJ0050", "text": "y" * 5000,
+         "text_language": "EN", "missing_reasons": ""},
+        {"ecli": "ECLI:DE:BVerwG:2023:1", "celex": "82023DE0001", "text": "z" * 800,
+         "text_language": "DE", "missing_reasons": ""},
+        {"ecli": "ECLI:EU:C:2024:99", "celex": "62024CJ0099", "text": "q" * 1200,
+         "text_language": "FR", "missing_reasons": ""},
+    ])
+    return cases, fulltexts
+
+
+def test_compute_coverage_stats_decade_table_split_by_text_presence():
+    cases, fulltexts = _make_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+
+    decade_lookup = {d: (n, wt, pct) for d, n, wt, pct in stats["decade_table"]}
+    # 1960s: 1 case, 0 with text
+    assert decade_lookup[1960] == (1, 0, 0.0)
+    # 2000s: 1 case, 1 with text
+    assert decade_lookup[2000] == (1, 1, 100.0)
+    # 2020s: 4 cases (including the dup), 3 with text (the 4 unique ECLIs all
+    # have text, but the duplicate row is also counted as having text via its
+    # ECLI matching a fulltext row).
+    n_2020, wt_2020, pct_2020 = decade_lookup[2020]
+    assert n_2020 == 4 and wt_2020 == 4 and pct_2020 == 100.0
+
+
+def test_compute_coverage_stats_sector_split_explodes_multi_sector_cells():
+    cases, fulltexts = _make_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+
+    by_sector = {sec: (n, pct) for sec, n, pct in stats["sector_table"]}
+    # "6" appears 5 times: 4 rows with sector="6" + 1 row with sector="6;8"
+    # "8" appears 2 times: 1 row with sector="8" + 1 row with sector="6;8"
+    assert by_sector["6"][0] == 5
+    assert by_sector["8"][0] == 2
+
+
+def test_compute_coverage_stats_fulltext_languages_and_missing_reasons():
+    cases, fulltexts = _make_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+
+    langs = dict(stats["fulltext_languages"])
+    assert langs == {"FR": 2, "EN": 1, "DE": 1}  # the empty-lang row dropped
+    assert stats["missing_reason_top"] == [("FULLTEXT_UNAVAILABLE_UPSTREAM", 1)]
+    assert stats["fulltext_total"] == 5
+    assert stats["fulltext_with_text"] == 4  # the 1965 empty-text row excluded
+
+
+def test_compute_coverage_stats_counts_ecli_dupes():
+    cases, fulltexts = _make_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    # 6 rows, 5 unique ECLIs -> 1 duplicate
+    assert stats["dup_ecli_count"] == 1
+
+
+def test_compute_coverage_stats_empty_inputs_safe():
+    stats = compute_coverage_stats(pd.DataFrame(), pd.DataFrame())
+    assert stats["decade_table"] == []
+    assert stats["sector_table"] == []
+    assert stats["fulltext_total"] == 0
+    assert stats["fulltext_with_text"] == 0
+    assert stats["dup_ecli_count"] == 0
+
+
+def test_write_dataset_card_emits_coverage_section_when_stats_provided(tmp_path):
+    cases, fulltexts = _make_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+
+    out = tmp_path / "README.md"
+    write_dataset_card(
+        out,
+        cases_rows=len(cases),
+        fulltexts_rows=len(fulltexts),
+        start_date="1965-01-01",
+        end_date="2024-12-31",
+        canonical_columns=["celex", "ecli"],
+        discovered_columns=[],
+        hf_dataset_repo="example-org/cjeu",
+        coverage_stats=stats,
+    )
+    body = out.read_text(encoding="utf-8")
+
+    # Section headings landed
+    assert "## Coverage and caveats" in body
+    assert "### Per-decade fulltext availability" in body
+    assert "### Sector split" in body
+    assert "### Languages" in body
+    assert "### Known quirks" in body
+
+    # Decade rows rendered as a markdown table
+    assert "| 1960s |" in body
+    assert "| 2020s |" in body
+
+    # Sector descriptions present
+    assert "EU courts" in body and "National case law" in body
+
+    # Languages line lists at least one language
+    assert "**FR**" in body
+
+    # The URI caveat is documented (until we ship the cellar-extractor fix)
+    assert "work_cites_work" in body
+    assert "CELLAR URI" in body or "raw CELLAR" in body
+
+    # The dedup note references the actual count
+    assert "1 rows" in body or "1 ECLI" in body or "share an ECLI" in body
+
+
+def test_write_dataset_card_skips_coverage_section_without_stats(tmp_path):
+    """Backwards compatibility — callers that don't supply stats still work."""
+    out = tmp_path / "README.md"
+    write_dataset_card(
+        out,
+        cases_rows=10,
+        fulltexts_rows=10,
+        start_date="2020-01-01",
+        end_date="2020-01-31",
+        canonical_columns=["celex"],
+        discovered_columns=[],
+        hf_dataset_repo="example/x",
+    )
+    body = out.read_text(encoding="utf-8")
+    assert "## Coverage and caveats" not in body
+    assert "## Headline numbers" in body  # still has the basic header
