@@ -30,6 +30,9 @@ def _build_config(tmp_path: Path, *, hf_token: str = "fake-token", skip_upload: 
         extractor_threads=2,
         max_window_retries=2,
         skip_upload=skip_upload,
+        ntfy_topic_url=None,
+        ntfy_interval_seconds=1800,
+        ntfy_auth_token=None,
     )
 
 

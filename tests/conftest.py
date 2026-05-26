@@ -21,5 +21,8 @@ def _isolate_env(monkeypatch):
         "EXTRACTOR_THREADS",
         "MAX_WINDOW_RETRIES",
         "SKIP_UPLOAD",
+        "NTFY_TOPIC_URL",
+        "NTFY_INTERVAL_SECONDS",
+        "NTFY_AUTH_TOKEN",
     ):
         monkeypatch.delenv(var, raising=False)

@@ -49,6 +49,9 @@ def _smoke_config(tmp_path: Path) -> Config:
         extractor_threads=4,
         max_window_retries=2,
         skip_upload=True,
+        ntfy_topic_url=None,
+        ntfy_interval_seconds=1800,
+        ntfy_auth_token=None,
     )
 
 

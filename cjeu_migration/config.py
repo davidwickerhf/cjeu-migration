@@ -68,6 +68,9 @@ class Config:
     extractor_threads: int
     max_window_retries: int
     skip_upload: bool
+    ntfy_topic_url: Optional[str]
+    ntfy_interval_seconds: int
+    ntfy_auth_token: Optional[str]
 
     @classmethod
     def from_env(cls, env_file: Optional[Path] = None) -> "Config":
@@ -92,6 +95,11 @@ class Config:
             extractor_threads=_parse_int("EXTRACTOR_THREADS", os.environ.get("EXTRACTOR_THREADS", "10")),
             max_window_retries=_parse_int("MAX_WINDOW_RETRIES", os.environ.get("MAX_WINDOW_RETRIES", "3")),
             skip_upload=_str_to_bool(os.environ.get("SKIP_UPLOAD", "0")),
+            ntfy_topic_url=(os.environ.get("NTFY_TOPIC_URL") or "").strip() or None,
+            ntfy_interval_seconds=_parse_int(
+                "NTFY_INTERVAL_SECONDS", os.environ.get("NTFY_INTERVAL_SECONDS", "1800")
+            ),
+            ntfy_auth_token=(os.environ.get("NTFY_AUTH_TOKEN") or "").strip() or None,
         )
 
     @property

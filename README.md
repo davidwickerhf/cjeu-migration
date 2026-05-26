@@ -80,6 +80,9 @@ All knobs live in `.env`. See `.env.example` for the full set.
 | `EXTRACTOR_THREADS` | `10` | Worker threads inside `cellar-extractor`. |
 | `MAX_WINDOW_RETRIES` | `3` | Retries before a window is marked `exhausted` and skipped. |
 | `SKIP_UPLOAD` | `0` | Set to `1` to stop after the consolidate step. |
+| `NTFY_TOPIC_URL` | _empty (disabled)_ | If set (e.g. `https://ntfy.sh/cjeu-migrate-davidwickerhf-xyz`), pushes a manifest summary every `NTFY_INTERVAL_SECONDS` plus on start / finish / fatal error. Subscribe via the [ntfy app](https://ntfy.sh) on your phone. |
+| `NTFY_INTERVAL_SECONDS` | `1800` | Period (in seconds) for the periodic progress push. |
+| `NTFY_AUTH_TOKEN` | _empty_ | Bearer token for private / self-hosted ntfy instances. Not needed for `ntfy.sh` public topics. |
 
 ## Output layout
 

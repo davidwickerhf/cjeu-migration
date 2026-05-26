@@ -27,6 +27,7 @@ from cjeu_migration.consolidate import (
 )
 from cjeu_migration.huggingface_push import push_dataset
 from cjeu_migration.manifest import Manifest, WindowStatus
+from cjeu_migration.notifier import NtfyConfig, ProgressNotifier
 from cjeu_migration.scraper import ScrapeError, scrape_window
 from cjeu_migration.windowing import Window, iter_windows
 
@@ -69,18 +70,41 @@ def run(
     for window in windows:
         manifest.register(window.window_id, window.sd.isoformat(), window.ed.isoformat())
 
-    if not consolidate_only:
-        _scrape_pending(config, manifest, windows, scrape_fn=scrape_fn)
+    notifier = _build_notifier(config, manifest)
+    if notifier is not None:
+        notifier.notify_run_started(
+            start_date=config.start_date.isoformat(),
+            end_date=config.end_date.isoformat(),
+            total_windows=len(windows),
+        )
+        notifier.start()
 
-    cases_df, fulltexts_df = _consolidate(config)
+    try:
+        if not consolidate_only:
+            _scrape_pending(config, manifest, windows, scrape_fn=scrape_fn)
 
-    uploaded: List[str] = []
-    if not config.skip_upload:
-        uploaded = _push(config, cases_df, fulltexts_df, push_fn=push_fn)
-    else:
-        log.info("SKIP_UPLOAD set — leaving dataset at %s", config.consolidated_dir)
+        cases_df, fulltexts_df = _consolidate(config)
+
+        uploaded: List[str] = []
+        if not config.skip_upload:
+            uploaded = _push(config, cases_df, fulltexts_df, push_fn=push_fn)
+        else:
+            log.info("SKIP_UPLOAD set — leaving dataset at %s", config.consolidated_dir)
+    except Exception as exc:
+        if notifier is not None:
+            notifier.notify_fatal_error(repr(exc))
+            notifier.stop()
+        raise
 
     summary_counts = manifest.summary()
+    if notifier is not None:
+        notifier.notify_run_finished(
+            summary=summary_counts,
+            cases_rows=len(cases_df),
+            fulltexts_rows=len(fulltexts_df),
+        )
+        notifier.stop()
+
     return RunSummary(
         windows_total=len(windows),
         windows_completed=summary_counts.get(WindowStatus.COMPLETED.value, 0),
@@ -90,6 +114,21 @@ def run(
         fulltexts_rows=len(fulltexts_df),
         uploaded=uploaded,
     )
+
+
+def _build_notifier(config: Config, manifest: Manifest) -> Optional[ProgressNotifier]:
+    if not config.ntfy_topic_url:
+        return None
+    ntfy_cfg = NtfyConfig(
+        topic_url=config.ntfy_topic_url,
+        interval_seconds=config.ntfy_interval_seconds,
+        auth_token=config.ntfy_auth_token,
+    )
+    log.info(
+        "ntfy progress notifications enabled: %s (every %ds)",
+        ntfy_cfg.topic_url, ntfy_cfg.interval_seconds,
+    )
+    return ProgressNotifier(ntfy_cfg, manifest.summary)
 
 
 def _scrape_pending(
