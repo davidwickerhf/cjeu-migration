@@ -18,6 +18,28 @@ def _str_to_bool(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on", "y"}
 
 
+def _parse_date(env_var: str, value: str) -> date:
+    """Parse a date with a friendly error message when the .env value is bogus."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{env_var}={value!r} is not a valid ISO date (expected YYYY-MM-DD, "
+            f"and the date must really exist on the calendar). Common mistakes: "
+            f"Feb 30, leap-day in a non-leap year, slashes instead of dashes, "
+            f"DD-MM-YYYY order. Original error: {exc}"
+        ) from exc
+
+
+def _parse_int(env_var: str, value: str) -> int:
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{env_var}={value!r} is not a valid integer. Check your .env file."
+        ) from exc
+
+
 @dataclass(frozen=True)
 class Config:
     """Runtime configuration. Construct via :meth:`from_env`."""
@@ -40,22 +62,21 @@ class Config:
         if env_file.exists():
             load_dotenv(env_file, override=False)
 
+        start_date = _parse_date("START_DATE", os.environ.get("START_DATE", "1954-01-01").strip())
         end_raw = os.environ.get("END_DATE", "").strip()
-        end_date = date.fromisoformat(end_raw) if end_raw else date.today()
+        end_date = _parse_date("END_DATE", end_raw) if end_raw else date.today()
 
         return cls(
             hf_token=os.environ.get("HUGGINGFACE_TOKEN") or None,
             hf_dataset_repo=os.environ.get("HF_DATASET_REPO", "").strip()
                 or "maastrichtlawtech/cjeu-cases",
             workspace_dir=Path(os.environ.get("WORKSPACE_DIR", "./workspace")).resolve(),
-            start_date=date.fromisoformat(
-                os.environ.get("START_DATE", "1954-01-01").strip()
-            ),
+            start_date=start_date,
             end_date=end_date,
             window=os.environ.get("WINDOW", "month").strip().lower(),  # type: ignore[arg-type]
-            max_ecli_per_window=int(os.environ.get("MAX_ECLI_PER_WINDOW", "10000")),
-            extractor_threads=int(os.environ.get("EXTRACTOR_THREADS", "10")),
-            max_window_retries=int(os.environ.get("MAX_WINDOW_RETRIES", "3")),
+            max_ecli_per_window=_parse_int("MAX_ECLI_PER_WINDOW", os.environ.get("MAX_ECLI_PER_WINDOW", "10000")),
+            extractor_threads=_parse_int("EXTRACTOR_THREADS", os.environ.get("EXTRACTOR_THREADS", "10")),
+            max_window_retries=_parse_int("MAX_WINDOW_RETRIES", os.environ.get("MAX_WINDOW_RETRIES", "3")),
             skip_upload=_str_to_bool(os.environ.get("SKIP_UPLOAD", "0")),
         )
 
