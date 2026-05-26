@@ -31,6 +31,20 @@ def _parse_date(env_var: str, value: str) -> date:
         ) from exc
 
 
+def _clean_token(value: Optional[str]) -> Optional[str]:
+    """Strip whitespace and non-ASCII chars from a token loaded from .env.
+
+    HuggingFace's web UI occasionally lets you copy invisible Unicode
+    separators (``\\u2028``, ``\\u00a0``, …) into the token field. These pass
+    visual inspection but break the HTTP ``Authorization`` header at the
+    ASCII-encoding step deep inside httpx. Defensive scrub.
+    """
+    if value is None:
+        return None
+    cleaned = "".join(ch for ch in value if 32 <= ord(ch) < 127).strip()
+    return cleaned or None
+
+
 def _parse_int(env_var: str, value: str) -> int:
     try:
         return int(value)
@@ -67,7 +81,7 @@ class Config:
         end_date = _parse_date("END_DATE", end_raw) if end_raw else date.today()
 
         return cls(
-            hf_token=os.environ.get("HUGGINGFACE_TOKEN") or None,
+            hf_token=_clean_token(os.environ.get("HUGGINGFACE_TOKEN")),
             hf_dataset_repo=os.environ.get("HF_DATASET_REPO", "").strip()
                 or "maastrichtlawtech/cjeu-cases",
             workspace_dir=Path(os.environ.get("WORKSPACE_DIR", "./workspace")).resolve(),
