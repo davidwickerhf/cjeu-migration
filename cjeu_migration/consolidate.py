@@ -164,13 +164,20 @@ def compute_coverage_stats(
     Returned dict shape::
 
         {
-            "decade_table":   [(decade, cases, with_text, coverage_pct), ...],
-            "sector_table":   [(sector, cases, pct), ...],
-            "fulltext_total":      int,
-            "fulltext_with_text":  int,
-            "fulltext_languages":  [(lang, count), ...],   # top 10
-            "missing_reason_top":  [(reason, count), ...], # top 5
-            "dup_ecli_count":      int,
+            "decade_table":      [(decade, cases, with_text, coverage_pct), ...],
+            "sector_table":      [(sector, cases, pct), ...],
+            "fulltext_total":         int,
+            "fulltext_with_text":     int,
+            "fulltext_languages":     [(lang, count), ...],     # top 10
+            "missing_reason_top":     [(reason, count), ...],   # top 5
+            "dup_ecli_count":         int,
+            "top_subjects":           [(atom, count), ...],     # top 15
+            "top_procedures":         [(atom, count), ...],     # top 10
+            "top_origin_countries":   [(country, count), ...],  # top 15
+            "top_cited_cases":        [(ecli, count, subject, year), ...],  # top 10
+            "citation_edges_total":   int,
+            "citation_edges_internal": int,  # land inside the dataset
+            "citation_edges_external": int,  # legislation, treaties, opinions
         }
     """
     out: dict = {
@@ -181,6 +188,13 @@ def compute_coverage_stats(
         "fulltext_languages": [],
         "missing_reason_top": [],
         "dup_ecli_count": 0,
+        "top_subjects": [],
+        "top_procedures": [],
+        "top_origin_countries": [],
+        "top_cited_cases": [],
+        "citation_edges_total": 0,
+        "citation_edges_internal": 0,
+        "citation_edges_external": 0,
     }
 
     if cases_df.empty:
@@ -273,6 +287,95 @@ def compute_coverage_stats(
             len(dup_eclis) - dup_eclis.nunique()
         )
 
+    # ---- Top atom distributions (subject / procedure / country) ----
+    def _atoms(col: str):
+        if col not in cases_df.columns:
+            return pd.Series(dtype="object")
+        s = (
+            cases_df[col]
+            .astype("string")
+            .fillna("")
+            .str.split(";")
+            .explode()
+            .str.strip()
+        )
+        return s[s != ""]
+
+    sm_atoms = _atoms("subject_matter")
+    if not sm_atoms.empty:
+        out["top_subjects"] = [
+            (str(k), int(v)) for k, v in sm_atoms.value_counts().head(15).items()
+        ]
+    proc_atoms = _atoms("type_procedure")
+    if not proc_atoms.empty:
+        out["top_procedures"] = [
+            (str(k), int(v)) for k, v in proc_atoms.value_counts().head(10).items()
+        ]
+    country_atoms = _atoms("origin_country")
+    if not country_atoms.empty:
+        out["top_origin_countries"] = [
+            (str(k), int(v)) for k, v in country_atoms.value_counts().head(15).items()
+        ]
+
+    # ---- Citation graph topology ----
+    if "work_cites_work" in cases_df.columns:
+        edges = (
+            cases_df["work_cites_work"]
+            .astype("string")
+            .fillna("")
+            .str.split(";")
+            .explode()
+            .str.strip()
+        )
+        edges = edges[edges != ""]
+        out["citation_edges_total"] = int(len(edges))
+        if not edges.empty:
+            # CELEX values in the dataset (split multi-cell entries too).
+            case_celexes = set()
+            for cell in cases_df.get("celex", pd.Series(dtype="object")).dropna():
+                for c in str(cell).split(";"):
+                    c = c.strip()
+                    if c:
+                        case_celexes.add(c)
+            internal = int(edges.isin(case_celexes).sum())
+            out["citation_edges_internal"] = internal
+            out["citation_edges_external"] = int(len(edges) - internal)
+
+    # ---- Top cited cases ----
+    if "cited_by" in cases_df.columns:
+        in_deg = (
+            cases_df["cited_by"]
+            .astype("string")
+            .fillna("")
+            .str.split(";")
+            .map(lambda toks: sum(1 for t in toks if t.strip()))
+        )
+        # Pull the date-publication year for context, fall back to "".
+        year_col = pd.Series([""] * len(cases_df), index=cases_df.index)
+        if "date_publication" in cases_df.columns:
+            def _first(v):
+                if pd.isna(v):
+                    return None
+                parts = [p.strip() for p in str(v).split(";") if p.strip()]
+                return min(parts) if parts else None
+            dt = pd.to_datetime(
+                cases_df["date_publication"].map(_first), errors="coerce", utc=True
+            )
+            year_col = dt.dt.year.astype("Int64").astype("string").fillna("")
+
+        top_idx = in_deg.nlargest(10).index
+        out["top_cited_cases"] = [
+            (
+                str(cases_df.loc[i, "ecli"]) if "ecli" in cases_df.columns else "",
+                int(in_deg.loc[i]),
+                str(cases_df.loc[i, "subject_matter"])
+                    if "subject_matter" in cases_df.columns else "",
+                str(year_col.loc[i]),
+            )
+            for i in top_idx
+            if int(in_deg.loc[i]) > 0
+        ]
+
     return out
 
 
@@ -310,6 +413,34 @@ def _format_missing_reasons(rows: list) -> str:
     return "\n".join(f"- `{k}` — {v:,} rows" for k, v in rows)
 
 
+def _format_top_atoms_table(rows: list, headers: tuple) -> str:
+    """Format a (key, count) list as a 2-col markdown table."""
+    if not rows:
+        return "_(no data)_"
+    lines = [
+        f"| {headers[0]} | {headers[1]} |",
+        "|---|---:|",
+    ]
+    for k, v in rows:
+        lines.append(f"| {k} | {v:,} |")
+    return "\n".join(lines)
+
+
+def _format_top_cited_table(rows: list) -> str:
+    """Format the most-cited-cases table."""
+    if not rows:
+        return "_(no citation data)_"
+    lines = [
+        "| Rank | ECLI | Cited by | Year | Subject matter |",
+        "|---:|---|---:|:---:|---|",
+    ]
+    for i, (ecli, count, subject, year) in enumerate(rows, 1):
+        # Truncate long subject_matter atoms for table readability
+        subj = (subject[:60] + "…") if len(subject) > 60 else subject
+        lines.append(f"| {i} | `{ecli}` | {count:,} | {year} | {subj} |")
+    return "\n".join(lines)
+
+
 def write_dataset_card(
     output_path: Path,
     *,
@@ -336,11 +467,16 @@ def write_dataset_card(
     canonical_md = "\n".join(f"- `{c}`" for c in canonical_columns) or "_(none)_"
     discovered_md = "\n".join(f"- `{c}`" for c in discovered_columns) or "_(none populated)_"
 
-    # --- Coverage section: only emitted when stats are supplied ---
+    # --- Rich content blocks ---
+    # Each block is only emitted when the relevant stats are available, so
+    # the card degrades gracefully when called with minimal stats (e.g.
+    # unit tests, empty corpora).
     if coverage_stats:
         ft_total = coverage_stats.get("fulltext_total", 0)
         ft_with = coverage_stats.get("fulltext_with_text", 0)
         ft_pct = (round(100 * ft_with / ft_total, 1) if ft_total else 0.0)
+
+        # --- Coverage and caveats ---
         coverage_section = f"""## Coverage and caveats
 
 ### Per-decade fulltext availability
@@ -370,30 +506,361 @@ top 10 by row count (within ``fulltexts.parquet``):
 
 ### Known quirks
 
-- **Citation graph in URI form.** ``work_cites_work`` currently stores
-  raw CELLAR URIs (e.g.
-  ``http://publications.europa.eu/resource/cellar/<uuid>``) instead of
-  CELEX identifiers. Use ``cited_by`` (which is CELEX-form) for in-place
-  joins, or resolve the URIs via
-  ``cellar_extractor.sparql.resolve_celexes_for_cellar_uris``.
-- **ECLI duplicates.** {coverage_stats.get('dup_ecli_count', 0)} rows
-  share an ECLI with another row. These are the same legal decision
-  scraped through two overlapping windows; columns other than
-  ``__source_window`` agree, so a ``drop_duplicates(subset='ecli')`` is
-  lossless.
-- **Multi-window dedup.** Raw scrape volume (~185 k ECLIs across windows)
-  collapses to the unique ECLI set (~46 k) at consolidation. CELLAR can
-  return the same record from adjacent date windows, especially for
-  pre-2000 backfilled entries.
-- **Schema-union columns.** A handful of columns in ``cases.parquet``
-  exist for cross-sector parity (legislation-only fields, or
-  text-describing fields that properly live in ``fulltexts.parquet``)
-  and are always null for case law. See ``FIELDS.md`` for the
-  per-field reference.
+- **ECLI dedup.** {coverage_stats.get('dup_ecli_count', 0)} duplicate-ECLI
+  rows remain in this snapshot (down from 14 in earlier versions). The
+  cleanup pipeline collapses same-ECLI rows from overlapping scrape
+  windows; the surviving row carries a `;`-joined `__source_window`
+  string for provenance.
+- **Multi-window dedup at consolidation.** Raw scrape volume
+  (~185 k ECLIs across all date windows) collapses to the unique ECLI
+  set (~46 k) — CELLAR returns the same record from adjacent windows
+  for backfilled pre-2000 entries.
+- **Schema-trim.** 15 always-null CDM predicates (legislation-only
+  fields like `eli`, `in_force`, plus text-describing fields that live
+  in ``fulltexts.parquet``) are dropped from ``cases.parquet`` for
+  schema clarity. The field reference in [`FIELDS.md`](FIELDS.md) is
+  the source of truth.
+
+"""
+
+        # --- Citation graph topology block ---
+        cg_total = coverage_stats.get("citation_edges_total", 0)
+        cg_internal = coverage_stats.get("citation_edges_internal", 0)
+        cg_external = coverage_stats.get("citation_edges_external", 0)
+        cg_pct = (round(100 * cg_internal / cg_total, 1) if cg_total else 0.0)
+        citation_graph_section = f"""## Citation graph
+
+Each case row carries two citation columns:
+
+- `work_cites_work` — outbound edges (CELEX IDs of cases / acts this case cites)
+- `cited_by` — inbound edges (CELEX IDs of cases that cite this case)
+
+Both are `;`-separated multi-cardinality strings. After the v2 cleanup
+pass, both columns are CELEX-form (the previous URI form has been
+resolved in place).
+
+### Topology
+
+- Total outbound edges: **{cg_total:,}**
+- Inside the dataset (case → case, self-joinable): **{cg_internal:,} ({cg_pct}%)**
+- Outside the dataset (case → legislation / treaty / opinion): **{cg_external:,}**
+
+### Most-cited cases (top 10 by inbound count)
+
+{_format_top_cited_table(coverage_stats.get("top_cited_cases", []))}
+
+"""
+
+        # --- Demographics block (subject / procedure / country) ---
+        demographics_section = f"""## What's in the corpus
+
+### Top subject-matter atoms
+
+`subject_matter` is a `;`-separated list of EU legal-area atoms. The
+single-atom counts below are after exploding the lists.
+
+{_format_top_atoms_table(coverage_stats.get("top_subjects", []), ("Subject atom", "Cases"))}
+
+### Top procedure types
+
+{_format_top_atoms_table(coverage_stats.get("top_procedures", []), ("Procedure", "Cases"))}
+
+### Top origin countries
+
+`origin_country` records the member state that referred the case
+(preliminary references) or whose national court the action originated
+from. Counts after exploding multi-country cells.
+
+{_format_top_atoms_table(coverage_stats.get("top_origin_countries", []), ("Country", "Cases"))}
 
 """
     else:
         coverage_section = ""
+        citation_graph_section = ""
+        demographics_section = ""
+
+    # --- Static (data-independent) sections ---
+
+    quick_start_section = f"""## Quick start
+
+### Pandas (recommended for analytics)
+
+```python
+import pandas as pd
+
+# Direct parquet — fastest, no datasets dep required.
+URL = "https://huggingface.co/datasets/{hf_dataset_repo}/resolve/main"
+cases = pd.read_parquet(f"{{URL}}/cases.parquet")
+texts = pd.read_parquet(f"{{URL}}/fulltexts.parquet")
+
+print(cases.shape, texts.shape)
+```
+
+### HuggingFace `datasets` (streaming-friendly)
+
+```python
+from datasets import load_dataset
+
+cases = load_dataset("{hf_dataset_repo}", "cases", split="train")
+texts = load_dataset("{hf_dataset_repo}", "fulltexts", split="train")
+
+# Streaming for the fulltexts table (avoids loading 325 MB into RAM):
+texts_stream = load_dataset(
+    "{hf_dataset_repo}", "fulltexts", split="train", streaming=True
+)
+for row in texts_stream:
+    print(row["ecli"], len(row["text"]))
+    break
+```
+
+### Polars (fast column scans)
+
+```python
+import polars as pl
+
+cases = pl.read_parquet(
+    "https://huggingface.co/datasets/{hf_dataset_repo}/resolve/main/cases.parquet"
+)
+print(cases.select(["ecli", "celex", "subject_matter"]).head())
+```
+
+"""
+
+    recipes_section = """## Recipes
+
+Practical queries you can paste verbatim. All examples assume `cases`
+and `texts` DataFrames loaded as in *Quick start*.
+
+### 1. Filter by date range and sector
+
+```python
+import pandas as pd
+
+cases["pub_date"] = pd.to_datetime(
+    cases["date_publication"].str.split(";").str[0],
+    errors="coerce", utc=True,
+)
+recent_cjeu = cases[
+    (cases["pub_date"] >= "2020-01-01")
+    & (cases["sector"] == "6")
+]
+print(len(recent_cjeu), "post-2020 sector-6 cases")
+```
+
+### 2. Subject-matter filter (preliminary references on VAT)
+
+```python
+vat_refs = cases[
+    cases["subject_matter"].fillna("").str.contains("Value added tax")
+    & cases["type_procedure"].fillna("").str.contains(
+        "Reference for a preliminary ruling"
+    )
+]
+print(f"{len(vat_refs):,} VAT preliminary references")
+print(vat_refs[["ecli", "origin_country", "date_publication"]].head())
+```
+
+### 3. Build a citation network (in-dataset edges only)
+
+```python
+import pandas as pd
+
+# work_cites_work is CELEX-form; explode for one edge per row.
+edges = (
+    cases[["celex", "work_cites_work"]]
+    .assign(target=lambda d: d["work_cites_work"].str.split(";"))
+    .explode("target")
+    .dropna(subset=["target"])
+    .query("target != ''")
+    .rename(columns={"celex": "source"})
+    [["source", "target"]]
+)
+# Restrict to edges whose target is in the dataset (self-joinable):
+in_dataset = set(cases["celex"].dropna())
+edges = edges[edges["target"].isin(in_dataset)]
+print(f"{len(edges):,} case→case citation edges")
+```
+
+### 4. PageRank over the citation graph (with NetworkX)
+
+```python
+import networkx as nx
+
+g = nx.from_pandas_edgelist(
+    edges, source="source", target="target", create_using=nx.DiGraph,
+)
+pr = nx.pagerank(g, alpha=0.85)
+top = sorted(pr.items(), key=lambda kv: -kv[1])[:10]
+for celex, score in top:
+    row = cases.loc[cases["celex"] == celex].iloc[0]
+    print(f"{row['ecli']:30s}  PR={score:.4f}  {row['subject_matter'][:60]}")
+```
+
+### 5. Fetch the body text for a specific case
+
+```python
+# texts has one row per (celex, language). Modern cases publish in ~24
+# languages; you usually want the procedural language (matches `language_procedure`).
+def fetch_text(ecli: str, lang: str | None = None) -> str | None:
+    rows = texts[texts["ecli"] == ecli]
+    if rows.empty:
+        return None
+    if lang:
+        rows = rows[rows["text_language"].str.upper() == lang.upper()]
+    if rows.empty:
+        return None
+    return rows.iloc[0]["text"]
+
+body = fetch_text("ECLI:EU:C:2014:317")  # the Google Spain case
+print(body[:500] if body else "(no fulltext available)")
+```
+
+### 6. Per-language fulltext counts
+
+```python
+print(
+    texts[texts["text"].str.len() >= 200]
+    ["text_language"].value_counts().head(15)
+)
+```
+
+### 7. Cases without fulltext, with the reason recorded
+
+```python
+no_text = texts[texts["text"].str.len() < 200]
+print(no_text["missing_reasons"].value_counts().head())
+```
+
+### 8. Join cases and texts on ECLI
+
+```python
+joined = cases.merge(texts, on="ecli", how="left", suffixes=("", "_text"))
+print(joined.shape)  # ~46 k rows (one per ECLI; no fan-out post-dedup)
+```
+
+"""
+
+    fulltext_analysis_section = """## Working with fulltexts
+
+`fulltexts.parquet` has 8 columns:
+
+| Column | Type | Description |
+|---|---|---|
+| `ecli` | string | Join key against `cases.parquet`. |
+| `celex` | string | Sometimes multi-valued (`62019CJ0793;62019CJ0793_RES`) when an ECLI bundles multiple work items. |
+| `text` | string | Plain text. Empty when CELLAR has no body for this work. |
+| `text_source` | string | `CELLAR_ITEM` / `CELLAR_REST_XHTML` / `INFOCURIA_BLOB_HTML` / `EXTRACTOR_FALLBACK_TEXT`. |
+| `text_format` | string | `html` / `xhtml` / `pdf` / `xml`. Original markup format before plain-text extraction. |
+| `text_language` | string | ISO 639-1 code (`FR`, `EN`, `DE`, …). The procedural language at the CJEU is historically French, hence FR dominance. |
+| `missing_reasons` | string | `;`-separated tags explaining empty fields, e.g. `FULLTEXT_UNAVAILABLE_UPSTREAM`. |
+| `__source_window` | string | Internal: the date window(s) that scraped this row. `;`-joined post-dedup. |
+
+The body is plain text — no markup, no headers/footers, no page numbers.
+For semantic analysis (sentence segmentation, embeddings) just iterate
+over `text` directly:
+
+```python
+from itertools import islice
+
+def iter_long_judgments(min_chars: int = 5000):
+    long_ones = texts[texts["text"].str.len() >= min_chars]
+    for _, row in long_ones.iterrows():
+        yield row["ecli"], row["text_language"], row["text"]
+
+for ecli, lang, body in islice(iter_long_judgments(), 3):
+    print(f"--- {ecli} ({lang}, {len(body):,} chars) ---")
+    print(body[:300], "…\\n")
+```
+
+"""
+
+    extraction_section = """## How the data was extracted
+
+The pipeline lives in two repos:
+
+1. **[`cellar-extractor`](https://github.com/maastrichtlawtech/cellar-extractor)** — the actual scraper. Hits the CELLAR SPARQL endpoint
+   for metadata + citation graph, plus InfoCuria + CELLAR REST for body text and provenance flags. Handles per-CDM-predicate flattening, sector-3 legislation support, citation URI→CELEX resolution.
+
+2. **[`cjeu-migration`](https://github.com/davidwickerhf/cjeu-migration)** — the orchestrator. Iterates date windows (month-sized), retries failed
+   windows with exponential backoff, persists per-window CSV + JSON checkpoints (survives crashes), then consolidates everything into the two
+   parquet files you're reading here. Includes the cleanup scripts (`scripts/cleanup_hf_dataset.py`) that produced this version.
+
+Single-command reproduction:
+
+```bash
+git clone https://github.com/davidwickerhf/cjeu-migration
+cd cjeu-migration
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env  # set HUGGINGFACE_TOKEN if you intend to upload
+cjeu-migrate run --skip-upload  # local-only; drop --skip-upload to push to HF
+```
+
+The full corpus run (1954 → today) takes ~4-6 h on a 16-thread CPU instance.
+
+### Field provenance
+
+See [`FIELDS.md`](FIELDS.md) for per-field source documentation: which CDM
+predicate or InfoCuria key produced each column, type, cardinality, and
+whether it's case-law-only or any-sector.
+
+"""
+
+    schema_section = f"""## Schema
+
+### Canonical columns
+
+These are the contracted columns — they appear on every row (populated or
+null), and their semantics are stable across runs:
+
+{canonical_md}
+
+### Discovered columns
+
+CDM predicates surfaced opportunistically from CELLAR that aren't part of
+the canonical contract but were populated for at least one row in this
+snapshot:
+
+{discovered_md}
+
+For a full field reference (type, cardinality, source, examples), see
+[`FIELDS.md`](FIELDS.md) bundled with this dataset.
+
+"""
+
+    citation_section = """## How to cite
+
+If you use this dataset in academic work, please cite both the source
+software and the underlying CELLAR / InfoCuria publications:
+
+```bibtex
+@misc{cjeu-opendata-2026,
+  title  = {CJEU / CELLAR Case Law},
+  author = {Wicker, David},
+  year   = {2026},
+  publisher = {HuggingFace},
+  howpublished = {\\url{https://huggingface.co/datasets/davidwickerhf/cjeu-opendata}},
+}
+
+@software{cellar-extractor,
+  title  = {cellar-extractor: a Python toolkit for CJEU corpus extraction},
+  author = {{Maastricht Law \\& Tech}},
+  url    = {https://github.com/maastrichtlawtech/cellar-extractor},
+}
+```
+
+"""
+
+    license_section = """## License
+
+- **Code (extraction + consolidation pipeline):** Apache-2.0.
+- **Dataset content:** EU institutional content. Court judgments are
+  public-domain in the EU; metadata and citation graph are derived from
+  the EU's CELLAR open-data programme.
+
+Re-use is unconstrained for research, teaching, and commercial purposes;
+attribution to the source (CELLAR / curia.europa.eu) is appreciated.
+"""
 
     content = f"""---
 license: apache-2.0
@@ -414,60 +881,31 @@ configs:
 
 # CJEU / CELLAR Case Law
 
-European Court of Justice case law (CELLAR sectors 6 and 8) scraped via
-[`cellar-extractor`](https://github.com/maastrichtlawtech/cellar-extractor)
-and consolidated into two Parquet tables:
+A full-coverage corpus of European Court of Justice case law — every
+judgment, order, opinion, and notice the Court of Justice and General
+Court have published since **1954**, plus the **national-court decisions**
+that cite EU law (sector 8). Each case carries its own metadata,
+multi-language full text where available, and the inbound + outbound
+**citation graph** as joinable CELEX identifiers.
+
+The dataset is a single source of truth for empirical EU-law research:
+who cites whom, what subject matters dominate, how the procedural-language
+mix has shifted over seven decades, where the General Court's IP docket
+fits in.
 
 | Table | Granularity | Description |
 |---|---|---|
-| `cases.parquet` | one row per ECLI | All canonical CJEU metadata fields (court formation, judicial procedure type, language, origin country, advocate general, judge rapporteur, subject matter, eurovoc concepts, citing / cited_by graph, etc.). Per-field documentation in [`FIELDS.md`](FIELDS.md). |
-| `fulltexts.parquet` | one row per `(celex, language)` | Plain-text body of each document, with provenance flags (`text_source`, `text_format`, `text_language`, `missing_reasons`). |
+| `cases.parquet` | one row per ECLI | All case metadata. 107 columns covering court formation, judicial procedure type, advocate general, judge rapporteur, subject matter, eurovoc concepts, citing / cited-by edges, etc. Per-field docs in [`FIELDS.md`](FIELDS.md). |
+| `fulltexts.parquet` | one row per ECLI | Plain-text body of each document plus provenance flags (`text_source`, `text_format`, `text_language`, `missing_reasons`). |
 
 ## Headline numbers
 
-- Date window: **{start_date} → {end_date}**
-- Cases: **{cases_rows:,}**
-- Fulltexts: **{fulltexts_rows:,}**
-- Last refreshed: {now}
+- **Date range:** {start_date} → {end_date}
+- **Cases:** {cases_rows:,}
+- **Fulltexts:** {fulltexts_rows:,}
+- **Last refreshed:** {now}
 
-{coverage_section}## Usage
-
-```python
-from datasets import load_dataset
-
-cases = load_dataset("{hf_dataset_repo}", "cases", split="train")
-texts = load_dataset("{hf_dataset_repo}", "fulltexts", split="train")
-
-# Join — note the relationship is one ECLI : many CELEX-language pairs.
-import pandas as pd
-df = cases.to_pandas().merge(texts.to_pandas(), on="ecli", how="left")
-```
-
-## Canonical schema
-
-These columns are present on every row (populated or null), as documented in
-[`FIELDS.md`](FIELDS.md):
-
-{canonical_md}
-
-## Discovered fields (also present in this snapshot)
-
-CDM predicates surfaced from CELLAR that aren't part of the canonical schema
-but were populated for at least one row in this run:
-
-{discovered_md}
-
-## Source
-
-Extracted via [`cellar-extractor`](https://github.com/maastrichtlawtech/cellar-extractor)
-against the live CELLAR SPARQL endpoint and InfoCuria. See
-[`FIELDS.md`](FIELDS.md) for per-field upstream provenance.
-
-## License
-
-Apache-2.0 (matching the source code license). Underlying judicial documents
-are public domain / EU institutional content.
-"""
+{coverage_section}{quick_start_section}{recipes_section}{citation_graph_section}{demographics_section}{fulltext_analysis_section}{extraction_section}{schema_section}{citation_section}{license_section}"""
     output_path.write_text(content, encoding="utf-8")
 
 

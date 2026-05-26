@@ -443,12 +443,9 @@ def test_write_dataset_card_emits_coverage_section_when_stats_provided(tmp_path)
     # Languages line lists at least one language
     assert "**FR**" in body
 
-    # The URI caveat is documented (until we ship the cellar-extractor fix)
-    assert "work_cites_work" in body
-    assert "CELLAR URI" in body or "raw CELLAR" in body
-
-    # The dedup note references the actual count
-    assert "1 rows" in body or "1 ECLI" in body or "share an ECLI" in body
+    # The dedup + schema-trim notes are documented in the new Known quirks section
+    assert "ECLI dedup" in body
+    assert "Schema-trim" in body
 
 
 def test_write_dataset_card_skips_coverage_section_without_stats(tmp_path):
@@ -467,3 +464,206 @@ def test_write_dataset_card_skips_coverage_section_without_stats(tmp_path):
     body = out.read_text(encoding="utf-8")
     assert "## Coverage and caveats" not in body
     assert "## Headline numbers" in body  # still has the basic header
+
+
+# ---------------------------------------------------------------------------
+# Extended stats and richer README sections
+# ---------------------------------------------------------------------------
+
+
+def _make_rich_coverage_fixture():
+    """Bigger fixture exercising the new stat dimensions: subjects,
+    procedures, countries, citation graph topology, and most-cited cases."""
+    cases = pd.DataFrame([
+        {
+            "ecli": "ECLI:EU:T:2003:199", "celex": "C001", "sector": "6",
+            "date_publication": "2003-04-01",
+            "subject_matter": "Trade marks;Intellectual, industrial and commercial property",
+            "type_procedure": "Action for annulment",
+            "origin_country": "Germany",
+            "work_cites_work": "C002;EXTERNAL_LAW_1",
+            "cited_by": "C002;C003;C004;C005;C006",
+        },
+        {
+            "ecli": "ECLI:EU:C:2014:317", "celex": "C002", "sector": "6",
+            "date_publication": "2014-05-13",
+            "subject_matter": "Approximation of laws;Right to be forgotten",
+            "type_procedure": "Reference for a preliminary ruling",
+            "origin_country": "Spain",
+            "work_cites_work": "C001",
+            "cited_by": "C003;C004",
+        },
+        {
+            "ecli": "ECLI:EU:C:2020:001", "celex": "C003", "sector": "6",
+            "date_publication": "2020-01-15",
+            "subject_matter": "Value added tax;Taxation",
+            "type_procedure": "Reference for a preliminary ruling",
+            "origin_country": "Germany",
+            "work_cites_work": "C001;C002",
+            "cited_by": "",
+        },
+        {
+            "ecli": "ECLI:DE:BVerwG:2023:1", "celex": "C004", "sector": "8",
+            "date_publication": "2023-06-10",
+            "subject_matter": "Competition;State aids",
+            "type_procedure": "Reference for a preliminary ruling",
+            "origin_country": "Germany",
+            "work_cites_work": "C001;EXTERNAL_TREATY_1",
+            "cited_by": "",
+        },
+    ])
+    fulltexts = pd.DataFrame([
+        {"ecli": "ECLI:EU:T:2003:199", "text": "x" * 1000, "text_language": "EN",
+         "missing_reasons": ""},
+        {"ecli": "ECLI:EU:C:2014:317", "text": "y" * 5000, "text_language": "EN",
+         "missing_reasons": ""},
+        {"ecli": "ECLI:EU:C:2020:001", "text": "z" * 800, "text_language": "DE",
+         "missing_reasons": ""},
+        {"ecli": "ECLI:DE:BVerwG:2023:1", "text": "q" * 600, "text_language": "DE",
+         "missing_reasons": ""},
+    ])
+    return cases, fulltexts
+
+
+def test_compute_coverage_stats_top_subjects_explodes_multi_atom():
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    subjects = dict(stats["top_subjects"])
+    # Each subject_matter cell has 2 atoms; "Germany" 3 cases means German
+    # cases contribute different subject atoms across the rows.
+    assert subjects["Trade marks"] == 1
+    assert subjects["Value added tax"] == 1
+    assert subjects["Competition"] == 1
+
+
+def test_compute_coverage_stats_top_procedures():
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    procedures = dict(stats["top_procedures"])
+    assert procedures["Reference for a preliminary ruling"] == 3
+    assert procedures["Action for annulment"] == 1
+
+
+def test_compute_coverage_stats_top_origin_countries():
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    countries = dict(stats["top_origin_countries"])
+    assert countries["Germany"] == 3
+    assert countries["Spain"] == 1
+
+
+def test_compute_coverage_stats_citation_topology():
+    """Internal edges (case → case in dataset) vs external (legislation etc.)"""
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    # Total edges: C001 has 2 (C002 + EXTERNAL_LAW_1)
+    #              C002 has 1 (C001)
+    #              C003 has 2 (C001 + C002)
+    #              C004 has 2 (C001 + EXTERNAL_TREATY_1)
+    # = 7 total. Internal: C002,C001,C001,C002,C001 = 5. External: 2.
+    assert stats["citation_edges_total"] == 7
+    assert stats["citation_edges_internal"] == 5
+    assert stats["citation_edges_external"] == 2
+
+
+def test_compute_coverage_stats_top_cited_cases_ordered_by_in_degree():
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    top = stats["top_cited_cases"]
+    # C001 → 5 inbound, C002 → 2, C003+C004 → 0 (filtered out)
+    eclis = [t[0] for t in top]
+    assert eclis[0] == "ECLI:EU:T:2003:199"  # 5 cites
+    assert eclis[1] == "ECLI:EU:C:2014:317"  # 2 cites
+    assert len(top) == 2                     # zero-cite rows excluded
+    # Each entry has (ecli, count, subject, year) and the year is parseable.
+    assert top[0][1] == 5
+    assert "2003" in top[0][3]
+
+
+def test_write_dataset_card_emits_all_new_sections(tmp_path):
+    """The rich card has Quick start, Recipes, Citation graph, demographics,
+    fulltext-analysis, extraction, schema, citation (how-to-cite), and license."""
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+
+    out = tmp_path / "README.md"
+    write_dataset_card(
+        out,
+        cases_rows=len(cases),
+        fulltexts_rows=len(fulltexts),
+        start_date="2003-01-01", end_date="2023-12-31",
+        canonical_columns=["ecli", "celex", "sector"],
+        discovered_columns=[],
+        hf_dataset_repo="example/cjeu",
+        coverage_stats=stats,
+    )
+    body = out.read_text(encoding="utf-8")
+
+    # Every major section heading present
+    for heading in [
+        "## Quick start",
+        "## Recipes",
+        "## Citation graph",
+        "## What's in the corpus",
+        "## Working with fulltexts",
+        "## How the data was extracted",
+        "## Schema",
+        "## How to cite",
+        "## License",
+    ]:
+        assert heading in body, f"missing section: {heading}"
+
+    # Code blocks for the three loading idioms
+    assert "import pandas as pd" in body
+    assert "from datasets import load_dataset" in body
+    assert "import polars as pl" in body
+
+    # The recipes mention concrete query patterns
+    assert "Reference for a preliminary ruling" in body  # recipe #2
+    assert "PageRank" in body                            # recipe #4
+    assert "fetch_text" in body                          # recipe #5
+
+    # Demographics tables include the actual atoms from the fixture
+    assert "Trade marks" in body
+    assert "Germany" in body
+    assert "Reference for a preliminary ruling" in body
+
+    # Citation graph topology numbers rendered
+    assert "5" in body and "7" in body  # internal + total edges
+
+    # Most-cited table has the top case
+    assert "ECLI:EU:T:2003:199" in body
+
+    # how-to-cite block exists with a bibtex stanza
+    assert "@misc" in body or "@software" in body
+    assert "Apache-2.0" in body
+
+
+def test_write_dataset_card_recipe_code_blocks_are_valid_python(tmp_path):
+    """Any ```python``` block in the card should parse — a typo in the
+    sample would otherwise ship to the dataset page."""
+    import ast
+    import re
+
+    cases, fulltexts = _make_rich_coverage_fixture()
+    stats = compute_coverage_stats(cases, fulltexts)
+    out = tmp_path / "README.md"
+    write_dataset_card(
+        out,
+        cases_rows=len(cases), fulltexts_rows=len(fulltexts),
+        start_date="2003-01-01", end_date="2023-12-31",
+        canonical_columns=["ecli"], discovered_columns=[],
+        hf_dataset_repo="example/cjeu",
+        coverage_stats=stats,
+    )
+    body = out.read_text(encoding="utf-8")
+    # Match ```python ... ``` blocks (non-greedy)
+    blocks = re.findall(r"```python\n(.*?)```", body, flags=re.DOTALL)
+    assert blocks, "no python code blocks in card"
+    for i, block in enumerate(blocks):
+        try:
+            ast.parse(block)
+        except SyntaxError as e:
+            raise AssertionError(
+                f"code block #{i+1} doesn't parse: {e}\n--- block ---\n{block}"
+            )
