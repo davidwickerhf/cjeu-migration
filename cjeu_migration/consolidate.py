@@ -198,27 +198,57 @@ are public domain / EU institutional content.
     output_path.write_text(content, encoding="utf-8")
 
 
-def copy_fields_md(output_path: Path) -> bool:
-    """Copy ``FIELDS.md`` from the installed cellar-extractor distribution.
+FIELDS_MD_RAW_URL = (
+    "https://raw.githubusercontent.com/"
+    "maastrichtlawtech/cellar-extractor/dev/FIELDS.md"
+)
 
-    Returns True if the file was located and copied, False otherwise (in
-    which case the caller can carry on without a field catalogue — the
-    dataset card already links the canonical column list).
+
+def copy_fields_md(output_path: Path) -> bool:
+    """Make ``FIELDS.md`` available in the dataset directory.
+
+    Tries the installed cellar-extractor distribution first (works when the
+    file is included in the package's MANIFEST). Falls back to fetching the
+    raw file from GitHub at install-time URL, since the upstream wheel does
+    not currently include ``FIELDS.md`` in its MANIFEST.in.
+
+    Returns ``True`` if the file ended up on disk, ``False`` otherwise (the
+    dataset card still links the canonical column list, so a missing
+    ``FIELDS.md`` is recoverable).
     """
-    candidates = _locate_fields_md()
-    if not candidates:
-        log.warning("FIELDS.md not found in cellar-extractor — skipping copy")
+    # 1. Local install candidates (will work once upstream MANIFEST.in is fixed).
+    for candidate in _locate_fields_md():
+        try:
+            output_path.write_text(candidate.read_text(encoding="utf-8"), encoding="utf-8")
+            log.info("copied FIELDS.md from %s -> %s", candidate, output_path)
+            return True
+        except OSError as exc:
+            log.warning("could not read %s: %s", candidate, exc)
+
+    # 2. Fall back to fetching the raw markdown from GitHub.
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen(FIELDS_MD_RAW_URL, timeout=15) as resp:
+            content = resp.read().decode("utf-8")
+        output_path.write_text(content, encoding="utf-8")
+        log.info("downloaded FIELDS.md from %s -> %s", FIELDS_MD_RAW_URL, output_path)
+        return True
+    except Exception as exc:  # network down, repo moved, etc.
+        log.warning(
+            "FIELDS.md not in install and could not be fetched from %s: %s — "
+            "skipping copy. The dataset card still lists canonical columns.",
+            FIELDS_MD_RAW_URL, exc,
+        )
         return False
-    src = candidates[0]
-    output_path.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-    log.info("copied FIELDS.md from %s -> %s", src, output_path)
-    return True
 
 
 def _locate_fields_md() -> List[Path]:
-    """Find the ``FIELDS.md`` that ships with cellar-extractor.
+    """Find the ``FIELDS.md`` that may ship with cellar-extractor.
 
     The file isn't a Python module so we walk a few likely install locations.
+    Returns an empty list when the file isn't present (upstream MANIFEST.in
+    doesn't currently include it — see ``copy_fields_md`` fallback).
     """
     found: List[Path] = []
     try:
@@ -227,11 +257,11 @@ def _locate_fields_md() -> List[Path]:
         return found
 
     package_dir = Path(cellar_extractor.__file__).resolve().parent
-    # 1. Same directory as the package (installed flat, editable install).
+    # 1. Repo root next to the package (editable installs).
     candidate = package_dir.parent / "FIELDS.md"
     if candidate.exists():
         found.append(candidate)
-    # 2. Inside the package itself (some packaging layouts).
+    # 2. Inside the package itself (would require MANIFEST.in change upstream).
     candidate = package_dir / "FIELDS.md"
     if candidate.exists():
         found.append(candidate)

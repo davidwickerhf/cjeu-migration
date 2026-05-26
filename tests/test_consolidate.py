@@ -175,6 +175,58 @@ def test_write_dataset_card_includes_key_facts(tmp_path):
     assert "`work_part_of_dossier`" in body
 
 
+def test_copy_fields_md_falls_back_to_github_when_not_installed(tmp_path, monkeypatch):
+    """When cellar-extractor's install doesn't ship FIELDS.md (current upstream
+    MANIFEST.in), the helper falls back to fetching the raw file from GitHub."""
+    from unittest.mock import patch
+
+    out = tmp_path / "FIELDS.md"
+
+    # Force the local lookup to return nothing.
+    from cjeu_migration import consolidate
+    monkeypatch.setattr(consolidate, "_locate_fields_md", lambda: [])
+
+    # Fake urllib response.
+    fake_body = b"# CJEU FIELDS\n\nFetched from GitHub.\n"
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return fake_body
+
+    with patch("urllib.request.urlopen", return_value=_FakeResponse()) as urlopen_mock:
+        ok = consolidate.copy_fields_md(out)
+
+    assert ok is True
+    assert out.exists()
+    assert "Fetched from GitHub" in out.read_text("utf-8")
+    urlopen_mock.assert_called_once()
+    called_url = urlopen_mock.call_args[0][0]
+    assert "FIELDS.md" in called_url
+    assert "cellar-extractor" in called_url
+
+
+def test_copy_fields_md_returns_false_when_local_and_remote_both_fail(tmp_path, monkeypatch):
+    """If neither the local install nor GitHub is reachable, the helper logs
+    a warning and returns False — the rest of the pipeline keeps going."""
+    from unittest.mock import patch
+
+    out = tmp_path / "FIELDS.md"
+    from cjeu_migration import consolidate
+    monkeypatch.setattr(consolidate, "_locate_fields_md", lambda: [])
+
+    with patch("urllib.request.urlopen", side_effect=OSError("network down")):
+        ok = consolidate.copy_fields_md(out)
+
+    assert ok is False
+    assert not out.exists()
+
+
 def test_write_dataset_card_handles_no_discovered_columns(tmp_path):
     out = tmp_path / "README.md"
     write_dataset_card(
