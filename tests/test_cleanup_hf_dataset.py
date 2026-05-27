@@ -123,6 +123,65 @@ def test_dedup_by_ecli_handles_empty_frame():
     assert out.empty
 
 
+# Multi-key dedup — for post-multi-language fulltexts.parquet
+
+
+def test_dedup_by_ecli_with_extra_key_keeps_one_row_per_pair():
+    """When the same ECLI appears with different text_language values,
+    each (ECLI, language) combination should survive — only true duplicates
+    of the same language collapse."""
+    df = pd.DataFrame({
+        "ecli":            ["A", "A", "A", "B", "B"],
+        "text_language":   ["EN", "FR", "EN", "EN", "DE"],
+        "text":            ["en1", "fr1", "en2-dup-of-A-EN", "b-en", "b-de"],
+        "__source_window": ["w1", "w2", "w3", "w4", "w5"],
+    })
+    out, dropped = mod.dedup_by_ecli(df, extra_key_cols=("text_language",))
+    assert dropped == 1  # the second "A/EN" row collapses
+    # 4 surviving (ECLI, lang) pairs
+    pairs = set(zip(out["ecli"], out["text_language"]))
+    assert pairs == {("A", "EN"), ("A", "FR"), ("B", "EN"), ("B", "DE")}
+    # __source_window of the collapsed A/EN row merges w1+w3
+    a_en = out[(out["ecli"] == "A") & (out["text_language"] == "EN")].iloc[0]
+    assert a_en["__source_window"] == "w1;w3"
+
+
+def test_dedup_by_ecli_with_extra_key_keeps_all_langs_of_same_case():
+    """A case with 23 language variants must not collapse to one row."""
+    rows = [
+        {"ecli": "A", "text_language": lang, "text": f"body-{lang}"}
+        for lang in ["EN", "FR", "DE", "IT", "ES"]
+    ]
+    df = pd.DataFrame(rows)
+    out, dropped = mod.dedup_by_ecli(df, extra_key_cols=("text_language",))
+    assert dropped == 0
+    assert len(out) == 5
+
+
+def test_dedup_by_ecli_extra_key_missing_column_falls_back_to_ecli():
+    """If the extra-key column doesn't exist in the frame (pre-multi-lang
+    data), dedup behaves like the old ECLI-only path."""
+    df = pd.DataFrame({"ecli": ["A", "A", "B"], "text": ["x", "x", "y"]})
+    out, dropped = mod.dedup_by_ecli(df, extra_key_cols=("text_language",))
+    assert dropped == 1
+    assert len(out) == 2
+
+
+def test_clean_fulltexts_dedups_by_ecli_and_language():
+    """Integration check: clean_fulltexts now keys on the pair."""
+    df = pd.DataFrame({
+        "ecli":            ["A", "A", "A"],
+        "text_language":   ["EN", "FR", "EN"],
+        "text":            ["en-body", "fr-body", "en-dup"],
+        "__source_window": ["w1", "w2", "w3"],
+    })
+    out, report = mod.clean_fulltexts(df)
+    assert report["rows_dedupped"] == 1
+    assert len(out) == 2
+    langs = sorted(out["text_language"])
+    assert langs == ["EN", "FR"]
+
+
 # ---------------------------------------------------------------------------
 # clean_cases — order-of-operations + integration of the three transforms
 # ---------------------------------------------------------------------------

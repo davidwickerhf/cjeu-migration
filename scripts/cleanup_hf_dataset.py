@@ -115,6 +115,7 @@ def dedup_by_ecli(
     *,
     ecli_col: str = "ecli",
     source_window_col: str = "__source_window",
+    extra_key_cols: Tuple[str, ...] = (),
 ) -> Tuple[pd.DataFrame, int]:
     """Collapse rows that share an ``ecli`` value to a single row.
 
@@ -122,6 +123,12 @@ def dedup_by_ecli(
     present and differs across the group, the surviving row keeps a
     ``;``-joined union of the source windows so provenance isn't lost.
     Rows with NaN ECLI are left alone — they can't be safely grouped.
+
+    Pass ``extra_key_cols`` to widen the dedup key. For example, the
+    post-multi-language ``fulltexts.parquet`` has one legitimate row per
+    ``(ecli, text_language)`` — callers should pass
+    ``extra_key_cols=("text_language",)`` so only true duplicates of the
+    same language are collapsed.
     """
     if ecli_col not in df.columns:
         return df, 0
@@ -130,16 +137,22 @@ def dedup_by_ecli(
     valid = df[df[ecli_col].notna()].copy()
     nan_block = df[df[ecli_col].isna()].copy()
 
+    # Full key is ecli plus any extras the caller asked for (defensive: only
+    # use extras that actually exist in the frame).
+    key_cols = [ecli_col] + [c for c in extra_key_cols if c in valid.columns]
+
     if source_window_col in valid.columns:
-        # Build a per-ECLI merged window string then deduplicate.
+        # Build a per-key merged window string then deduplicate.
         merged = (
-            valid.groupby(ecli_col, sort=False)[source_window_col]
+            valid.groupby(key_cols, sort=False)[source_window_col]
             .agg(lambda series: ";".join(sorted({str(s) for s in series if pd.notna(s) and str(s).strip()})))
         )
-        valid = valid.drop_duplicates(subset=[ecli_col], keep="first")
-        valid[source_window_col] = valid[ecli_col].map(merged)
+        valid = valid.drop_duplicates(subset=key_cols, keep="first")
+        # Re-key the merged windows back onto each surviving row.
+        merge_index = valid.set_index(key_cols).index
+        valid[source_window_col] = merge_index.map(merged)
     else:
-        valid = valid.drop_duplicates(subset=[ecli_col], keep="first")
+        valid = valid.drop_duplicates(subset=key_cols, keep="first")
 
     out = pd.concat([valid, nan_block], ignore_index=True)
     return out, before - len(out)
@@ -216,13 +229,22 @@ def clean_cases(
 
 
 def clean_fulltexts(df: pd.DataFrame) -> Tuple[pd.DataFrame, dict]:
-    """Cleanup for ``fulltexts.parquet`` — dedup ECLIs and ride the
-    viewer-friendly writer."""
+    """Cleanup for ``fulltexts.parquet`` — dedup on (ECLI, language).
+
+    Post-multi-language fanout, fulltexts.parquet legitimately carries one
+    row per (ECLI, text_language) pair. Dedup must therefore key on the
+    pair, not just ECLI — otherwise we'd silently drop 22 of every 23
+    language variants. ``text_language`` is left out of the key when the
+    column isn't present (the pre-multi-lang shape), in which case dedup
+    collapses on plain ECLI.
+    """
     report = {"rows_before": len(df), "rows_dedupped": 0}
-    df, dropped_count = dedup_by_ecli(df)
+    df, dropped_count = dedup_by_ecli(
+        df, extra_key_cols=("text_language",)
+    )
     report["rows_dedupped"] = dropped_count
     report["rows_after"] = len(df)
-    log.info("fulltexts: deduped %d rows on ECLI -> %d rows",
+    log.info("fulltexts: deduped %d rows on (ECLI, text_language) -> %d rows",
              dropped_count, len(df))
     return df, report
 
