@@ -476,20 +476,16 @@ def write_dataset_card(
         ft_with = coverage_stats.get("fulltext_with_text", 0)
         ft_pct = (round(100 * ft_with / ft_total, 1) if ft_total else 0.0)
 
-        # --- Coverage and caveats ---
-        coverage_section = f"""## Coverage and caveats
+        # --- Coverage section ---
+        coverage_section = f"""## Coverage
 
 ### Per-decade fulltext availability
-
-CELLAR's body-text coverage rises sharply with the move from analogue to
-digital court archives. Pre-2000 cases are largely metadata-only — the
-decision text exists in print but was never digitised into CELLAR.
 
 {_format_decade_table(coverage_stats.get("decade_table", []))}
 
 In total, **{ft_with:,} of {ft_total:,} ({ft_pct}%)** documents have a
-non-trivial body text (≥200 characters). The remainder carry a populated
-``missing_reasons`` column explaining why:
+non-trivial body text (≥200 characters). Rows without body text carry a
+populated ``missing_reasons`` column:
 
 {_format_missing_reasons(coverage_stats.get("missing_reason_top", []))}
 
@@ -499,27 +495,21 @@ non-trivial body text (≥200 characters). The remainder carry a populated
 
 ### Languages
 
-The dataset preserves each document's original procedural language. The
-top 10 by row count (within ``fulltexts.parquet``):
+Each document is available in its original procedural language and, where
+CELLAR provides them, in additional EU-official-language translations. Top
+10 by row count in ``fulltexts.parquet``:
 
 {_format_language_table(coverage_stats.get("fulltext_languages", []))}
 
-### Known quirks
+### Notes
 
-- **ECLI dedup.** {coverage_stats.get('dup_ecli_count', 0)} duplicate-ECLI
-  rows remain in this snapshot (down from 14 in earlier versions). The
-  cleanup pipeline collapses same-ECLI rows from overlapping scrape
-  windows; the surviving row carries a `;`-joined `__source_window`
-  string for provenance.
-- **Multi-window dedup at consolidation.** Raw scrape volume
-  (~185 k ECLIs across all date windows) collapses to the unique ECLI
-  set (~46 k) — CELLAR returns the same record from adjacent windows
-  for backfilled pre-2000 entries.
-- **Schema-trim.** 15 always-null CDM predicates (legislation-only
-  fields like `eli`, `in_force`, plus text-describing fields that live
-  in ``fulltexts.parquet``) are dropped from ``cases.parquet`` for
-  schema clarity. The field reference in [`FIELDS.md`](FIELDS.md) is
-  the source of truth.
+- Schema fields that apply only to legislation (e.g. `eli`, `in_force`)
+  or that describe the body text rather than the case
+  (`text_language`, `text_format`, `text_source`) are not present in
+  ``cases.parquet``. See [`FIELDS.md`](FIELDS.md) for the full per-field
+  reference.
+- Each row in both tables carries a ``__source_window`` column
+  identifying the scrape window(s) it came from.
 
 """
 
@@ -530,14 +520,11 @@ top 10 by row count (within ``fulltexts.parquet``):
         cg_pct = (round(100 * cg_internal / cg_total, 1) if cg_total else 0.0)
         citation_graph_section = f"""## Citation graph
 
-Each case row carries two citation columns:
+Each case row carries two citation columns, both as `;`-separated lists
+of CELEX identifiers:
 
-- `work_cites_work` — outbound edges (CELEX IDs of cases / acts this case cites)
-- `cited_by` — inbound edges (CELEX IDs of cases that cite this case)
-
-Both are `;`-separated multi-cardinality strings. After the v2 cleanup
-pass, both columns are CELEX-form (the previous URI form has been
-resolved in place).
+- `work_cites_work` — outbound edges (cases / acts this case cites)
+- `cited_by` — inbound edges (cases that cite this case)
 
 ### Topology
 

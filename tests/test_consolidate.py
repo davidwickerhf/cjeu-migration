@@ -427,11 +427,11 @@ def test_write_dataset_card_emits_coverage_section_when_stats_provided(tmp_path)
     body = out.read_text(encoding="utf-8")
 
     # Section headings landed
-    assert "## Coverage and caveats" in body
+    assert "## Coverage" in body
     assert "### Per-decade fulltext availability" in body
     assert "### Sector split" in body
     assert "### Languages" in body
-    assert "### Known quirks" in body
+    assert "### Notes" in body
 
     # Decade rows rendered as a markdown table
     assert "| 1960s |" in body
@@ -443,9 +443,8 @@ def test_write_dataset_card_emits_coverage_section_when_stats_provided(tmp_path)
     # Languages line lists at least one language
     assert "**FR**" in body
 
-    # The dedup + schema-trim notes are documented in the new Known quirks section
-    assert "ECLI dedup" in body
-    assert "Schema-trim" in body
+    # The schema note is in Notes section (refers to FIELDS.md)
+    assert "`FIELDS.md`" in body or "FIELDS.md" in body
 
 
 def test_write_dataset_card_skips_coverage_section_without_stats(tmp_path):
@@ -462,7 +461,7 @@ def test_write_dataset_card_skips_coverage_section_without_stats(tmp_path):
         hf_dataset_repo="example/x",
     )
     body = out.read_text(encoding="utf-8")
-    assert "## Coverage and caveats" not in body
+    assert "## Coverage" not in body
     assert "## Headline numbers" in body  # still has the basic header
 
 
