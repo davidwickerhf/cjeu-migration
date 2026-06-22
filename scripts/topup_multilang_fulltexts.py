@@ -185,6 +185,182 @@ def write_viewer_friendly_parquet(df: pd.DataFrame, output: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Streaming helpers — used by run() to avoid loading the 5+ GB text column
+# into pandas. The text column is what blows memory in container
+# environments (a 5 GB on-disk parquet expands to 15-25 GB once pandas
+# decodes every string into a Python object). These helpers stream the
+# parquet via pyarrow without ever materialising the text column.
+# ---------------------------------------------------------------------------
+
+
+def stream_existing_langs_by_ecli(
+    fulltexts_path: Path,
+    *,
+    batch_size: int = 10_000,
+) -> dict:
+    """Build a per-ECLI language index by streaming fulltexts.parquet.
+
+    Returns ``dict[ecli] -> set[upper-cased language code]``. The text
+    column is never read — pyarrow projects only ``(ecli, text_language)``.
+    Memory use is bounded by ``batch_size`` plus the index dict itself
+    (~one set per ECLI, typically a few MB total even for 50k ECLIs).
+    """
+    pf = pq.ParquetFile(fulltexts_path)
+    out: dict = {}
+    for batch in pf.iter_batches(
+        batch_size=batch_size, columns=["ecli", "text_language"]
+    ):
+        ecli_col = batch.column("ecli").to_pylist()
+        lang_col = batch.column("text_language").to_pylist()
+        for e, l in zip(ecli_col, lang_col):
+            if not e:
+                continue
+            lang = (l or "").upper()
+            if not lang:
+                continue
+            out.setdefault(e, set()).add(lang)
+    return out
+
+
+def find_sparse_eclis_from_index(
+    cases_df: pd.DataFrame,
+    existing_by_ecli: dict,
+    *,
+    min_langs: int,
+    year_threshold: int,
+) -> list:
+    """Variant of :func:`find_sparse_eclis` that takes the precomputed
+    ``existing_by_ecli`` index instead of a full fulltexts DataFrame.
+
+    Output is identical to ``find_sparse_eclis`` given equivalent inputs.
+    Used by :func:`run` so the script doesn't need to materialise the
+    text column in pandas.
+    """
+    if cases_df.empty:
+        return []
+
+    def _first_date(v):
+        if pd.isna(v):
+            return None
+        parts = [p.strip() for p in str(v).split(";") if p.strip()]
+        return min(parts) if parts else None
+
+    dt = pd.to_datetime(
+        cases_df["date_publication"].map(_first_date), errors="coerce", utc=True
+    )
+    years = dt.dt.year
+
+    def _first_celex(v):
+        if pd.isna(v):
+            return None
+        parts = [p.strip() for p in str(v).split(";") if p.strip()]
+        return parts[0] if parts else None
+
+    celexes = cases_df["celex"].map(_first_celex)
+
+    sparse: list = []
+    for ecli, year, celex in zip(cases_df["ecli"], years, celexes):
+        if pd.isna(ecli) or not celex:
+            continue
+        if pd.isna(year) or year < year_threshold:
+            continue
+        if len(existing_by_ecli.get(str(ecli), ())) < min_langs:
+            sparse.append((str(ecli), str(celex)))
+    return sparse
+
+
+def _union_schema(orig: pa.Schema, extra: pa.Schema) -> pa.Schema:
+    """Return a schema with all fields from *orig* plus any new fields
+    from *extra*. Original field types win on collision."""
+    fields = list(orig)
+    existing = {f.name for f in fields}
+    for f in extra:
+        if f.name not in existing:
+            fields.append(f)
+    return pa.schema(fields)
+
+
+def _conform_batch(batch: pa.RecordBatch, target: pa.Schema) -> pa.RecordBatch:
+    """Reproject *batch* to match *target* schema, filling missing
+    columns with typed nulls."""
+    arrays = []
+    for field in target:
+        if field.name in batch.schema.names:
+            arrays.append(batch.column(field.name))
+        else:
+            arrays.append(pa.nulls(batch.num_rows, type=field.type))
+    return pa.RecordBatch.from_arrays(arrays, schema=target)
+
+
+def append_new_rows_streaming(
+    original_path: Path,
+    new_rows: list,
+    output_path: Path,
+) -> int:
+    """Stream-copy *original_path* to *output_path* and append *new_rows*
+    that don't already exist as (ecli, text_language) pairs.
+
+    Memory-bounded — reads via pyarrow batches, writes via
+    :class:`ParquetWriter` without ever materialising the whole table.
+    Schema is the union of the original parquet's schema and any new
+    fields present in *new_rows* (with nulls padded for original rows).
+    Output is viewer-friendly (zstd + page index).
+
+    Returns the count of new rows actually appended (after dedup).
+    """
+    if not new_rows:
+        return 0
+
+    reader = pq.ParquetFile(original_path)
+    orig_schema = reader.schema_arrow
+
+    # Pass 1 — collect (ecli, language) keys already present.
+    existing_keys: set = set()
+    for batch in reader.iter_batches(
+        batch_size=20_000, columns=["ecli", "text_language"]
+    ):
+        for e, l in zip(
+            batch.column("ecli").to_pylist(),
+            batch.column("text_language").to_pylist(),
+        ):
+            if e and l:
+                existing_keys.add((str(e), str(l).upper()))
+
+    deduped = [
+        r for r in new_rows
+        if (
+            str(r.get("ecli") or ""),
+            (r.get("text_language") or "").upper(),
+        ) not in existing_keys
+    ]
+    if not deduped:
+        return 0
+
+    new_table = pa.Table.from_pandas(pd.DataFrame(deduped), preserve_index=False)
+    target_schema = _union_schema(orig_schema, new_table.schema)
+
+    # Pass 2 — stream original through, then append new rows.
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = pq.ParquetWriter(
+        output_path,
+        schema=target_schema,
+        compression="zstd",
+        write_page_index=True,
+    )
+    try:
+        # New reader because iter_batches in pass 1 exhausted the iterator state
+        reader2 = pq.ParquetFile(original_path)
+        for batch in reader2.iter_batches(batch_size=FULLTEXTS_ROW_GROUP_SIZE):
+            writer.write_batch(_conform_batch(batch, target_schema))
+        for new_batch in new_table.to_batches(max_chunksize=FULLTEXTS_ROW_GROUP_SIZE):
+            writer.write_batch(_conform_batch(new_batch, target_schema))
+    finally:
+        writer.close()
+
+    return len(deduped)
+
+
+# ---------------------------------------------------------------------------
 # CELLAR query (per ECLI) — uses cellar-extractor's helpers
 # ---------------------------------------------------------------------------
 
@@ -405,26 +581,102 @@ def run(
 
     log.info("loading cases  ← %s", cases_path)
     cases_df = pd.read_parquet(cases_path)
-    log.info("loading fulltexts ← %s", fulltexts_path)
-    fulltexts_df = pd.read_parquet(fulltexts_path)
-    log.info("loaded: cases %d × %d, fulltexts %d × %d",
-             *cases_df.shape, *fulltexts_df.shape)
 
-    updated_df, stats = topup_dataset(
-        cases_df, fulltexts_df,
-        min_langs=min_langs, year_threshold=year_threshold,
-        max_workers=max_workers,
-        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    # Stream-build a per-ECLI language index without ever loading the 5+ GB
+    # text column into pandas. The text column is what blows memory on
+    # container-limited boxes — a 5 GB on-disk parquet inflates to 20+ GB
+    # of Python string objects in pandas. Streaming keeps us bounded.
+    log.info("indexing fulltexts (streaming) ← %s", fulltexts_path)
+    existing_by_ecli = stream_existing_langs_by_ecli(fulltexts_path)
+    log.info(
+        "indexed %d ECLIs across %d (ecli, lang) tuples",
+        len(existing_by_ecli),
+        sum(len(s) for s in existing_by_ecli.values()),
     )
 
-    if stats["new_rows_added"] == 0:
+    if work_uri_fn is None or items_fn is None or fanout_fn is None:
+        from cellar_extractor.eurlex_scraping import (
+            _fetch_sector8_work_uri as _default_work_uri,
+            _fetch_sector8_items_for_work as _default_items,
+            _fanout_fulltexts_from_candidates as _default_fanout,
+        )
+        work_uri_fn = work_uri_fn or _default_work_uri
+        items_fn = items_fn or _default_items
+        fanout_fn = fanout_fn or _default_fanout
+
+    sparse = find_sparse_eclis_from_index(
+        cases_df, existing_by_ecli,
+        min_langs=min_langs, year_threshold=year_threshold,
+    )
+    log.info(
+        "found %d sparse ECLIs to topup (year>=%d, langs<%d)",
+        len(sparse), year_threshold, min_langs,
+    )
+
+    all_new_rows: list = []
+    failures = 0
+    start = time.monotonic()
+    processed = 0
+
+    def _task(ecli_celex):
+        ecli, celex = ecli_celex
+        existing = existing_by_ecli.get(ecli, set())
+        return _topup_one_ecli(
+            ecli, celex, existing,
+            work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_task, sc): sc for sc in sparse}
+        for fut in as_completed(futures):
+            processed += 1
+            try:
+                rows = fut.result()
+                all_new_rows.extend(rows)
+            except Exception as exc:
+                failures += 1
+                log.warning("topup failed for %s: %s", futures[fut], exc)
+            if processed % 100 == 0:
+                rate = processed / (time.monotonic() - start)
+                remaining = len(sparse) - processed
+                eta_min = (remaining / rate / 60) if rate else 0
+                log.info(
+                    "topup progress: %d/%d  (+%d rows so far, "
+                    "%.1f ECLIs/s, ETA %.1f min)",
+                    processed, len(sparse), len(all_new_rows),
+                    rate, eta_min,
+                )
+
+    log.info(
+        "topup network phase complete: %d rows generated, %d failures",
+        len(all_new_rows), failures,
+    )
+
+    stats = {
+        "sparse_eclis": len(sparse),
+        "new_rows_attempted": len(all_new_rows),
+        "new_rows_added": 0,
+        "failures": failures,
+    }
+
+    if not all_new_rows:
         log.info("no new rows to add — dataset already topped up. Skipping upload.")
         return stats
 
     out_path = workdir / "fulltexts.topped.parquet"
-    write_viewer_friendly_parquet(updated_df, out_path)
-    log.info("wrote %s (%.1f MB, %d rows)",
-             out_path, out_path.stat().st_size / 1e6, len(updated_df))
+    added = append_new_rows_streaming(fulltexts_path, all_new_rows, out_path)
+    stats["new_rows_added"] = added
+    if added == 0:
+        log.info(
+            "after dedup all %d generated rows were duplicates; nothing to upload.",
+            len(all_new_rows),
+        )
+        return stats
+
+    log.info(
+        "wrote %s (%.1f MB, %d new rows appended)",
+        out_path, out_path.stat().st_size / 1e6, added,
+    )
 
     if dry_run:
         log.info("DRY_RUN — skipping upload.")

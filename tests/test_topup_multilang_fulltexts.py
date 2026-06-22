@@ -335,6 +335,122 @@ def test_topup_dataset_idempotent_on_already_topped_up_data():
 
 
 # ---------------------------------------------------------------------------
+# Streaming helpers — used by run() to avoid loading the text column
+# ---------------------------------------------------------------------------
+
+
+def test_stream_existing_langs_by_ecli_returns_per_ecli_set(tmp_path):
+    """Build a tiny parquet, stream-index it, confirm the dict matches
+    what we'd get from a pandas groupby."""
+    ft = pd.DataFrame([
+        {"ecli": "A", "text_language": "EN", "text": "long..."},
+        {"ecli": "A", "text_language": "FR", "text": "long..."},
+        {"ecli": "A", "text_language": "en", "text": "case-insensitive merge"},
+        {"ecli": "B", "text_language": "DE", "text": "x"},
+        {"ecli": "C", "text_language": "", "text": "empty-lang row — skip"},
+        {"ecli": "",  "text_language": "IT", "text": "empty-ecli row — skip"},
+    ])
+    p = tmp_path / "ft.parquet"
+    ft.to_parquet(p, index=False)
+    idx = mod.stream_existing_langs_by_ecli(p)
+    assert idx == {"A": {"EN", "FR"}, "B": {"DE"}}
+
+
+def test_find_sparse_eclis_from_index_matches_in_memory_version():
+    """The streaming variant must produce identical output to the
+    in-memory variant given equivalent inputs."""
+    cases = pd.DataFrame([
+        {"ecli": "OLD", "celex": "61964CJ0001", "date_publication": "1964-07-15"},
+        {"ecli": "NEW-low", "celex": "62020CJ0001", "date_publication": "2020-01-15"},
+        {"ecli": "NEW-full", "celex": "62020CJ0002", "date_publication": "2020-02-15"},
+    ])
+    fulltexts = pd.DataFrame([
+        *[{"ecli": "OLD", "text_language": l} for l in ["EN", "FR", "DE"]],
+        *[{"ecli": "NEW-low", "text_language": l} for l in ["EN", "FR"]],
+        *[{"ecli": "NEW-full", "text_language": l}
+          for l in ["EN", "FR", "DE", "IT", "NL", "ES", "PT"]],
+    ])
+    idx = {"OLD": {"EN", "FR", "DE"},
+           "NEW-low": {"EN", "FR"},
+           "NEW-full": {"EN", "FR", "DE", "IT", "NL", "ES", "PT"}}
+
+    in_memory = mod.find_sparse_eclis(
+        cases, fulltexts, min_langs=5, year_threshold=2001
+    )
+    streamed = mod.find_sparse_eclis_from_index(
+        cases, idx, min_langs=5, year_threshold=2001
+    )
+    assert in_memory == streamed
+    assert {e for e, _ in streamed} == {"NEW-low"}
+
+
+def test_append_new_rows_streaming_dedups_and_writes_zstd(tmp_path):
+    """Round-trip: write a parquet, append new rows, confirm the result
+    has the dedup applied + viewer-friendly layout."""
+    orig = pd.DataFrame([
+        {"ecli": "A", "text_language": "EN", "text": "old en",
+         "celex": "62020CJ0001", "text_source": "INFOCURIA_BLOB_HTML",
+         "text_format": "html", "missing_reasons": ""},
+        {"ecli": "A", "text_language": "FR", "text": "old fr",
+         "celex": "62020CJ0001", "text_source": "CELLAR_ITEM",
+         "text_format": "xhtml", "missing_reasons": ""},
+    ])
+    orig_path = tmp_path / "orig.parquet"
+    orig.to_parquet(orig_path, index=False)
+    new_rows = [
+        {"ecli": "A", "text_language": "EN", "text": "duplicate"},   # skip
+        {"ecli": "A", "text_language": "DE", "text": "new de",
+         "celex": "62020CJ0001", "text_source": "CELLAR_ITEM",
+         "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+        {"ecli": "A", "text_language": "IT", "text": "new it",
+         "celex": "62020CJ0001", "text_source": "CELLAR_ITEM",
+         "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+    ]
+    out_path = tmp_path / "out.parquet"
+    added = mod.append_new_rows_streaming(orig_path, new_rows, out_path)
+    assert added == 2
+
+    df = pd.read_parquet(out_path)
+    assert len(df) == 4
+    assert set(df["text_language"]) == {"EN", "FR", "DE", "IT"}
+    # Original EN row preserved as-is
+    en = df[df["text_language"] == "EN"].iloc[0]
+    assert en["text"] == "old en"
+    # New schema column (__source_window) was added; old rows have NaN/None there
+    assert "__source_window" in df.columns
+    # Viewer-friendly layout
+    pf = pq.ParquetFile(out_path)
+    col0 = pf.metadata.row_group(0).column(0)
+    assert col0.has_offset_index
+    assert col0.compression.lower() == "zstd"
+
+
+def test_append_new_rows_streaming_noop_for_empty_input(tmp_path):
+    orig = pd.DataFrame([{"ecli": "A", "text_language": "EN", "text": "x"}])
+    orig_path = tmp_path / "orig.parquet"
+    orig.to_parquet(orig_path, index=False)
+    added = mod.append_new_rows_streaming(orig_path, [], tmp_path / "out.parquet")
+    assert added == 0
+
+
+def test_append_new_rows_streaming_noop_when_all_duplicates(tmp_path):
+    orig = pd.DataFrame([
+        {"ecli": "A", "text_language": "EN", "text": "x"},
+        {"ecli": "A", "text_language": "FR", "text": "y"},
+    ])
+    orig_path = tmp_path / "orig.parquet"
+    orig.to_parquet(orig_path, index=False)
+    new_rows = [
+        {"ecli": "A", "text_language": "EN", "text": "duplicate"},
+        {"ecli": "A", "text_language": "fr", "text": "case-insensitive dup"},
+    ]
+    added = mod.append_new_rows_streaming(orig_path, new_rows, tmp_path / "out.parquet")
+    assert added == 0
+
+
+# ---------------------------------------------------------------------------
 # run() end-to-end
 # ---------------------------------------------------------------------------
 
