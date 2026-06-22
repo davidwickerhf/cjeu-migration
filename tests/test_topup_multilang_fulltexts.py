@@ -81,6 +81,50 @@ def test_find_sparse_eclis_empty_inputs():
                                  min_langs=5, year_threshold=2001) == []
 
 
+def test_default_min_langs_is_24_to_cover_all_eu_official_languages():
+    """Lock the script-level default so a future edit can't silently lower
+    it back to 5 (the original choice that missed multi-lang back-fills
+    for cases sitting at 5-23 languages). The fix here was to bump the
+    default to 24 — the current number of official EU languages — so
+    every case below max-EU-language-coverage gets re-probed."""
+    import inspect
+    # find_sparse_eclis takes min_langs as a required kw-only arg; the
+    # defaults live on the higher-level helpers and on main()'s env
+    # fallback. Check the three places we set it:
+    for fn_name in ("topup_dataset", "run"):
+        sig = inspect.signature(getattr(mod, fn_name))
+        assert sig.parameters["min_langs"].default == 24, (
+            f"{fn_name} default min_langs is "
+            f"{sig.parameters['min_langs'].default}, expected 24"
+        )
+    # And the env-var fallback in main() should also default to "24"
+    src = inspect.getsource(mod.main)
+    assert 'MIN_LANGS", "24"' in src, (
+        "main() env-var fallback for MIN_LANGS is not '24'"
+    )
+
+
+def test_find_sparse_eclis_picks_up_modern_cases_below_24_langs():
+    """The Cupriak-Trojan failure mode: a modern case with exactly 5
+    languages should be picked up when min_langs=24 (it was skipped under
+    the old min_langs=5 default)."""
+    cases = pd.DataFrame([
+        {"ecli": "RECENT-5LANG", "celex": "62023CJ0713",
+         "date_publication": "2025-11-25"},
+    ])
+    fulltexts = pd.DataFrame([
+        {"ecli": "RECENT-5LANG", "text_language": l}
+        for l in ["IT", "CS", "FR", "DA", "HU"]
+    ])
+    # Old behaviour: with min_langs=5, this case was skipped.
+    assert mod.find_sparse_eclis(cases, fulltexts,
+                                 min_langs=5, year_threshold=2001) == []
+    # New behaviour: with min_langs=24, this case IS picked up for re-fetch.
+    out = mod.find_sparse_eclis(cases, fulltexts,
+                                min_langs=24, year_threshold=2001)
+    assert [e for e, _ in out] == ["RECENT-5LANG"]
+
+
 # ---------------------------------------------------------------------------
 # merge_new_rows
 # ---------------------------------------------------------------------------
