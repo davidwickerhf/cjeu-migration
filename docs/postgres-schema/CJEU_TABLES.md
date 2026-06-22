@@ -43,27 +43,26 @@ until we're confident the new shape is stable.
 
 ```mermaid
 erDiagram
-    case ||--o{ case_text : "1-N langs"
-    case ||--o{ case_judge : ""
-    case ||--o{ case_party : ""
-    case ||--o{ case_citation : "source"
-    case ||--o{ case_law_reference : ""
+    case ||--o{ case_text : has
+    case ||--o{ case_judge : has
+    case ||--o{ case_party : has
+    case ||--o{ case_citation : source
+    case ||--o{ case_law_reference : has
 
-    case ||--o| cjeu_document : "CJEU only"
-    case ||--o| cjeu_national_document : "sector-8 only"
-    case ||--o| cjeu_ag_opinion : "Opinion CELEXes only"
-    case ||--o{ cjeu_classification : "1-N tags"
+    case ||--o| cjeu_document : extends
+    case ||--o| cjeu_national_document : extends
+    case ||--o| cjeu_ag_opinion : extends
+    case ||--o{ cjeu_classification : has
 
-    cjeu_document }o--|| court_formation : ""
-    cjeu_document }o--o| case : "dossier_parent_case_id"
-
-    cjeu_ag_opinion }o--|| case : "parent_case_id"
+    cjeu_document }o--|| court_formation : uses
+    cjeu_document }o--o| case : dossier_parent
+    cjeu_ag_opinion }o--|| case : parent_case
 
     case {
         bigserial id PK
         text ecli UK
         text celex_id
-        text source "CJEU/RS/ECHR"
+        text source
         int court_id FK
         int instance_id FK
         int language_iso FK
@@ -91,7 +90,7 @@ erDiagram
         bigserial id PK
         bigint source_case_id FK
         bigint target_case_id FK
-        text target_celex "if not yet resolved"
+        text target_celex
         text relation_type
         text source_dataset
         text extractor_version
@@ -102,15 +101,15 @@ erDiagram
         bigserial id PK
         bigint case_id FK
         bigint legislation_id FK
-        bigint provision_id FK "nullable"
+        bigint provision_id FK
         text role
         text raw_reference
     }
 
     cjeu_document {
-        bigint case_id PK_FK
+        bigint case_id PK
         text celex_id
-        text sector "6 or 8"
+        text sector
         int formation_id FK
         date date_lodged
         text cellar_uri
@@ -120,19 +119,19 @@ erDiagram
         text local_identifier
         text procedure_result
         text dossier_uri
-        bigint dossier_parent_case_id FK "nullable"
+        bigint dossier_parent_case_id FK
     }
 
     cjeu_ag_opinion {
-        bigint case_id PK_FK
-        bigint parent_case_id FK "the judgment this opinion is for"
+        bigint case_id PK
+        bigint parent_case_id FK
         text advocate_general
         text opinion_uri
         date date_delivered
     }
 
     cjeu_national_document {
-        bigint case_id PK_FK
+        bigint case_id PK
         text national_court_uri
         text national_decision_internal_id
         text national_parties_raw
@@ -149,10 +148,10 @@ erDiagram
     cjeu_classification {
         bigserial id PK
         bigint case_id FK
-        text scheme "subject_matter | eurovoc | keyword | directory_code"
+        text scheme
         text code
         text label
-        bigint parent_id FK "nullable, for hierarchies"
+        bigint parent_id FK
     }
 
     court_formation {
@@ -162,6 +161,13 @@ erDiagram
         int judge_count
     }
 ```
+
+> **Diagram legend:**
+> - `cjeu_document.case_id`, `cjeu_ag_opinion.case_id`, `cjeu_national_document.case_id` are **both PK and FK** — one-to-one with `case`. Mermaid doesn't render combined keys, so the diagram shows just `PK`; the per-table spec below confirms the FK constraint.
+> - `cjeu_document.sector` is `'6'` (Court of Justice) or `'8'` (national CJEU-referred).
+> - `case.source` is `'CJEU' \| 'RS' \| 'ECHR'`.
+> - `cjeu_classification.scheme` is `'subject_matter' \| 'eurovoc' \| 'keyword' \| 'directory_code'`.
+> - `case_citation.target_celex` is populated when the cited case is not yet in `case` (e.g. pre-1954 ECSC decisions outside the corpus); `target_case_id` is then NULL.
 
 ---
 
