@@ -104,6 +104,28 @@ def test_default_min_langs_is_24_to_cover_all_eu_official_languages():
     )
 
 
+def test_default_year_threshold_is_0_to_cover_all_decades():
+    """Lock the script-level year_threshold default at 0 so a future edit
+    can't silently re-introduce the year=2001 filter that previously
+    excluded pre-2001 cases from the multi-lang back-fill. The earlier
+    2001 default was based on the (untested) assumption that pre-2001
+    cases were already at CELLAR's available maximum via the extractor's
+    sector-6 fallback — which we cannot verify without actually probing.
+    Default of 0 covers every decade; cases already at era-max
+    probe-and-skip cheaply."""
+    import inspect
+    for fn_name in ("topup_dataset", "run"):
+        sig = inspect.signature(getattr(mod, fn_name))
+        assert sig.parameters["year_threshold"].default == 0, (
+            f"{fn_name} default year_threshold is "
+            f"{sig.parameters['year_threshold'].default}, expected 0"
+        )
+    src = inspect.getsource(mod.main)
+    assert 'YEAR_THRESHOLD", "0"' in src, (
+        "main() env-var fallback for YEAR_THRESHOLD is not '0'"
+    )
+
+
 def test_find_sparse_eclis_picks_up_modern_cases_below_24_langs():
     """The Cupriak-Trojan failure mode: a modern case with exactly 5
     languages should be picked up when min_langs=24 (it was skipped under

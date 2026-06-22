@@ -24,13 +24,17 @@ Usage::
 
     # Override target repo / threshold / parallelism.
     HF_DATASET_REPO=org/name \
-    MIN_LANGS=24 YEAR_THRESHOLD=2001 WORKERS=6 \
+    MIN_LANGS=24 YEAR_THRESHOLD=0 WORKERS=6 \
     python scripts/topup_multilang_fulltexts.py
 
-The default ``MIN_LANGS`` is 24 — the current number of official EU
-languages. Anything below that gets re-checked against CELLAR. Pre-2004
-cases that genuinely cap at 11 languages probe-and-skip cheaply; the
-only real cost is the SPARQL round-trip per ECLI.
+Default thresholds are deliberately aggressive: ``MIN_LANGS=24`` (the
+current number of official EU languages — anything below that gets
+re-checked) and ``YEAR_THRESHOLD=0`` (every decade). Cases that are
+already at CELLAR's available maximum (e.g. a 1965 judgment that
+genuinely caps at 6 languages) probe-and-skip cheaply; the only real
+cost is one SPARQL round-trip per ECLI. The point is to make the
+defaults exhaustive — if a case has fewer translations than what
+CELLAR exposes, we want to find that out.
 
 Requires the locally-installed cellar-extractor to be the post-PR-#7
 version. Reinstall with::
@@ -243,7 +247,7 @@ def topup_dataset(
     fulltexts_df: pd.DataFrame,
     *,
     min_langs: int = 24,
-    year_threshold: int = 2001,
+    year_threshold: int = 0,
     max_workers: int = 6,
     work_uri_fn=None,
     items_fn=None,
@@ -373,7 +377,7 @@ def run(
     dry_run: bool = False,
     token: str | None = None,
     min_langs: int = 24,
-    year_threshold: int = 2001,
+    year_threshold: int = 0,
     max_workers: int = 6,
     local_cases: Path | None = None,
     local_fulltexts: Path | None = None,
@@ -436,7 +440,7 @@ def main() -> int:
     dry_run = os.environ.get("DRY_RUN") == "1"
     token = os.environ.get("HUGGINGFACE_TOKEN") or os.environ.get("HF_TOKEN")
     min_langs = int(os.environ.get("MIN_LANGS", "24"))
-    year_threshold = int(os.environ.get("YEAR_THRESHOLD", "2001"))
+    year_threshold = int(os.environ.get("YEAR_THRESHOLD", "0"))
     max_workers = int(os.environ.get("WORKERS", "6"))
     local_cases = os.environ.get("LOCAL_CASES_PARQUET")
     local_fulltexts = os.environ.get("LOCAL_FULLTEXTS_PARQUET")
