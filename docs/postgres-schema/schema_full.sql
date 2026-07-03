@@ -25,12 +25,20 @@
 --   • Legacy staging tables (case_law, legal_case, law_*, ecli_*) are NOT copied — the
 --     new model absorbs them via the shared tables + rs_law_* tables.
 --
--- Not applied here — left for the team to decide
---   • CHECK constraints on case_citation.relation_type / case_law_reference.role
---     (allowed-value lists inline as comments). Enable once the sets stabilise.
---   • pgvector column types on case_text.summary_embedding + case_segment.embedding
---     (kept as `vector` in this file since pgvector is confirmed installed in
---     legacy — `ecli_segments.embedding vector(768)`).
+-- Decisions are finalized — see docs/postgres-schema/DECISIONS.md for the
+-- full log. The load-bearing ones:
+--   • DEPLOY TARGET: a dedicated schema (suggested name: cle_v2), NOT public —
+--     table names collide with the legacy tables (echr_document, rs_document, …).
+--     This file says "public" only so visualization tools import it cleanly;
+--     at apply time run:  sed 's/"public"/"cle_v2"/g' schema_full.sql | psql …
+--   • LANGUAGE CODES: lowercase ISO 639-1 everywhere ('en','fr','nl','bg',…),
+--     normalized at load (HUDOC ENG→en, FRE→fr; CJEU EN→en). Seeded below.
+--   • fulltext_tsv: stays a GENERATED column; the loader truncates input past
+--     ~1M chars to stay under the 1 MB tsvector limit. Summary is searched
+--     separately by the API (no legacy-RS-style fold-in).
+--   • relation_type / role: plain text for the first full load; CHECK
+--     constraints added once the value sets are empirically stable.
+--   • Embeddings stay vector(768) (legacy model dimension).
 -- =============================================================================
 
 
@@ -138,17 +146,12 @@ $$;
 -- Lookups
 -- =============================================================================
 
--- DECISION REQUIRED — language-code convention.
--- The three corpora use three different code systems:
---   CJEU  : uppercase ISO 639-1        ('EN', 'FR', 'BG', …, 24 langs)
---   ECHR  : HUDOC 3-letter codes       ('ENG', 'FRE', …)
---   RS    : lowercase ISO 639-1        ('nl')
--- Everything that joins on language (case_text UNIQUE, echr_document PK,
--- the *_v_document_with_text views, all FKs to this table) requires ONE
--- canonical convention. Recommendation: lowercase ISO 639-1 ('en', 'fr',
--- 'nl', 'bg', …), normalized at load time (HUDOC ENG→en, FRE→fr; CJEU EN→en).
--- The original upstream code can be preserved on the corpus-specific rows
--- if ever needed (not included here).
+-- DECIDED: canonical language codes are lowercase ISO 639-1 ('en', 'fr',
+-- 'nl', 'bg', …), normalized at load time (HUDOC ENG→en, FRE→fr; CJEU
+-- EN→en). Everything that joins on language (case_text UNIQUE,
+-- echr_document PK, the *_v_document_with_text views, all FKs to this
+-- table) uses this convention. Seeded below with the 24 official EU
+-- languages, which covers all three corpora.
 CREATE TABLE "public"."language" (
     "iso_code" text NOT NULL,
     "name" text,
@@ -265,10 +268,21 @@ CREATE INDEX "legal_provision_idx_lookup"    ON "public"."legal_provision" ("leg
 CREATE TABLE "public"."domain" (
     "id" serial NOT NULL,
     "scheme" text,                   -- 'eurovoc' | 'cjeu_subject_matter' | 'cjeu_keyword' | 'cjeu_directory_code' | 'rs_domain' | 'echr_article' | ...
-    "name" text,
-    "uri" text,
-    "parent_id" int,
+    "name" text,                     -- canonical label (English for eurovoc)
+    "uri" text,                      -- concept URI (e.g. http://eurovoc.europa.eu/<id>) — the stable join key for thesaurus ingests
+    "parent_id" int,                 -- hierarchy (eurovoc broader-term, directory-code nesting)
     PRIMARY KEY ("id")
+);
+
+-- Multilingual labels for domain terms. Empty until the EuroVoc ingest runs
+-- (see DECISIONS.md → "EuroVoc label ingest"): the Publications Office SKOS
+-- distribution carries ~7k concepts × 24 language prefLabels (~170k rows).
+-- Any scheme can use it; eurovoc is the first customer.
+CREATE TABLE "public"."domain_label" (
+    "domain_id" int NOT NULL,
+    "language" text NOT NULL,
+    "label" text NOT NULL,
+    PRIMARY KEY ("domain_id", "language")
 );
 
 -- CJEU-specific formation lookup (~15 rows, seeded at bottom)
@@ -291,7 +305,9 @@ CREATE TABLE "public"."case" (
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
     "source" text,                   -- 'CJEU' | 'ECHR' | 'RS'
     "celex_id" text UNIQUE,
-    "title" text,
+    "title" text,                    -- RS/ECHR: native title. CJEU: synthesized by the
+                                     -- loader ("C-123/22, X v Y") — CELLAR's work_title
+                                     -- is populated for only 1.3% of cases
     "date_decision" date,
     "date_published" date,
     "court_id" bigint,
@@ -300,7 +316,12 @@ CREATE TABLE "public"."case" (
     "procedure_type_id" int,
     "instance_id" int,
     "case_number" text,
-    "importance" smallint,           -- ECHR importance level (1-4); NULL otherwise
+    "importance" smallint,           -- harmonized 1–4 scale, 1 = most important
+                                     -- (ECHR/HUDOC convention). ECHR: HUDOC value as-is.
+                                     -- RS: native importance mapped to 1–4.
+                                     -- CJEU: formation-based proxy set by the loader
+                                     -- (Full Court/Grand Chamber→1, 5-judge→2,
+                                     --  3-judge→3, sole judge/order→4)
     "is_landmark" boolean,
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -318,20 +339,17 @@ CREATE TABLE "public"."case_text" (
     "language" text NOT NULL,
     "fulltext" text,
     "summary" text,
-    -- DECISION REQUIRED — two caveats on fulltext_tsv:
-    --  (1) A tsvector has a hard 1 MB limit. A GENERATED column means an
-    --      oversized judgment fails the whole INSERT. Legacy ECHR used this
-    --      same generated pattern and survived production, but legacy RS used
-    --      a trigger instead. If very large CJEU judgments trip the limit,
-    --      switch to a trigger with a length guard.
-    --  (2) The legacy RS trigger folded summary + legal_provisions into the
-    --      vector, so legacy RS search also matched those. This generated
-    --      column covers fulltext only — the API should query summary
-    --      separately, or we reinstate the RS fold-in behavior via trigger.
+    -- DECIDED: fulltext_tsv stays a GENERATED column (covers fulltext only).
+    -- The loader truncates to_tsvector input past ~1M chars so oversized
+    -- judgments can't trip the 1 MB tsvector limit and fail the INSERT
+    -- (word positions clamp at 16,383 anyway, so the search-quality loss is
+    -- negligible). Unlike the legacy RS trigger, summary and legal
+    -- provisions are NOT folded into this vector — the API queries summary
+    -- separately.
     "fulltext_tsv" tsvector GENERATED ALWAYS AS (
         to_tsvector('simple'::regconfig, COALESCE("fulltext", ''::text))
     ) STORED,
-    "summary_embedding" vector(768),                       -- dimension pinned to legacy model (ecli_segments used 768); change if the embedding model changes
+    "summary_embedding" vector(768),                       -- DECIDED: 768 (legacy model dimension); a model switch means an index rebuild, decide before bulk load
     "embedding_model" text,
     "source" text,                                         -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
     "text_format" text,                                    -- xhtml | html | pdf | fmx4
@@ -470,6 +488,8 @@ CREATE TABLE "public"."cjeu_document" (
     "formation_id" int,              -- FK → court_formation (replaces legacy typo "formation timestamp")
     "proc_type" text,
     "procedure_result" text,         -- 'successful' | 'unfounded' | 'inadmissible' (parsed from type_procedure)
+    -- (legacy draft had subject_matter + parties_text here — dropped: no CJEU
+    --  data loaded yet, so these go straight to case_domain / case_party)
     "date_lodged" date,
     "cellar_uri" text,
     "work_uri" text,
@@ -932,6 +952,8 @@ ALTER TABLE "public"."legislation_alias" ADD CONSTRAINT fk_legislation_alias    
 ALTER TABLE "public"."legal_provision"   ADD CONSTRAINT fk_legal_provision            FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
 ALTER TABLE "public"."legal_provision"   ADD CONSTRAINT fk_legal_provision_parent     FOREIGN KEY ("parent_id")           REFERENCES "public"."legal_provision"("id");
 ALTER TABLE "public"."domain"            ADD CONSTRAINT fk_domain_parent              FOREIGN KEY ("parent_id")           REFERENCES "public"."domain"("id");
+ALTER TABLE "public"."domain_label"      ADD CONSTRAINT fk_domain_label_domain        FOREIGN KEY ("domain_id")           REFERENCES "public"."domain"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."domain_label"      ADD CONSTRAINT fk_domain_label_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
 
 -- Case & satellites
 ALTER TABLE "public"."case"              ADD CONSTRAINT fk_case_court                 FOREIGN KEY ("court_id")            REFERENCES "public"."court"("id");
@@ -1009,6 +1031,20 @@ ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_me
 
 
 -- =============================================================================
+-- Seed data — language lookup (24 official EU languages, lowercase ISO 639-1)
+-- =============================================================================
+
+INSERT INTO "public"."language" (iso_code, name) VALUES
+    ('bg', 'Bulgarian'), ('cs', 'Czech'),      ('da', 'Danish'),
+    ('de', 'German'),    ('el', 'Greek'),      ('en', 'English'),
+    ('es', 'Spanish'),   ('et', 'Estonian'),   ('fi', 'Finnish'),
+    ('fr', 'French'),    ('ga', 'Irish'),      ('hr', 'Croatian'),
+    ('hu', 'Hungarian'), ('it', 'Italian'),    ('lt', 'Lithuanian'),
+    ('lv', 'Latvian'),   ('mt', 'Maltese'),    ('nl', 'Dutch'),
+    ('pl', 'Polish'),    ('pt', 'Portuguese'), ('ro', 'Romanian'),
+    ('sk', 'Slovak'),    ('sl', 'Slovenian'),  ('sv', 'Swedish');
+
+-- =============================================================================
 -- Seed data — court_formation lookup (CJEU only)
 -- =============================================================================
 
@@ -1051,6 +1087,19 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     rs_edge                             → case_citation
 --     rs_citation_counts                  → case_citation_counts
 --     rs_document_formal_relation         → kept as-is AND fanned out to case_citation
+--
+--   CJEU (loads from the HF parquet corpus, not from legacy Postgres)
+--     case.title                          → synthesized "C-123/22, X v Y"
+--                                           (work_title is 1.3% populated upstream)
+--     case.importance                     → formation-based proxy on the
+--                                           harmonized 1–4 scale (GC/FC→1,
+--                                           5-judge→2, 3-judge→3, sole/order→4)
+--     subject_matter / eurovoc /
+--     keywords / directory_codes          → domain (per scheme) + case_domain
+--     judge_rapporteur + delivered_by     → case_judge (roles rapporteur/judge)
+--     parties + agents                    → party + case_party
+--     citing / cited_by / work_cites_work → case_citation
+--     18 CDM legal predicates             → case_law_reference (role per predicate)
 --
 --   Dutch legislation catalog (BWB + LIDO — was rs_law_*, misfiled as RS metadata)
 --     rs_law_element  type='wet'          → legislation (scheme='bwb',
