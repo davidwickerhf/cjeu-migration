@@ -17,10 +17,10 @@
 --     model can't express cleanly:
 --       ECHR: echr_document_appno, echr_document_article, echr_extractor_segments
 --       RS:   rs_document_publication, rs_document_formal_relation,
---             rs_document_external_authority, rs_document_law_reference
---             (legacy rs_law_element / rs_law_alias are BWB+LIDO Dutch
---              LEGISLATION catalog data, not RS-corpus metadata — they fold
---              into legislation / legal_provision / legislation_alias)
+--             rs_document_external_authority
+--             (legacy rs_law_element / rs_law_alias fold into the generic
+--              legislation tables; legacy rs_document_law_reference folds
+--              into the shared case_law_reference — see those sections)
 --   • ECLI is the natural business key on `case`; internal integer id is the FK anchor.
 --   • Legacy staging tables (case_law, legal_case, law_*, ecli_*) are NOT copied — the
 --     new model absorbs them via the shared tables + rs_law_* tables.
@@ -58,7 +58,7 @@ CREATE EXTENSION IF NOT EXISTS vector;    -- pgvector — HNSW on embeddings
 
 -- Generic updated_at touch trigger. Replaces echr_touch_updated_at +
 -- rs_touch_updated_at from legacy with one shared function.
-CREATE OR REPLACE FUNCTION public.touch_updated_at()
+CREATE OR REPLACE FUNCTION "public".touch_updated_at()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   NEW.updated_at := now();
@@ -66,9 +66,9 @@ BEGIN
 END;
 $$;
 
--- Date-to-ISO helper preserved from legacy — used by rs_document_law_reference
--- generated columns.
-CREATE OR REPLACE FUNCTION public.rs_date_to_iso(d date)
+-- Date-to-ISO helper preserved from legacy — used by the
+-- rs_v_document_law_reference view to build version-dated deeplink URLs.
+CREATE OR REPLACE FUNCTION "public".rs_date_to_iso(d date)
 RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE WHEN d IS NULL THEN NULL ELSE to_char(d, 'YYYY-MM-DD') END;
 $$;
@@ -76,17 +76,17 @@ $$;
 -- Generalised citation-count maintenance. One function drives
 -- case_citation_counts for all three corpora (replaces the two per-corpus
 -- functions in legacy). Trigger definition further below.
-CREATE OR REPLACE FUNCTION public.case_citation_counts_maintain()
+CREATE OR REPLACE FUNCTION "public".case_citation_counts_maintain()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD.source_case_id IS NOT NULL THEN
-      UPDATE public.case_citation_counts
+      UPDATE "public".case_citation_counts
          SET cites_count = GREATEST(cites_count - 1, 0), updated_at = now()
        WHERE case_id = OLD.source_case_id;
     END IF;
     IF OLD.target_case_id IS NOT NULL THEN
-      UPDATE public.case_citation_counts
+      UPDATE "public".case_citation_counts
          SET cited_by_count = GREATEST(cited_by_count - 1, 0), updated_at = now()
        WHERE case_id = OLD.target_case_id;
     END IF;
@@ -95,13 +95,13 @@ BEGIN
 
   IF TG_OP = 'INSERT' THEN
     IF NEW.source_case_id IS NOT NULL THEN
-      INSERT INTO public.case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+      INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
       VALUES (NEW.source_case_id, 1, 0, now())
       ON CONFLICT (case_id) DO UPDATE
         SET cites_count = case_citation_counts.cites_count + 1, updated_at = now();
     END IF;
     IF NEW.target_case_id IS NOT NULL THEN
-      INSERT INTO public.case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+      INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
       VALUES (NEW.target_case_id, 0, 1, now())
       ON CONFLICT (case_id) DO UPDATE
         SET cited_by_count = case_citation_counts.cited_by_count + 1, updated_at = now();
@@ -112,12 +112,12 @@ BEGIN
   IF TG_OP = 'UPDATE' THEN
     IF OLD.source_case_id IS DISTINCT FROM NEW.source_case_id THEN
       IF OLD.source_case_id IS NOT NULL THEN
-        UPDATE public.case_citation_counts
+        UPDATE "public".case_citation_counts
            SET cites_count = GREATEST(cites_count - 1, 0), updated_at = now()
          WHERE case_id = OLD.source_case_id;
       END IF;
       IF NEW.source_case_id IS NOT NULL THEN
-        INSERT INTO public.case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+        INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
         VALUES (NEW.source_case_id, 1, 0, now())
         ON CONFLICT (case_id) DO UPDATE
           SET cites_count = case_citation_counts.cites_count + 1, updated_at = now();
@@ -125,12 +125,12 @@ BEGIN
     END IF;
     IF OLD.target_case_id IS DISTINCT FROM NEW.target_case_id THEN
       IF OLD.target_case_id IS NOT NULL THEN
-        UPDATE public.case_citation_counts
+        UPDATE "public".case_citation_counts
            SET cited_by_count = GREATEST(cited_by_count - 1, 0), updated_at = now()
          WHERE case_id = OLD.target_case_id;
       END IF;
       IF NEW.target_case_id IS NOT NULL THEN
-        INSERT INTO public.case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+        INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
         VALUES (NEW.target_case_id, 0, 1, now())
         ON CONFLICT (case_id) DO UPDATE
           SET cited_by_count = case_citation_counts.cited_by_count + 1, updated_at = now();
@@ -254,7 +254,7 @@ CREATE TABLE "public"."legal_provision" (
     "title" text,                    -- display label (was rs_law_element.title)
     "paragraph" text,
     "text" text,
-    "bwb_label_id" bigint,           -- BWB label id — join key from rs_document_law_reference
+    "bwb_label_id" bigint,           -- BWB label id — join key from case_law_reference.raw_label_id
     "lido_id" text UNIQUE,
     "jc_id" text UNIQUE,
     "effective_from" date,
@@ -365,7 +365,7 @@ CREATE INDEX "case_text_idx_summary_embedding" ON "public"."case_text" USING hns
     WITH (m = 16, ef_construction = 64);
 CREATE TRIGGER trg_case_text_updated_at
 BEFORE UPDATE ON "public"."case_text"
-FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+FOR EACH ROW EXECUTE FUNCTION "public".touch_updated_at();
 
 CREATE TABLE "public"."case_judge" (
     "id" bigserial NOT NULL,
@@ -394,28 +394,51 @@ CREATE TABLE "public"."case_domain" (
 );
 CREATE INDEX "case_domain_idx_domain_id" ON "public"."case_domain" ("domain_id");
 
+-- THE single case→law reference table for all corpora. Mirrors the
+-- case_citation design: resolved FK targets and raw source-shaped targets
+-- live side by side in one table (there is deliberately NO per-corpus
+-- rs_document_law_reference — Dutch BWB references load here with
+-- raw_scheme='bwb'; the legacy API shape incl. deeplink URLs is
+-- reconstructed by the rs_v_document_law_reference view).
 CREATE TABLE "public"."case_law_reference" (
     "id" bigserial NOT NULL,
-    "case_id" bigint,
-    "provision_id" bigint,           -- nullable: CJEU / ECHR often cite whole acts
-    "legislation_id" bigint,
-    "raw_reference" text,
-    "role" text,
+    "case_id" bigint NOT NULL,
+    "legislation_id" bigint,         -- resolved act (nullable until resolution)
+    "provision_id" bigint,           -- resolved specific provision (nullable: courts often cite whole acts)
+    "raw_scheme" text,               -- 'bwb' | 'celex' | 'echr_treaty' | ... (identifier system of the raw target)
+    "raw_resource" text,             -- raw act identifier as cited ('BWBR0005290', '32016R0679')
+    "raw_subdivision" text,          -- raw element as cited ('658', '6-1', 'Bijlage II')
+    "raw_label_id" bigint,           -- numeric sub-identifier in the raw scheme (BWB label id; resolution join key)
+    "raw_reference" text,            -- verbatim citation string (RS 'opschrift', CDM literal, …)
+    "version_date" date,             -- temporal pin of the cited version (BWB version date; EU consolidated-version date)
+    "role" text NOT NULL DEFAULT 'cited',
     -- Allowed values (advisory — not enforced until value set stabilises)
     -- CJEU adds: based_on_treaty, legal_basis, affects, amends, amends_by_correction,
     --           confirms, interprets, interprets_judgement, declares_void,
     --           declares_void_by_preliminary_ruling, incidentally_declares_void,
     --           declares_valid, declares_incidentally_valid, states_failure,
     --           suspends_application, immediately_enforces, incorporates, corrects
-    -- RS adds:  applied, cited, art_ref
+    -- RS adds:  applied, cited
     -- ECHR adds: applied, violation, nonviolation
-    "source" text,                   -- provenance: 'cellar_sparql' | 'rs_law_ref' | 'echr_document_article' | ...
+    "source_dataset" text NOT NULL,  -- provenance: 'cellar_sparql' | 'rs_lido_ref' | 'rs_lido_linkt' | 'echr_document_article' | ...
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id")
 );
 CREATE INDEX "case_law_reference_idx_case_id"     ON "public"."case_law_reference" ("case_id");
 CREATE INDEX "case_law_reference_idx_legislation" ON "public"."case_law_reference" ("legislation_id");
 CREATE INDEX "case_law_reference_idx_provision"   ON "public"."case_law_reference" ("provision_id");
+CREATE INDEX "case_law_reference_idx_raw"         ON "public"."case_law_reference" ("raw_scheme", "raw_resource");
+-- Dedup per resolution state (same pattern as case_citation — a single
+-- UNIQUE constraint would treat NULL targets as always-distinct):
+CREATE UNIQUE INDEX "case_law_reference_uk_provision" ON "public"."case_law_reference"
+    ("case_id", "provision_id", "role", "source_dataset")
+    WHERE "provision_id" IS NOT NULL;
+CREATE UNIQUE INDEX "case_law_reference_uk_legislation" ON "public"."case_law_reference"
+    ("case_id", "legislation_id", "role", "source_dataset")
+    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL;
+CREATE UNIQUE INDEX "case_law_reference_uk_raw" ON "public"."case_law_reference"
+    ("case_id", "raw_scheme", "raw_resource", COALESCE("raw_subdivision", ''), "role", "source_dataset")
+    WHERE "provision_id" IS NULL AND "legislation_id" IS NULL AND "raw_resource" IS NOT NULL;
 
 CREATE TABLE "public"."case_citation" (
     "id" bigserial NOT NULL,
@@ -471,7 +494,7 @@ CREATE TABLE "public"."case_citation_counts" (
 
 CREATE TRIGGER trg_case_citation_counts
 AFTER INSERT OR UPDATE OR DELETE ON "public"."case_citation"
-FOR EACH ROW EXECUTE FUNCTION public.case_citation_counts_maintain();
+FOR EACH ROW EXECUTE FUNCTION "public".case_citation_counts_maintain();
 
 
 -- =============================================================================
@@ -539,7 +562,7 @@ CREATE TABLE "public"."cjeu_national_document" (
 
 CREATE TABLE "public"."echr_document" (
     -- One row per (case_id, language). Preserves HUDOC's per-language variants.
-    -- Every legacy column from public.echr_document is kept; itemid and languageisocode
+    -- Every legacy column from "public".echr_document is kept; itemid and languageisocode
     -- become (case_id via FK, language) — HUDOC itemid stored on case.item_id.
     "case_id" bigint NOT NULL,
     "language" text NOT NULL,                              -- HUDOC's languageisocode (ENG/FRE/…)
@@ -581,7 +604,7 @@ CREATE INDEX "echr_document_idx_docname_trgm"     ON "public"."echr_document" US
 CREATE INDEX "echr_document_idx_issue_trgm"       ON "public"."echr_document" USING gin ("issue" gin_trgm_ops);
 CREATE TRIGGER trg_echr_document_updated_at
 BEFORE UPDATE ON "public"."echr_document"
-FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+FOR EACH ROW EXECUTE FUNCTION "public".touch_updated_at();
 
 CREATE TABLE "public"."echr_document_appno" (
     -- Normalized appnos — one row per (case × language × appno × source).
@@ -653,7 +676,7 @@ CREATE TABLE "public"."rs_document" (
     "url_publication" text,
     -- NOTE: legacy rs_document.summary moved to case_text.summary (language='nl').
     -- The rs_v_document_with_text view re-exposes it for API compatibility.
-    "legal_provisions" text[],                             -- denormalized array; canonical values live in rs_document_law_reference
+    "legal_provisions" text[],                             -- denormalized display cache; canonical rows live in case_law_reference (raw_scheme='bwb')
     "predecessor_successor_cases" text,
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -678,7 +701,7 @@ CREATE INDEX "rs_document_idx_date_issued"   ON "public"."rs_document" ("date_is
 CREATE INDEX "rs_document_idx_date_modified" ON "public"."rs_document" ("date_modified");
 CREATE TRIGGER trg_rs_document_updated_at
 BEFORE UPDATE ON "public"."rs_document"
-FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+FOR EACH ROW EXECUTE FUNCTION "public".touch_updated_at();
 
 CREATE TABLE "public"."rs_document_external_authority" (
     "case_id" bigint NOT NULL,
@@ -717,33 +740,13 @@ CREATE TABLE "public"."rs_document_publication" (
     PRIMARY KEY ("case_id", "raw")
 );
 
-CREATE TABLE "public"."rs_document_law_reference" (
-    -- Dutch legislation references (BWB) with generated deeplinks.
-    -- Preserved from legacy — the generated URL columns encode Dutch-law semantics
-    -- (wetten.overheid.nl + LIDO) that don't generalise, so kept in the RS bucket.
-    "case_id" bigint NOT NULL,
-    "bwb_resource" text NOT NULL,
-    "article" text DEFAULT '' NOT NULL,
-    "version_date" date,
-    "bwb_label_id" bigint,
-    "source" text NOT NULL,
-    "opschrift" text,
-    "created_at" timestamptz DEFAULT now() NOT NULL,
-    "legal_provision_url" text GENERATED ALWAYS AS (
-        'http://wetten.overheid.nl/id/' || "bwb_resource" || '/' ||
-        COALESCE(public.rs_date_to_iso("version_date"), '1900-01-01') || '/0'
-    ) STORED,
-    "legal_provision_url_lido" text GENERATED ALWAYS AS (
-        CASE
-            WHEN "bwb_label_id" IS NULL THEN NULL::text
-            ELSE 'http://linkeddata.overheid.nl/terms/bwb/id/' || "bwb_resource" || '/'
-                 || "bwb_label_id"::text || '/'
-                 || COALESCE(public.rs_date_to_iso("version_date"), '1900-01-01') || '/'
-                 || COALESCE(public.rs_date_to_iso("version_date"), '1900-01-01')
-        END
-    ) STORED,
-    PRIMARY KEY ("case_id", "bwb_resource", "article", "source")
-);
+-- NOTE: legacy rs_document_law_reference is NOT ported as an rs_* table.
+-- Dutch BWB references load into the shared case_law_reference with
+-- raw_scheme='bwb' (raw_resource=bwb_resource, raw_subdivision=article,
+-- raw_label_id=bwb_label_id, raw_reference=opschrift, version_date). The
+-- legacy API shape — including the wetten.overheid.nl / LIDO deeplink
+-- URLs, formerly GENERATED columns — is reconstructed by the
+-- rs_v_document_law_reference view below.
 
 -- NOTE: legacy rs_law_element and rs_law_alias are NOT ported as rs_* tables.
 -- They are a catalog of Dutch LEGISLATION (BWB register + LIDO/JuriConnect
@@ -758,7 +761,7 @@ CREATE TABLE "public"."rs_document_law_reference" (
 
 CREATE TABLE "public"."lido_link" (
     -- LIDO (Dutch government) links: usually RS → ECLI or RS → BWB provision.
-    -- Complements case_citation (structured cases) and rs_document_law_reference
+    -- Complements case_citation (structured cases) and case_law_reference
     -- (structured law refs); lido_link keeps the raw fetched URI shape.
     "id" bigserial NOT NULL,
     "source_case_id" bigint,
@@ -891,51 +894,83 @@ SELECT d.*, t."summary", t."fulltext", t."fulltext_tsv"
 FROM "public"."rs_document" d
 LEFT JOIN "public"."case_text" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
 
--- Legal-provision display labels for /api/rechtspraak — mirrors the legacy view.
+-- Legacy-shaped Dutch law-reference rows, reconstructed from the shared
+-- case_law_reference (raw_scheme='bwb'). Replaces the legacy
+-- rs_document_law_reference table 1:1 — including the two deeplink URL
+-- columns that used to be GENERATED columns on that table.
+CREATE OR REPLACE VIEW "public"."rs_v_document_law_reference" AS
+SELECT
+    r."case_id",
+    c."ecli",
+    r."raw_resource"                  AS "bwb_resource",
+    COALESCE(r."raw_subdivision", '') AS "article",
+    r."version_date",
+    r."raw_label_id"                  AS "bwb_label_id",
+    r."source_dataset"                AS "source",
+    r."raw_reference"                 AS "opschrift",
+    'http://wetten.overheid.nl/id/' || r."raw_resource" || '/' ||
+        COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01') || '/0'
+        AS "legal_provision_url",
+    CASE
+        WHEN r."raw_label_id" IS NULL THEN NULL::text
+        ELSE 'http://linkeddata.overheid.nl/terms/bwb/id/' || r."raw_resource" || '/'
+             || r."raw_label_id"::text || '/'
+             || COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01') || '/'
+             || COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01')
+    END AS "legal_provision_url_lido"
+FROM "public"."case_law_reference" r
+JOIN "public"."case" c ON c."id" = r."case_id"
+WHERE r."raw_scheme" = 'bwb';
+
+-- Legal-provision display labels for /api/rechtspraak — mirrors the legacy view,
+-- reading from the shared case_law_reference (raw_scheme='bwb').
 CREATE OR REPLACE VIEW "public"."rs_v_document_legal_provisions" AS
-SELECT DISTINCT c."ecli", lr."opschrift" AS legal_provision
-FROM "public"."rs_document_law_reference" lr
+SELECT DISTINCT c."ecli", lr."raw_reference" AS legal_provision
+FROM "public"."case_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-WHERE NULLIF(lr."opschrift", '') IS NOT NULL
+WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lr."raw_reference", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", lp."title" AS legal_provision
-FROM "public"."rs_document_law_reference" lr
+FROM "public"."case_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-JOIN "public"."legal_provision" lp ON lp."bwb_label_id" = lr."bwb_label_id"
-WHERE lr."bwb_label_id" IS NOT NULL AND NULLIF(lp."title", '') IS NOT NULL
+JOIN "public"."legal_provision" lp ON lp."bwb_label_id" = lr."raw_label_id"
+WHERE lr."raw_scheme" = 'bwb' AND lr."raw_label_id" IS NOT NULL
+  AND NULLIF(lp."title", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", lp."title" AS legal_provision
-FROM "public"."rs_document_law_reference" lr
+FROM "public"."case_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
 JOIN "public"."legal_provision" lp
   ON lp."legislation_id" = lg."id"
- AND lower(lp."article_label") = lower(lr."article")
+ AND lower(lp."article_label") = lower(lr."raw_subdivision")
  AND lp."element_type" = 'artikel'
-WHERE NULLIF(lp."title", '') IS NOT NULL
+WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lp."title", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", lg."title" AS legal_provision
-FROM "public"."rs_document_law_reference" lr
+FROM "public"."case_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
-WHERE NULLIF(lg."title", '') IS NOT NULL
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
+WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", (lg."title" || ', Artikel ' || lr."article") AS legal_provision
-FROM "public"."rs_document_law_reference" lr
+SELECT DISTINCT c."ecli", (lg."title" || ', Artikel ' || lr."raw_subdivision") AS legal_provision
+FROM "public"."case_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
-WHERE NULLIF(lg."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
+WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
+  AND NULLIF(lr."raw_subdivision", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", (lg."title" || ', Bijlage ' || lr."article") AS legal_provision
-FROM "public"."rs_document_law_reference" lr
+SELECT DISTINCT c."ecli", (lg."title" || ', Bijlage ' || lr."raw_subdivision") AS legal_provision
+FROM "public"."case_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
-WHERE NULLIF(lg."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
-  AND lr."opschrift" ILIKE '%bijlage%';
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
+WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
+  AND NULLIF(lr."raw_subdivision", '') IS NOT NULL
+  AND lr."raw_reference" ILIKE '%bijlage%';
 
 
 -- =============================================================================
@@ -1012,7 +1047,6 @@ ALTER TABLE "public"."rs_document_external_authority" ADD CONSTRAINT fk_rs_docum
 ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_source    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."case"("ecli");
 ALTER TABLE "public"."rs_document_publication"        ADD CONSTRAINT fk_rs_document_publication_case FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_law_reference"      ADD CONSTRAINT fk_rs_document_law_reference_case FOREIGN KEY ("case_id")           REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 
 -- Cross-corpus bridge
 ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."case"("id");
@@ -1087,6 +1121,15 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     rs_edge                             → case_citation
 --     rs_citation_counts                  → case_citation_counts
 --     rs_document_formal_relation         → kept as-is AND fanned out to case_citation
+--     rs_document_law_reference           → case_law_reference (raw_scheme='bwb',
+--                                             raw_resource=bwb_resource,
+--                                             raw_subdivision=article,
+--                                             raw_label_id=bwb_label_id,
+--                                             raw_reference=opschrift,
+--                                             version_date, source_dataset per
+--                                             extraction source; deeplink URLs
+--                                             now live on the
+--                                             rs_v_document_law_reference view)
 --
 --   CJEU (loads from the HF parquet corpus, not from legacy Postgres)
 --     case.title                          → synthesized "C-123/22, X v Y"
@@ -1117,6 +1160,5 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     case_law, legal_case, ecli_bwb_opschrift, ecli_keywords, ecli_segments,
 --     ecli_texts, law_alias, law_element
 -- Their information now lives in: case, case_law_reference, case_domain,
--- case_segment, legislation, legal_provision, legislation_alias,
--- rs_document_law_reference.
+-- case_segment, legislation, legal_provision, legislation_alias.
 -- =============================================================================

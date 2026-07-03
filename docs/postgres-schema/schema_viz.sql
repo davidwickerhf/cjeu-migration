@@ -25,10 +25,10 @@
 --     model can't express cleanly:
 --       ECHR: echr_document_appno, echr_document_article, echr_extractor_segments
 --       RS:   rs_document_publication, rs_document_formal_relation,
---             rs_document_external_authority, rs_document_law_reference
---             (legacy rs_law_element / rs_law_alias are BWB+LIDO Dutch
---              LEGISLATION catalog data, not RS-corpus metadata — they fold
---              into legislation / legal_provision / legislation_alias)
+--             rs_document_external_authority
+--             (legacy rs_law_element / rs_law_alias fold into the generic
+--              legislation tables; legacy rs_document_law_reference folds
+--              into the shared case_law_reference — see those sections)
 --   • ECLI is the natural business key on `case`; internal integer id is the FK anchor.
 --   • Legacy staging tables (case_law, legal_case, law_*, ecli_*) are NOT copied — the
 --     new model absorbs them via the shared tables + rs_law_* tables.
@@ -68,8 +68,8 @@ CREATE SCHEMA IF NOT EXISTS "public";
 -- rs_touch_updated_at from legacy with one shared function.
 
 
--- Date-to-ISO helper preserved from legacy — used by rs_document_law_reference
--- generated columns.
+-- Date-to-ISO helper preserved from legacy — used by the
+-- rs_v_document_law_reference view to build version-dated deeplink URLs.
 
 
 -- Generalised citation-count maintenance. One function drives
@@ -189,7 +189,7 @@ CREATE TABLE "public"."legal_provision" (
     "title" text,                    -- display label (was rs_law_element.title)
     "paragraph" text,
     "text" text,
-    "bwb_label_id" bigint,           -- BWB label id — join key from rs_document_law_reference
+    "bwb_label_id" bigint,           -- BWB label id — join key from case_law_reference.raw_label_id
     "lido_id" text UNIQUE,
     "jc_id" text UNIQUE,
     "effective_from" date,
@@ -325,28 +325,51 @@ CREATE TABLE "public"."case_domain" (
 );
 CREATE INDEX "case_domain_idx_domain_id" ON "public"."case_domain" ("domain_id");
 
+-- THE single case→law reference table for all corpora. Mirrors the
+-- case_citation design: resolved FK targets and raw source-shaped targets
+-- live side by side in one table (there is deliberately NO per-corpus
+-- rs_document_law_reference — Dutch BWB references load here with
+-- raw_scheme='bwb'; the legacy API shape incl. deeplink URLs is
+-- reconstructed by the rs_v_document_law_reference view).
 CREATE TABLE "public"."case_law_reference" (
     "id" bigserial NOT NULL,
-    "case_id" bigint,
-    "provision_id" bigint,           -- nullable: CJEU / ECHR often cite whole acts
-    "legislation_id" bigint,
-    "raw_reference" text,
-    "role" text,
+    "case_id" bigint NOT NULL,
+    "legislation_id" bigint,         -- resolved act (nullable until resolution)
+    "provision_id" bigint,           -- resolved specific provision (nullable: courts often cite whole acts)
+    "raw_scheme" text,               -- 'bwb' | 'celex' | 'echr_treaty' | ... (identifier system of the raw target)
+    "raw_resource" text,             -- raw act identifier as cited ('BWBR0005290', '32016R0679')
+    "raw_subdivision" text,          -- raw element as cited ('658', '6-1', 'Bijlage II')
+    "raw_label_id" bigint,           -- numeric sub-identifier in the raw scheme (BWB label id; resolution join key)
+    "raw_reference" text,            -- verbatim citation string (RS 'opschrift', CDM literal, …)
+    "version_date" date,             -- temporal pin of the cited version (BWB version date; EU consolidated-version date)
+    "role" text NOT NULL DEFAULT 'cited',
     -- Allowed values (advisory — not enforced until value set stabilises)
     -- CJEU adds: based_on_treaty, legal_basis, affects, amends, amends_by_correction,
     --           confirms, interprets, interprets_judgement, declares_void,
     --           declares_void_by_preliminary_ruling, incidentally_declares_void,
     --           declares_valid, declares_incidentally_valid, states_failure,
     --           suspends_application, immediately_enforces, incorporates, corrects
-    -- RS adds:  applied, cited, art_ref
+    -- RS adds:  applied, cited
     -- ECHR adds: applied, violation, nonviolation
-    "source" text,                   -- provenance: 'cellar_sparql' | 'rs_law_ref' | 'echr_document_article' | ...
+    "source_dataset" text NOT NULL,  -- provenance: 'cellar_sparql' | 'rs_lido_ref' | 'rs_lido_linkt' | 'echr_document_article' | ...
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id")
 );
 CREATE INDEX "case_law_reference_idx_case_id"     ON "public"."case_law_reference" ("case_id");
 CREATE INDEX "case_law_reference_idx_legislation" ON "public"."case_law_reference" ("legislation_id");
 CREATE INDEX "case_law_reference_idx_provision"   ON "public"."case_law_reference" ("provision_id");
+CREATE INDEX "case_law_reference_idx_raw"         ON "public"."case_law_reference" ("raw_scheme", "raw_resource");
+-- Dedup per resolution state (same pattern as case_citation — a single
+-- UNIQUE constraint would treat NULL targets as always-distinct):
+CREATE UNIQUE INDEX "case_law_reference_uk_provision" ON "public"."case_law_reference"
+    ("case_id", "provision_id", "role", "source_dataset")
+    WHERE "provision_id" IS NOT NULL;
+CREATE UNIQUE INDEX "case_law_reference_uk_legislation" ON "public"."case_law_reference"
+    ("case_id", "legislation_id", "role", "source_dataset")
+    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL;
+CREATE UNIQUE INDEX "case_law_reference_uk_raw" ON "public"."case_law_reference"
+    ("case_id", "raw_scheme", "raw_resource", COALESCE("raw_subdivision", ''), "role", "source_dataset")
+    WHERE "provision_id" IS NULL AND "legislation_id" IS NULL AND "raw_resource" IS NOT NULL;
 
 CREATE TABLE "public"."case_citation" (
     "id" bigserial NOT NULL,
@@ -466,7 +489,7 @@ CREATE TABLE "public"."cjeu_national_document" (
 
 CREATE TABLE "public"."echr_document" (
     -- One row per (case_id, language). Preserves HUDOC's per-language variants.
-    -- Every legacy column from public.echr_document is kept; itemid and languageisocode
+    -- Every legacy column from "public".echr_document is kept; itemid and languageisocode
     -- become (case_id via FK, language) — HUDOC itemid stored on case.item_id.
     "case_id" bigint NOT NULL,
     "language" text NOT NULL,                              -- HUDOC's languageisocode (ENG/FRE/…)
@@ -576,7 +599,7 @@ CREATE TABLE "public"."rs_document" (
     "url_publication" text,
     -- NOTE: legacy rs_document.summary moved to case_text.summary (language='nl').
     -- The rs_v_document_with_text view re-exposes it for API compatibility.
-    "legal_provisions" text[],                             -- denormalized array; canonical values live in rs_document_law_reference
+    "legal_provisions" text[],                             -- denormalized display cache; canonical rows live in case_law_reference (raw_scheme='bwb')
     "predecessor_successor_cases" text,
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -638,22 +661,13 @@ CREATE TABLE "public"."rs_document_publication" (
     PRIMARY KEY ("case_id", "raw")
 );
 
-CREATE TABLE "public"."rs_document_law_reference" (
-    -- Dutch legislation references (BWB) with generated deeplinks.
-    -- Preserved from legacy — the generated URL columns encode Dutch-law semantics
-    -- (wetten.overheid.nl + LIDO) that don't generalise, so kept in the RS bucket.
-    "case_id" bigint NOT NULL,
-    "bwb_resource" text NOT NULL,
-    "article" text DEFAULT '' NOT NULL,
-    "version_date" date,
-    "bwb_label_id" bigint,
-    "source" text NOT NULL,
-    "opschrift" text,
-    "created_at" timestamptz DEFAULT now() NOT NULL,
-    "legal_provision_url" text,
-    "legal_provision_url_lido" text,
-    PRIMARY KEY ("case_id", "bwb_resource", "article", "source")
-);
+-- NOTE: legacy rs_document_law_reference is NOT ported as an rs_* table.
+-- Dutch BWB references load into the shared case_law_reference with
+-- raw_scheme='bwb' (raw_resource=bwb_resource, raw_subdivision=article,
+-- raw_label_id=bwb_label_id, raw_reference=opschrift, version_date). The
+-- legacy API shape — including the wetten.overheid.nl / LIDO deeplink
+-- URLs, formerly GENERATED columns — is reconstructed by the
+-- rs_v_document_law_reference view below.
 
 -- NOTE: legacy rs_law_element and rs_law_alias are NOT ported as rs_* tables.
 -- They are a catalog of Dutch LEGISLATION (BWB register + LIDO/JuriConnect
@@ -668,7 +682,7 @@ CREATE TABLE "public"."rs_document_law_reference" (
 
 CREATE TABLE "public"."lido_link" (
     -- LIDO (Dutch government) links: usually RS → ECLI or RS → BWB provision.
-    -- Complements case_citation (structured cases) and rs_document_law_reference
+    -- Complements case_citation (structured cases) and case_law_reference
     -- (structured law refs); lido_link keeps the raw fetched URI shape.
     "id" bigserial NOT NULL,
     "source_case_id" bigint,
@@ -791,7 +805,14 @@ CREATE TABLE "public"."search_query_log" (
 -- rs_document.summary column.
 
 
--- Legal-provision display labels for /api/rechtspraak — mirrors the legacy view.
+-- Legacy-shaped Dutch law-reference rows, reconstructed from the shared
+-- case_law_reference (raw_scheme='bwb'). Replaces the legacy
+-- rs_document_law_reference table 1:1 — including the two deeplink URL
+-- columns that used to be GENERATED columns on that table.
+
+
+-- Legal-provision display labels for /api/rechtspraak — mirrors the legacy view,
+-- reading from the shared case_law_reference (raw_scheme='bwb').
 
 
 -- =============================================================================
@@ -868,7 +889,6 @@ ALTER TABLE "public"."rs_document_external_authority" ADD CONSTRAINT fk_rs_docum
 ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_source    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."case"("ecli");
 ALTER TABLE "public"."rs_document_publication"        ADD CONSTRAINT fk_rs_document_publication_case FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_law_reference"      ADD CONSTRAINT fk_rs_document_law_reference_case FOREIGN KEY ("case_id")           REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 
 -- Cross-corpus bridge
 ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."case"("id");
@@ -943,6 +963,15 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     rs_edge                             → case_citation
 --     rs_citation_counts                  → case_citation_counts
 --     rs_document_formal_relation         → kept as-is AND fanned out to case_citation
+--     rs_document_law_reference           → case_law_reference (raw_scheme='bwb',
+--                                             raw_resource=bwb_resource,
+--                                             raw_subdivision=article,
+--                                             raw_label_id=bwb_label_id,
+--                                             raw_reference=opschrift,
+--                                             version_date, source_dataset per
+--                                             extraction source; deeplink URLs
+--                                             now live on the
+--                                             rs_v_document_law_reference view)
 --
 --   CJEU (loads from the HF parquet corpus, not from legacy Postgres)
 --     case.title                          → synthesized "C-123/22, X v Y"
@@ -973,6 +1002,5 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     case_law, legal_case, ecli_bwb_opschrift, ecli_keywords, ecli_segments,
 --     ecli_texts, law_alias, law_element
 -- Their information now lives in: case, case_law_reference, case_domain,
--- case_segment, legislation, legal_provision, legislation_alias,
--- rs_document_law_reference.
+-- case_segment, legislation, legal_provision, legislation_alias.
 -- =============================================================================

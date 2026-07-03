@@ -94,6 +94,28 @@ they fold into the generic tables: `wet` rows → `legislation`
 and a `parent_id` hierarchy that also serves EU acts), aliases →
 `legislation_alias`.
 
+### D10 — One law-reference table for all corpora (no `rs_document_law_reference`)
+
+`case_law_reference` follows the same design as `case_citation`: resolved FK
+targets (`legislation_id` / `provision_id`) and raw source-shaped targets
+(`raw_scheme` / `raw_resource` / `raw_subdivision` / `raw_label_id` /
+`raw_reference`) live side by side in one shared table, with partial unique
+indexes per resolution state. What used to justify a separate RS table is
+absorbed:
+
+- **`version_date`** (the temporal pin of the cited law version) became a
+  shared column — EU consolidated versions are dated too, so it generalizes.
+- **BWB resolution keys** map to the generic raw columns
+  (`bwb_resource`→`raw_resource`, `article`→`raw_subdivision`,
+  `bwb_label_id`→`raw_label_id`, `opschrift`→`raw_reference`).
+- **The wetten.overheid.nl / LIDO deeplink URLs** (formerly GENERATED
+  columns) are presentation logic — they moved to the
+  `rs_v_document_law_reference` view, which reconstructs the legacy table
+  shape 1:1 for the API.
+
+Query rule: everything reads `case_law_reference`; Dutch-specific API
+endpoints read the compat view.
+
 ## Ratified structural choices
 
 | # | Choice | Rationale |
