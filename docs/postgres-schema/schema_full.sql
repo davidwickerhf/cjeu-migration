@@ -136,6 +136,17 @@ $$;
 -- Lookups
 -- =============================================================================
 
+-- DECISION REQUIRED — language-code convention.
+-- The three corpora use three different code systems:
+--   CJEU  : uppercase ISO 639-1        ('EN', 'FR', 'BG', …, 24 langs)
+--   ECHR  : HUDOC 3-letter codes       ('ENG', 'FRE', …)
+--   RS    : lowercase ISO 639-1        ('nl')
+-- Everything that joins on language (case_text UNIQUE, echr_document PK,
+-- the *_v_document_with_text views, all FKs to this table) requires ONE
+-- canonical convention. Recommendation: lowercase ISO 639-1 ('en', 'fr',
+-- 'nl', 'bg', …), normalized at load time (HUDOC ENG→en, FRE→fr; CJEU EN→en).
+-- The original upstream code can be preserved on the corpus-specific rows
+-- if ever needed (not included here).
 CREATE TABLE "public"."language" (
     "iso_code" text NOT NULL,
     "name" text,
@@ -285,10 +296,20 @@ CREATE TABLE "public"."case_text" (
     "language" text NOT NULL,
     "fulltext" text,
     "summary" text,
+    -- DECISION REQUIRED — two caveats on fulltext_tsv:
+    --  (1) A tsvector has a hard 1 MB limit. A GENERATED column means an
+    --      oversized judgment fails the whole INSERT. Legacy ECHR used this
+    --      same generated pattern and survived production, but legacy RS used
+    --      a trigger instead. If very large CJEU judgments trip the limit,
+    --      switch to a trigger with a length guard.
+    --  (2) The legacy RS trigger folded summary + legal_provisions into the
+    --      vector, so legacy RS search also matched those. This generated
+    --      column covers fulltext only — the API should query summary
+    --      separately, or we reinstate the RS fold-in behavior via trigger.
     "fulltext_tsv" tsvector GENERATED ALWAYS AS (
         to_tsvector('simple'::regconfig, COALESCE("fulltext", ''::text))
     ) STORED,
-    "summary_embedding" vector(768),                       -- pgvector; enable HNSW below
+    "summary_embedding" vector(768),                       -- dimension pinned to legacy model (ecli_segments used 768); change if the embedding model changes
     "embedding_model" text,
     "source" text,                                         -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
     "text_format" text,                                    -- xhtml | html | pdf | fmx4
@@ -370,15 +391,26 @@ CREATE TABLE "public"."case_citation" (
     --          'interprets_judgement' | 'logical_successor_of'
     --   ECHR:  (echr_edge is untyped; use 'cites')
     --   RS:    values from rs_document_formal_relation.relation_type
-    "source_dataset" text,                     -- 'cellar_sparql' | 'echr_edge' | 'rs_edge' | 'rs_formal_relation' | 'lido'
+    "source_dataset" text NOT NULL,            -- 'cellar_sparql' | 'echr_edge' | 'rs_edge' | 'rs_formal_relation' | 'lido'
     "weight" int DEFAULT 1,                    -- ECHR/RS: how many times cited in body text
     "context_segment_id" bigint,               -- text-extracted (RS body-cite): the segment where the cite lives
     "is_cross_jurisdiction" boolean DEFAULT false,
     "extractor_at" timestamptz DEFAULT now(),
     "extractor_version" text,
-    PRIMARY KEY ("id"),
-    UNIQUE ("source_case_id", "target_case_id", "relation_type", "source_dataset")
+    PRIMARY KEY ("id")
 );
+-- Dedup is enforced per resolution state. A single UNIQUE constraint over
+-- (source, target, relation, dataset) would NOT deduplicate unresolved
+-- citations — Postgres treats NULL target_case_id as always-distinct.
+CREATE UNIQUE INDEX "case_citation_uk_resolved" ON "public"."case_citation"
+    ("source_case_id", "target_case_id", "relation_type", "source_dataset")
+    WHERE "target_case_id" IS NOT NULL;
+CREATE UNIQUE INDEX "case_citation_uk_unresolved_celex" ON "public"."case_citation"
+    ("source_case_id", "target_celex_raw", "relation_type", "source_dataset")
+    WHERE "target_case_id" IS NULL AND "target_celex_raw" IS NOT NULL;
+CREATE UNIQUE INDEX "case_citation_uk_unresolved_ecli" ON "public"."case_citation"
+    ("source_case_id", "target_ecli_raw", "relation_type", "source_dataset")
+    WHERE "target_case_id" IS NULL AND "target_ecli_raw" IS NOT NULL;
 CREATE INDEX "case_citation_idx_source"        ON "public"."case_citation" ("source_case_id");
 CREATE INDEX "case_citation_idx_target"        ON "public"."case_citation" ("target_case_id");
 CREATE INDEX "case_citation_idx_relation_type" ON "public"."case_citation" ("relation_type");
@@ -577,7 +609,8 @@ CREATE TABLE "public"."rs_document" (
     "jurisdiction_country" text DEFAULT 'NL' NOT NULL,
     "procedure_type" text,
     "url_publication" text,
-    "summary" text,
+    -- NOTE: legacy rs_document.summary moved to case_text.summary (language='nl').
+    -- The rs_v_document_with_text view re-exposes it for API compatibility.
     "legal_provisions" text[],                             -- denormalized array; canonical values live in rs_document_law_reference
     "predecessor_successor_cases" text,
     "created_at" timestamptz DEFAULT now() NOT NULL,
@@ -833,8 +866,10 @@ SELECT * FROM "public"."echr_document"
 WHERE "doctype" ILIKE '%JUD%' OR "doctype" ILIKE '%DEC%';
 
 -- Rechtspraak document + fulltext (only Dutch text — RS is monolingual).
+-- Re-exposes summary from case_text for API compatibility with the legacy
+-- rs_document.summary column.
 CREATE OR REPLACE VIEW "public"."rs_v_document_with_text" AS
-SELECT d.*, t."fulltext", t."fulltext_tsv"
+SELECT d.*, t."summary", t."fulltext", t."fulltext_tsv"
 FROM "public"."rs_document" d
 LEFT JOIN "public"."case_text" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
 
@@ -865,7 +900,22 @@ FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
 JOIN "public"."rs_law_element" wet
   ON wet."bwb_id" = lr."bwb_resource" AND wet."type" = 'wet'
-WHERE NULLIF(wet."title", '') IS NOT NULL;
+WHERE NULLIF(wet."title", '') IS NOT NULL
+UNION
+SELECT DISTINCT c."ecli", (wet."title" || ', Artikel ' || lr."article") AS legal_provision
+FROM "public"."rs_document_law_reference" lr
+JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."rs_law_element" wet
+  ON wet."bwb_id" = lr."bwb_resource" AND wet."type" = 'wet'
+WHERE NULLIF(wet."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
+UNION
+SELECT DISTINCT c."ecli", (wet."title" || ', Bijlage ' || lr."article") AS legal_provision
+FROM "public"."rs_document_law_reference" lr
+JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."rs_law_element" wet
+  ON wet."bwb_id" = lr."bwb_resource" AND wet."type" = 'wet'
+WHERE NULLIF(wet."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
+  AND lr."opschrift" ILIKE '%bijlage%';
 
 
 -- =============================================================================
@@ -906,7 +956,11 @@ ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_l
 ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_prov   FOREIGN KEY ("provision_id")        REFERENCES "public"."legal_provision"("id");
 
 ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_source       FOREIGN KEY ("source_case_id")      REFERENCES "public"."case"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "public"."case"("id");
+-- ON DELETE SET NULL: deleting a cited case degrades the citation to
+-- "unresolved" (target_*_raw keeps the identifier) instead of blocking the
+-- delete or dropping the edge. Loader must therefore ALWAYS populate
+-- target_ecli_raw / target_celex_raw, even when target_case_id resolves.
+ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "public"."case"("id") ON DELETE SET NULL;
 ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "public"."case_segment"("id");
 
 ALTER TABLE "public"."case_citation_counts" ADD CONSTRAINT fk_case_citation_counts    FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
@@ -922,9 +976,12 @@ ALTER TABLE "public"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_d
 -- ECHR
 ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_case          FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
-ALTER TABLE "public"."echr_document_appno"     ADD CONSTRAINT fk_echr_document_appno_case    FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_case  FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_case FOREIGN KEY ("case_id")            REFERENCES "public"."case"("id") ON DELETE CASCADE;
+-- Satellites FK to echr_document(case_id, language) — an appno / article /
+-- segmentation row can only exist for a language variant we actually hold.
+-- (case existence is enforced transitively via echr_document's own FK.)
+ALTER TABLE "public"."echr_document_appno"     ADD CONSTRAINT fk_echr_document_appno_doc     FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
+ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_doc   FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
+ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
 
 -- Rechtspraak
 ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
