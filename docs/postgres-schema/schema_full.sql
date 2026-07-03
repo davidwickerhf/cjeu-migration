@@ -17,8 +17,10 @@
 --     model can't express cleanly:
 --       ECHR: echr_document_appno, echr_document_article, echr_extractor_segments
 --       RS:   rs_document_publication, rs_document_formal_relation,
---             rs_document_external_authority, rs_document_law_reference,
---             rs_law_element, rs_law_alias
+--             rs_document_external_authority, rs_document_law_reference
+--             (legacy rs_law_element / rs_law_alias are BWB+LIDO Dutch
+--              LEGISLATION catalog data, not RS-corpus metadata — they fold
+--              into legislation / legal_provision / legislation_alias)
 --   • ECLI is the natural business key on `case`; internal integer id is the FK anchor.
 --   • Legacy staging tables (case_law, legal_case, law_*, ecli_*) are NOT copied — the
 --     new model absorbs them via the shared tables + rs_law_* tables.
@@ -209,36 +211,56 @@ CREATE TABLE "public"."party" (
     PRIMARY KEY ("id")
 );
 
+-- Legislation catalog is multi-jurisdiction. Dutch legislation (BWB register,
+-- enriched with LIDO / JuriConnect identifiers — the legacy rs_law_element /
+-- rs_law_alias tables) folds in here rather than living as rs_* tables:
+-- it is jurisdiction-level reference data, not Rechtspraak-corpus metadata.
+--   legacy rs_law_element type='wet'   → legislation  (scheme='bwb')
+--   legacy rs_law_element other types  → legal_provision (element_type + parent_id hierarchy)
+--   legacy rs_law_alias                → legislation_alias
 CREATE TABLE "public"."legislation" (
     "id" bigserial NOT NULL,
-    "identifier" text,
+    "identifier" text,               -- CELEX number | BWB id | treaty id
     "scheme" text,                   -- 'celex' | 'bwb' | 'echr_treaty' | ...
     "title" text,
     "jurisdiction_id" bigint,
     "document_type" text,
     "enacted_date" date,
+    "lido_id" text UNIQUE,           -- LIDO URI id (Dutch laws; was rs_law_element.lido_id)
+    "jc_id" text UNIQUE,             -- JuriConnect id (Dutch laws; was rs_law_element.jc_id)
+    "snapshot_date" date,            -- catalog snapshot (was rs_law_element.snapshot_date)
     PRIMARY KEY ("id")
 );
+CREATE INDEX "legislation_idx_scheme_identifier" ON "public"."legislation" ("scheme", "identifier");
 
 CREATE TABLE "public"."legislation_alias" (
     "id" bigserial NOT NULL,
     "legislation_id" bigint,
     "alias" text,
-    "source" text,
+    "source" text,                   -- 'opschrift' | 'bwbidlist' | ...
     PRIMARY KEY ("id")
 );
+CREATE INDEX "legislation_alias_idx_alias_lower" ON "public"."legislation_alias" (lower("alias"));
 
 CREATE TABLE "public"."legal_provision" (
     "id" bigserial NOT NULL,
     "legislation_id" bigint,
-    "article_label" text,
+    "parent_id" bigint,              -- self-FK: nested structure (NL: boek→titeldeel→artikel; EU: article→paragraph→annex)
+    "element_type" text,             -- NL: 'boek'|'deel'|'titeldeel'|'hoofdstuk'|'afdeling'|'paragraaf'|'subparagraaf'|'artikel'; EU: 'article'|'paragraph'|'annex'
+    "article_label" text,            -- was rs_law_element.number
+    "title" text,                    -- display label (was rs_law_element.title)
     "paragraph" text,
     "text" text,
+    "bwb_label_id" bigint,           -- BWB label id — join key from rs_document_law_reference
+    "lido_id" text UNIQUE,
+    "jc_id" text UNIQUE,
     "effective_from" date,
     "effective_to" date,
     "snapshot_date" date,
     PRIMARY KEY ("id")
 );
+CREATE INDEX "legal_provision_idx_bwb_label" ON "public"."legal_provision" ("bwb_label_id");
+CREATE INDEX "legal_provision_idx_lookup"    ON "public"."legal_provision" ("legislation_id", lower("article_label"), "element_type");
 
 CREATE TABLE "public"."domain" (
     "id" serial NOT NULL,
@@ -703,35 +725,11 @@ CREATE TABLE "public"."rs_document_law_reference" (
     PRIMARY KEY ("case_id", "bwb_resource", "article", "source")
 );
 
-CREATE TABLE "public"."rs_law_element" (
-    -- BWB legal-element hierarchy (wet / boek / artikel / …). Preserved from legacy.
-    "id" bigserial NOT NULL,
-    "type" text,
-    "bwb_id" text,
-    "bwb_label_id" bigint,
-    "lido_id" text UNIQUE,
-    "jc_id" text UNIQUE,
-    "number" text,
-    "title" text,
-    "snapshot_date" date DEFAULT CURRENT_DATE NOT NULL,
-    PRIMARY KEY ("id"),
-    CONSTRAINT rs_law_element_type_check CHECK (
-        "type" IN ('wet', 'boek', 'deel', 'titeldeel', 'hoofdstuk',
-                   'artikel', 'paragraaf', 'subparagraaf', 'afdeling')
-    )
-);
-CREATE INDEX "rs_law_element_idx_bwb_label"    ON "public"."rs_law_element" ("bwb_id", "bwb_label_id");
-CREATE INDEX "rs_law_element_idx_bwb_type_num" ON "public"."rs_law_element" ("bwb_id", "type", "number");
-CREATE INDEX "rs_law_element_idx_filter"       ON "public"."rs_law_element" ("bwb_id", lower("number"), "type");
-
-CREATE TABLE "public"."rs_law_alias" (
-    "id" bigserial NOT NULL,
-    "alias" text NOT NULL,
-    "bwb_id" text NOT NULL,
-    "snapshot_date" date DEFAULT CURRENT_DATE NOT NULL,
-    PRIMARY KEY ("id")
-);
-CREATE INDEX "rs_law_alias_idx_alias_lower" ON "public"."rs_law_alias" (lower("alias"));
+-- NOTE: legacy rs_law_element and rs_law_alias are NOT ported as rs_* tables.
+-- They are a catalog of Dutch LEGISLATION (BWB register + LIDO/JuriConnect
+-- identifiers), not Rechtspraak-corpus metadata — they fold into the generic
+-- legislation / legal_provision / legislation_alias tables (see the
+-- Legislation section above and the migration notes at the bottom).
 
 
 -- =============================================================================
@@ -880,41 +878,43 @@ FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
 WHERE NULLIF(lr."opschrift", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", le."title" AS legal_provision
+SELECT DISTINCT c."ecli", lp."title" AS legal_provision
 FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-JOIN "public"."rs_law_element" le ON le."bwb_label_id" = lr."bwb_label_id"
-WHERE lr."bwb_label_id" IS NOT NULL AND NULLIF(le."title", '') IS NOT NULL
+JOIN "public"."legal_provision" lp ON lp."bwb_label_id" = lr."bwb_label_id"
+WHERE lr."bwb_label_id" IS NOT NULL AND NULLIF(lp."title", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", le."title" AS legal_provision
+SELECT DISTINCT c."ecli", lp."title" AS legal_provision
 FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-JOIN "public"."rs_law_element" le
-  ON le."bwb_id" = lr."bwb_resource"
- AND lower(le."number") = lower(lr."article")
- AND le."type" = 'artikel'
-WHERE NULLIF(le."title", '') IS NOT NULL
+JOIN "public"."legislation" lg
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
+JOIN "public"."legal_provision" lp
+  ON lp."legislation_id" = lg."id"
+ AND lower(lp."article_label") = lower(lr."article")
+ AND lp."element_type" = 'artikel'
+WHERE NULLIF(lp."title", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", wet."title" AS legal_provision
+SELECT DISTINCT c."ecli", lg."title" AS legal_provision
 FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-JOIN "public"."rs_law_element" wet
-  ON wet."bwb_id" = lr."bwb_resource" AND wet."type" = 'wet'
-WHERE NULLIF(wet."title", '') IS NOT NULL
+JOIN "public"."legislation" lg
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
+WHERE NULLIF(lg."title", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", (wet."title" || ', Artikel ' || lr."article") AS legal_provision
+SELECT DISTINCT c."ecli", (lg."title" || ', Artikel ' || lr."article") AS legal_provision
 FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-JOIN "public"."rs_law_element" wet
-  ON wet."bwb_id" = lr."bwb_resource" AND wet."type" = 'wet'
-WHERE NULLIF(wet."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
+JOIN "public"."legislation" lg
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
+WHERE NULLIF(lg."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
 UNION
-SELECT DISTINCT c."ecli", (wet."title" || ', Bijlage ' || lr."article") AS legal_provision
+SELECT DISTINCT c."ecli", (lg."title" || ', Bijlage ' || lr."article") AS legal_provision
 FROM "public"."rs_document_law_reference" lr
 JOIN "public"."case" c ON c."id" = lr."case_id"
-JOIN "public"."rs_law_element" wet
-  ON wet."bwb_id" = lr."bwb_resource" AND wet."type" = 'wet'
-WHERE NULLIF(wet."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
+JOIN "public"."legislation" lg
+  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."bwb_resource"
+WHERE NULLIF(lg."title", '') IS NOT NULL AND NULLIF(lr."article", '') IS NOT NULL
   AND lr."opschrift" ILIKE '%bijlage%';
 
 
@@ -930,6 +930,7 @@ ALTER TABLE "public"."party"             ADD CONSTRAINT fk_party_country        
 ALTER TABLE "public"."legislation"       ADD CONSTRAINT fk_legislation_jurisdiction   FOREIGN KEY ("jurisdiction_id")     REFERENCES "public"."jurisdiction"("id");
 ALTER TABLE "public"."legislation_alias" ADD CONSTRAINT fk_legislation_alias          FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
 ALTER TABLE "public"."legal_provision"   ADD CONSTRAINT fk_legal_provision            FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
+ALTER TABLE "public"."legal_provision"   ADD CONSTRAINT fk_legal_provision_parent     FOREIGN KEY ("parent_id")           REFERENCES "public"."legal_provision"("id");
 ALTER TABLE "public"."domain"            ADD CONSTRAINT fk_domain_parent              FOREIGN KEY ("parent_id")           REFERENCES "public"."domain"("id");
 
 -- Case & satellites
@@ -1051,9 +1052,22 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     rs_citation_counts                  → case_citation_counts
 --     rs_document_formal_relation         → kept as-is AND fanned out to case_citation
 --
+--   Dutch legislation catalog (BWB + LIDO — was rs_law_*, misfiled as RS metadata)
+--     rs_law_element  type='wet'          → legislation (scheme='bwb',
+--                                             identifier=bwb_id, title, lido_id,
+--                                             jc_id, snapshot_date)
+--     rs_law_element  other types         → legal_provision (element_type=type,
+--                                             article_label=number, title,
+--                                             bwb_label_id, lido_id, jc_id,
+--                                             parent_id from BWB hierarchy)
+--     rs_law_alias                        → legislation_alias (alias,
+--                                             legislation_id via bwb_id lookup,
+--                                             source='bwbidlist')
+--
 -- Legacy tables NOT ported (staging / deprecated)
 --     case_law, legal_case, ecli_bwb_opschrift, ecli_keywords, ecli_segments,
 --     ecli_texts, law_alias, law_element
 -- Their information now lives in: case, case_law_reference, case_domain,
--- case_segment, rs_law_alias, rs_law_element, rs_document_law_reference.
+-- case_segment, legislation, legal_provision, legislation_alias,
+-- rs_document_law_reference.
 -- =============================================================================
