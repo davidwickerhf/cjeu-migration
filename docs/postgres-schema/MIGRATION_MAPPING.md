@@ -381,3 +381,53 @@ references made by *any* court known to LIDO. Rows whose ECLI exists in
 the rest (foreign courts we don't ingest) are dropped or parked.
 *Recommendation: fold resolvable rows in a second pass after all three
 corpora are loaded; report the unresolvable remainder.*
+
+---
+
+## 6. Edge-case findings from the deep probe (2026-07-06, live DB)
+
+All verified with read-only queries; each has a loader rule.
+
+**6.1 ECHR compound article codes.** `article_code` includes conjunction
+forms: `13+3` (5,423), `14+8` (3,421), `13+6-1` (3,241), `14+P1-1` (2,259),
+`6+6-3-c` (1,889), plus deep paths (`P1-1-1`, 18,685). Loader rule for the
+`protocol` column: set only when the code is a single `P{n}` reference
+(`P1-1` → `P1`); compound codes keep `protocol NULL` and stay verbatim in
+`article_code` (the API's per-article filters match on the verbatim code).
+
+**6.2 ECHR dates are sparse — parse the ECLI.** Only 91,274 / 197,011
+variant rows have `judgementdate`; case-level coverage is 28,978 / 81,717
+(35%) even with `referencedate` fallback. But the ECLI encodes the decision
+date: `ECLI:CE:ECHR:2020:0206JUD…` → 2020-02-06. Loader rule for
+`cases.date_decision`: `judgementdate` → `referencedate` → parse from ECLI
+segment. Raises date coverage to ~100% of ECLI-bearing cases.
+
+**6.3 ECHR multi-respondent strings.** `respondent` holds `;`-joined lists
+(`MDA;RUS` ×219, `BIH;HRV;MKD;SRB;SVN` ×46, …). The legacy API's
+`respondent = ANY(…)` equality silently misses these. Loader rule: explode
+respondent into `party` (country-typed) + `case_party`
+(role=`'respondent_state'`); keep the raw string on
+`echr_document.respondent` for display. Fixes the API bug.
+
+**6.4 ECLI hygiene.** 8 RS ECLIs are not uppercase-normalized. Loader rule:
+`trim()` + canonical ECLI casing before any resolution or insert; log
+collisions post-normalization.
+
+**6.5 BWB references to unknown laws.** 5,734 distinct `bwb_resource`
+values in `rs_document_law_reference` have no `wet` row in
+`rs_law_element`. Loader rule: create stub `legislation` rows
+(scheme=`'bwb'`, identifier, title NULL) so `/api/links/laws`-style counts
+still group correctly; stubs get titles if/when the BWB catalog refreshes.
+
+**6.6 Unresolvable RS edge targets.** 169,610 `rs_edge` targets are not in
+`rs_document` — but 161,922 of them are cross-corpus (`ECLI:CE:` 50,920 →
+ECHR, `ECLI:EU:` 111,002 → CJEU) and RESOLVE once all three corpora are
+loaded (`is_cross_jurisdiction=true`). Only ~7,700 NL targets remain
+genuinely unresolved → `target_ecli_raw`. Load citations LAST (§0).
+
+**6.7 Depublicated cases.** 46 rows with `opendata_status='depublicated'`.
+Loader rule: load them (flag intact) — the API filters on the column.
+
+**6.8 Sanity results that need no action.** No orphan ECHR edges (0 of
+424,721), no orphan text rows, no ECLI spanning both JUD and DEC doctypes,
+no future dates; 30 pre-1900 RS dates are plausible historical records.

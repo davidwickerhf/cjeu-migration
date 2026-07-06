@@ -247,6 +247,8 @@ CREATE TABLE "public"."legislation_alias" (
     PRIMARY KEY ("id")
 );
 CREATE INDEX "legislation_alias_idx_alias_lower" ON "public"."legislation_alias" (lower("alias"));
+-- linkextractor alias containment search (ILIKE with leading wildcard)
+CREATE INDEX "legislation_alias_idx_alias_trgm"  ON "public"."legislation_alias" USING gin ("alias" gin_trgm_ops);
 
 CREATE TABLE "public"."legal_provision" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
@@ -336,6 +338,11 @@ CREATE INDEX "case_idx_ecli"           ON "public"."cases" ("ecli");
 CREATE INDEX "case_idx_source"         ON "public"."cases" ("source");
 CREATE INDEX "case_idx_item_id"        ON "public"."cases" ("item_id");
 CREATE INDEX "case_idx_title_trgm"     ON "public"."cases" USING gin ("title" gin_trgm_ops);
+-- API keyset pagination: ORDER BY date_decision DESC NULLS LAST, ecli
+CREATE INDEX "case_idx_date_ecli"      ON "public"."cases" ("date_decision" DESC, "ecli");
+CREATE INDEX "case_idx_importance"     ON "public"."cases" ("importance") WHERE "importance" IS NOT NULL;
+-- API zaaknummer/case-number substring search (ILIKE '%…%')
+CREATE INDEX "case_idx_case_number_trgm" ON "public"."cases" USING gin ("case_number" gin_trgm_ops);
 
 CREATE TABLE "public"."case_text" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
@@ -436,6 +443,8 @@ CREATE INDEX "case_law_reference_idx_case_id"     ON "public"."case_law_referenc
 CREATE INDEX "case_law_reference_idx_legislation" ON "public"."case_law_reference" ("legislation_id");
 CREATE INDEX "case_law_reference_idx_provision"   ON "public"."case_law_reference" ("provision_id");
 CREATE INDEX "case_law_reference_idx_raw"         ON "public"."case_law_reference" ("raw_scheme", "raw_resource");
+-- /api/links/laws + /api/links/cases: lookups/counts by BWB label id
+CREATE INDEX "case_law_reference_idx_raw_label"   ON "public"."case_law_reference" ("raw_label_id") WHERE "raw_label_id" IS NOT NULL;
 -- Dedup per resolution state (same pattern as case_citation — a single
 -- UNIQUE constraint would treat NULL targets as always-distinct):
 CREATE UNIQUE INDEX "case_law_reference_uk_provision" ON "public"."case_law_reference"
@@ -618,6 +627,7 @@ CREATE INDEX "echr_document_idx_case_lang" ON "public"."echr_document" ("case_id
 CREATE INDEX "echr_document_idx_doctype"          ON "public"."echr_document" ("doctype");
 CREATE INDEX "echr_document_idx_doctype_branch"   ON "public"."echr_document" ("doctype_branch");
 CREATE INDEX "echr_document_idx_judgement_date"   ON "public"."echr_document" ("judgement_date");
+CREATE INDEX "echr_document_idx_reference_date"   ON "public"."echr_document" ("reference_date");
 CREATE INDEX "echr_document_idx_judgement_year"   ON "public"."echr_document" ("judgement_year");
 CREATE INDEX "echr_document_idx_originating_body" ON "public"."echr_document" ("originating_body");
 CREATE INDEX "echr_document_idx_docname_trgm"     ON "public"."echr_document" USING gin ("docname" gin_trgm_ops);
@@ -636,7 +646,7 @@ CREATE TABLE "public"."echr_document_appno" (
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("item_id", "appno", "source")
 );
-CREATE INDEX "echr_document_appno_idx_appno_left" ON "public"."echr_document_appno" (left("appno", 500));
+CREATE INDEX "echr_document_appno_idx_appno"      ON "public"."echr_document_appno" ("appno");
 CREATE INDEX "echr_document_appno_idx_source"     ON "public"."echr_document_appno" ("source");
 
 CREATE TABLE "public"."echr_document_article" (
@@ -716,6 +726,8 @@ CREATE TABLE "public"."rs_document" (
         CHECK ("opendata_status" IN ('public', 'depublicated'))
 );
 CREATE INDEX "rs_document_idx_date_decision" ON "public"."rs_document" ("date_decision");
+-- /api/rechtspraak domains && ARRAY[...] filter
+CREATE INDEX "rs_document_idx_domains_gin"   ON "public"."rs_document" USING gin ("domains");
 CREATE INDEX "rs_document_idx_date_issued"   ON "public"."rs_document" ("date_issued");
 CREATE INDEX "rs_document_idx_date_modified" ON "public"."rs_document" ("date_modified");
 CREATE TRIGGER trg_rs_document_updated_at
@@ -758,6 +770,7 @@ CREATE TABLE "public"."rs_document_publication" (
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("case_id", "raw")
 );
+CREATE INDEX "rs_document_publication_idx_journal" ON "public"."rs_document_publication" ("journal_abbr");
 
 -- NOTE: legacy rs_document_law_reference is NOT ported as an rs_* table.
 -- Dutch BWB references load into the shared case_law_reference with
