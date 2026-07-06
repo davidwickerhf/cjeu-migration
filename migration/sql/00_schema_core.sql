@@ -1,3 +1,8 @@
+-- GENERATED from docs/postgres-schema/schema_full.sql — DO NOT EDIT.
+-- Core DDL for bulk load: extensions, functions, tables (PK/UNIQUE inline),
+-- seeds. Secondary indexes / FKs / triggers / views live in 90_post_load.sql
+-- and are applied AFTER the data lands (10x faster bulk load).
+
 -- =============================================================================
 -- CLE unified schema — full target (CJEU + ECHR + Rechtspraak)
 -- =============================================================================
@@ -29,8 +34,8 @@
 -- full log. The load-bearing ones:
 --   • DEPLOY TARGET: a dedicated schema (suggested name: cle_v2), NOT public —
 --     table names collide with the legacy tables (echr_document, rs_document, …).
---     This file says "public" only so visualization tools import it cleanly;
---     at apply time run:  sed 's/"public"/"cle_v2"/g' schema_full.sql | psql …
+--     This file says "cle_v2" only so visualization tools import it cleanly;
+--     at apply time run:  sed 's/"cle_v2"/"cle_v2"/g' schema_full.sql | psql …
 --   • LANGUAGE CODES: lowercase ISO 639-1 everywhere ('en','fr','nl','bg',…),
 --     normalized at load (HUDOC ENG→en, FRE→fr; CJEU EN→en). Seeded below.
 --   • fulltext_tsv: stays a GENERATED column; the loader truncates input past
@@ -46,7 +51,9 @@
 -- Extensions (from legacy production)
 -- =============================================================================
 
-CREATE SCHEMA IF NOT EXISTS "public";
+SET search_path TO public;
+
+CREATE SCHEMA IF NOT EXISTS "cle_v2";
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- gin_trgm_ops on docname / issue
 CREATE EXTENSION IF NOT EXISTS vector;    -- pgvector — HNSW on embeddings
@@ -58,7 +65,7 @@ CREATE EXTENSION IF NOT EXISTS vector;    -- pgvector — HNSW on embeddings
 
 -- Generic updated_at touch trigger. Replaces echr_touch_updated_at +
 -- rs_touch_updated_at from legacy with one shared function.
-CREATE OR REPLACE FUNCTION "public".touch_updated_at()
+CREATE OR REPLACE FUNCTION "cle_v2".touch_updated_at()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   NEW.updated_at := now();
@@ -68,7 +75,7 @@ $$;
 
 -- Date-to-ISO helper preserved from legacy — used by the
 -- rs_v_document_law_reference view to build version-dated deeplink URLs.
-CREATE OR REPLACE FUNCTION "public".rs_date_to_iso(d date)
+CREATE OR REPLACE FUNCTION "cle_v2".rs_date_to_iso(d date)
 RETURNS text LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE WHEN d IS NULL THEN NULL ELSE to_char(d, 'YYYY-MM-DD') END;
 $$;
@@ -76,17 +83,17 @@ $$;
 -- Generalised citation-count maintenance. One function drives
 -- case_citation_counts for all three corpora (replaces the two per-corpus
 -- functions in legacy). Trigger definition further below.
-CREATE OR REPLACE FUNCTION "public".case_citation_counts_maintain()
+CREATE OR REPLACE FUNCTION "cle_v2".case_citation_counts_maintain()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'DELETE' THEN
     IF OLD.source_case_id IS NOT NULL THEN
-      UPDATE "public".case_citation_counts
+      UPDATE "cle_v2".case_citation_counts
          SET cites_count = GREATEST(cites_count - 1, 0), updated_at = now()
        WHERE case_id = OLD.source_case_id;
     END IF;
     IF OLD.target_case_id IS NOT NULL THEN
-      UPDATE "public".case_citation_counts
+      UPDATE "cle_v2".case_citation_counts
          SET cited_by_count = GREATEST(cited_by_count - 1, 0), updated_at = now()
        WHERE case_id = OLD.target_case_id;
     END IF;
@@ -95,13 +102,13 @@ BEGIN
 
   IF TG_OP = 'INSERT' THEN
     IF NEW.source_case_id IS NOT NULL THEN
-      INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+      INSERT INTO "cle_v2".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
       VALUES (NEW.source_case_id, 1, 0, now())
       ON CONFLICT (case_id) DO UPDATE
         SET cites_count = case_citation_counts.cites_count + 1, updated_at = now();
     END IF;
     IF NEW.target_case_id IS NOT NULL THEN
-      INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+      INSERT INTO "cle_v2".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
       VALUES (NEW.target_case_id, 0, 1, now())
       ON CONFLICT (case_id) DO UPDATE
         SET cited_by_count = case_citation_counts.cited_by_count + 1, updated_at = now();
@@ -112,12 +119,12 @@ BEGIN
   IF TG_OP = 'UPDATE' THEN
     IF OLD.source_case_id IS DISTINCT FROM NEW.source_case_id THEN
       IF OLD.source_case_id IS NOT NULL THEN
-        UPDATE "public".case_citation_counts
+        UPDATE "cle_v2".case_citation_counts
            SET cites_count = GREATEST(cites_count - 1, 0), updated_at = now()
          WHERE case_id = OLD.source_case_id;
       END IF;
       IF NEW.source_case_id IS NOT NULL THEN
-        INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+        INSERT INTO "cle_v2".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
         VALUES (NEW.source_case_id, 1, 0, now())
         ON CONFLICT (case_id) DO UPDATE
           SET cites_count = case_citation_counts.cites_count + 1, updated_at = now();
@@ -125,12 +132,12 @@ BEGIN
     END IF;
     IF OLD.target_case_id IS DISTINCT FROM NEW.target_case_id THEN
       IF OLD.target_case_id IS NOT NULL THEN
-        UPDATE "public".case_citation_counts
+        UPDATE "cle_v2".case_citation_counts
            SET cited_by_count = GREATEST(cited_by_count - 1, 0), updated_at = now()
          WHERE case_id = OLD.target_case_id;
       END IF;
       IF NEW.target_case_id IS NOT NULL THEN
-        INSERT INTO "public".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
+        INSERT INTO "cle_v2".case_citation_counts (case_id, cites_count, cited_by_count, updated_at)
         VALUES (NEW.target_case_id, 0, 1, now())
         ON CONFLICT (case_id) DO UPDATE
           SET cited_by_count = case_citation_counts.cited_by_count + 1, updated_at = now();
@@ -155,13 +162,13 @@ $$;
 -- 639-2/B codes (FRE→fr, GER→de, RUM→ro, CZE→cs). The seed below covers
 -- the EU 24 only — the loader MUST upsert unseen languages
 -- (INSERT … ON CONFLICT DO NOTHING) before inserting dependent rows.
-CREATE TABLE "public"."language" (
+CREATE TABLE "cle_v2"."language" (
     "iso_code" text NOT NULL,
     "name" text,
     PRIMARY KEY ("iso_code")
 );
 
-CREATE TABLE "public"."jurisdiction" (
+CREATE TABLE "cle_v2"."jurisdiction" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "iso_code" text UNIQUE,
     "name" text,
@@ -169,7 +176,7 @@ CREATE TABLE "public"."jurisdiction" (
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."court" (
+CREATE TABLE "cle_v2"."court" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "code" text UNIQUE,
     "name" text,
@@ -179,28 +186,28 @@ CREATE TABLE "public"."court" (
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."instance" (
+CREATE TABLE "cle_v2"."instance" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "code" text UNIQUE,
     "name" text,
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."document_type" (
+CREATE TABLE "cle_v2"."document_type" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "code" text UNIQUE,
     "name" text,
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."procedure_type" (
+CREATE TABLE "cle_v2"."procedure_type" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "code" text UNIQUE,
     "name" text,
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."judge" (
+CREATE TABLE "cle_v2"."judge" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "full_name" text,
     "aliases" text[],
@@ -208,7 +215,7 @@ CREATE TABLE "public"."judge" (
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."party" (
+CREATE TABLE "cle_v2"."party" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "canonical_name" text,
     "aliases" text[],
@@ -224,7 +231,7 @@ CREATE TABLE "public"."party" (
 --   legacy rs_law_element type='wet'   → legislation  (scheme='bwb')
 --   legacy rs_law_element other types  → legal_provision (element_type + parent_id hierarchy)
 --   legacy rs_law_alias                → legislation_alias
-CREATE TABLE "public"."legislation" (
+CREATE TABLE "cle_v2"."legislation" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "identifier" text,               -- CELEX number | BWB id | treaty id
     "scheme" text,                   -- 'celex' | 'bwb' | 'echr_treaty' | ...
@@ -237,20 +244,20 @@ CREATE TABLE "public"."legislation" (
     "snapshot_date" date,            -- catalog snapshot (was rs_law_element.snapshot_date)
     PRIMARY KEY ("id")
 );
-CREATE INDEX "legislation_idx_scheme_identifier" ON "public"."legislation" ("scheme", "identifier");
 
-CREATE TABLE "public"."legislation_alias" (
+
+CREATE TABLE "cle_v2"."legislation_alias" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "legislation_id" bigint,
     "alias" text,
     "source" text,                   -- 'opschrift' | 'bwbidlist' | ...
     PRIMARY KEY ("id")
 );
-CREATE INDEX "legislation_alias_idx_alias_lower" ON "public"."legislation_alias" (lower("alias"));
--- linkextractor alias containment search (ILIKE with leading wildcard)
-CREATE INDEX "legislation_alias_idx_alias_trgm"  ON "public"."legislation_alias" USING gin ("alias" gin_trgm_ops);
 
-CREATE TABLE "public"."legal_provision" (
+-- linkextractor alias containment search (ILIKE with leading wildcard)
+
+
+CREATE TABLE "cle_v2"."legal_provision" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "legislation_id" bigint,
     "parent_id" bigint,              -- self-FK: nested structure (NL: boek→titeldeel→artikel; EU: article→paragraph→annex)
@@ -267,10 +274,9 @@ CREATE TABLE "public"."legal_provision" (
     "snapshot_date" date,
     PRIMARY KEY ("id")
 );
-CREATE INDEX "legal_provision_idx_bwb_label" ON "public"."legal_provision" ("bwb_label_id");
-CREATE INDEX "legal_provision_idx_lookup"    ON "public"."legal_provision" ("legislation_id", lower("article_label"), "element_type");
 
-CREATE TABLE "public"."domain" (
+
+CREATE TABLE "cle_v2"."domain" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "scheme" text,                   -- 'eurovoc' | 'cjeu_subject_matter' | 'cjeu_keyword' | 'cjeu_directory_code' | 'rs_domain' | 'echr_article' | ...
     "name" text,                     -- canonical label (English for eurovoc)
@@ -283,7 +289,7 @@ CREATE TABLE "public"."domain" (
 -- (see DECISIONS.md → "EuroVoc label ingest"): the Publications Office SKOS
 -- distribution carries ~7k concepts × 24 language prefLabels (~170k rows).
 -- Any scheme can use it; eurovoc is the first customer.
-CREATE TABLE "public"."domain_label" (
+CREATE TABLE "cle_v2"."domain_label" (
     "domain_id" bigint NOT NULL,
     "language" text NOT NULL,
     "label" text NOT NULL,
@@ -291,7 +297,7 @@ CREATE TABLE "public"."domain_label" (
 );
 
 -- CJEU-specific formation lookup (~15 rows, seeded at bottom)
-CREATE TABLE "public"."court_formation" (
+CREATE TABLE "cle_v2"."court_formation" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "code" text UNIQUE,              -- 'GC' | 'FC' | '1C' | ... | 'PR' | 'SOLE'
     "label" text,
@@ -304,7 +310,7 @@ CREATE TABLE "public"."court_formation" (
 -- Core case data (shared across CJEU / ECHR / Rechtspraak)
 -- =============================================================================
 
-CREATE TABLE "public"."cases" (
+CREATE TABLE "cle_v2"."cases" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "ecli" text UNIQUE,
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
@@ -332,19 +338,15 @@ CREATE TABLE "public"."cases" (
     "updated_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id")
 );
-CREATE INDEX "case_idx_court"          ON "public"."cases" ("court_id");
-CREATE INDEX "case_idx_date_decision"  ON "public"."cases" ("date_decision");
-CREATE INDEX "case_idx_ecli"           ON "public"."cases" ("ecli");
-CREATE INDEX "case_idx_source"         ON "public"."cases" ("source");
-CREATE INDEX "case_idx_item_id"        ON "public"."cases" ("item_id");
-CREATE INDEX "case_idx_title_trgm"     ON "public"."cases" USING gin ("title" gin_trgm_ops);
--- API keyset pagination: ORDER BY date_decision DESC NULLS LAST, ecli
-CREATE INDEX "case_idx_date_ecli"      ON "public"."cases" ("date_decision" DESC, "ecli");
-CREATE INDEX "case_idx_importance"     ON "public"."cases" ("importance") WHERE "importance" IS NOT NULL;
--- API zaaknummer/case-number substring search (ILIKE '%…%')
-CREATE INDEX "case_idx_case_number_trgm" ON "public"."cases" USING gin ("case_number" gin_trgm_ops);
 
-CREATE TABLE "public"."case_text" (
+
+-- API keyset pagination: ORDER BY date_decision DESC NULLS LAST, ecli
+
+
+-- API zaaknummer/case-number substring search (ILIKE '%…%')
+
+
+CREATE TABLE "cle_v2"."case_text" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint NOT NULL,
     "language" text NOT NULL,
@@ -374,16 +376,9 @@ CREATE TABLE "public"."case_text" (
     PRIMARY KEY ("id"),
     UNIQUE ("case_id", "language")                         -- exactly one row per case × language
 );
-CREATE INDEX "case_text_idx_case_id"          ON "public"."case_text" ("case_id");
-CREATE INDEX "case_text_idx_fulltext_tsv"     ON "public"."case_text" USING gin ("fulltext_tsv");
-CREATE INDEX "case_text_idx_summary_tsv"      ON "public"."case_text" USING gin ("summary_tsv");
-CREATE INDEX "case_text_idx_summary_embedding" ON "public"."case_text" USING hnsw ("summary_embedding" vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
-CREATE TRIGGER trg_case_text_updated_at
-BEFORE UPDATE ON "public"."case_text"
-FOR EACH ROW EXECUTE FUNCTION "public".touch_updated_at();
 
-CREATE TABLE "public"."case_judge" (
+
+CREATE TABLE "cle_v2"."case_judge" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint,
     "judge_id" bigint,
@@ -391,24 +386,23 @@ CREATE TABLE "public"."case_judge" (
     PRIMARY KEY ("id"),
     UNIQUE ("case_id", "judge_id", "role")
 );
-CREATE INDEX "case_judge_idx_case_id"  ON "public"."case_judge" ("case_id");
-CREATE INDEX "case_judge_idx_judge_id" ON "public"."case_judge" ("judge_id");
 
-CREATE TABLE "public"."case_party" (
+
+CREATE TABLE "cle_v2"."case_party" (
     "case_id" bigint,
     "party_id" bigint,
     "role" text,                     -- 'applicant' | 'defendant' | 'referring_state' | 'defendant_agent' | ...
     "ordinal" smallint DEFAULT 1,    -- disambiguate multiple parties in same role
     PRIMARY KEY ("case_id", "party_id", "role", "ordinal")
 );
-CREATE INDEX "case_party_idx_party" ON "public"."case_party" ("party_id");
 
-CREATE TABLE "public"."case_domain" (
+
+CREATE TABLE "cle_v2"."case_domain" (
     "case_id" bigint,
     "domain_id" bigint,
     PRIMARY KEY ("case_id", "domain_id")
 );
-CREATE INDEX "case_domain_idx_domain_id" ON "public"."case_domain" ("domain_id");
+
 
 -- THE single case→law reference table for all corpora. Mirrors the
 -- case_citation design: resolved FK targets and raw source-shaped targets
@@ -416,7 +410,7 @@ CREATE INDEX "case_domain_idx_domain_id" ON "public"."case_domain" ("domain_id")
 -- rs_document_law_reference — Dutch BWB references load here with
 -- raw_scheme='bwb'; the legacy API shape incl. deeplink URLs is
 -- reconstructed by the rs_v_document_law_reference view).
-CREATE TABLE "public"."case_law_reference" (
+CREATE TABLE "cle_v2"."case_law_reference" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint NOT NULL,
     "legislation_id" bigint,         -- resolved act (nullable until resolution)
@@ -440,25 +434,15 @@ CREATE TABLE "public"."case_law_reference" (
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id")
 );
-CREATE INDEX "case_law_reference_idx_case_id"     ON "public"."case_law_reference" ("case_id");
-CREATE INDEX "case_law_reference_idx_legislation" ON "public"."case_law_reference" ("legislation_id");
-CREATE INDEX "case_law_reference_idx_provision"   ON "public"."case_law_reference" ("provision_id");
-CREATE INDEX "case_law_reference_idx_raw"         ON "public"."case_law_reference" ("raw_scheme", "raw_resource");
+
+
 -- /api/links/laws + /api/links/cases: lookups/counts by BWB label id
-CREATE INDEX "case_law_reference_idx_raw_label"   ON "public"."case_law_reference" ("raw_label_id") WHERE "raw_label_id" IS NOT NULL;
+
 -- Dedup per resolution state (same pattern as case_citation — a single
 -- UNIQUE constraint would treat NULL targets as always-distinct):
-CREATE UNIQUE INDEX "case_law_reference_uk_provision" ON "public"."case_law_reference"
-    ("case_id", "provision_id", "role", "source_dataset")
-    WHERE "provision_id" IS NOT NULL;
-CREATE UNIQUE INDEX "case_law_reference_uk_legislation" ON "public"."case_law_reference"
-    ("case_id", "legislation_id", "role", "source_dataset")
-    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL;
-CREATE UNIQUE INDEX "case_law_reference_uk_raw" ON "public"."case_law_reference"
-    ("case_id", "raw_scheme", "raw_resource", COALESCE("raw_subdivision", ''), "role", "source_dataset")
-    WHERE "provision_id" IS NULL AND "legislation_id" IS NULL AND "raw_resource" IS NOT NULL;
 
-CREATE TABLE "public"."case_citation" (
+
+CREATE TABLE "cle_v2"."case_citation" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "source_case_id" bigint,
     "target_case_id" bigint,                   -- nullable if target not yet in `case`
@@ -483,24 +467,9 @@ CREATE TABLE "public"."case_citation" (
 -- Dedup is enforced per resolution state. A single UNIQUE constraint over
 -- (source, target, relation, dataset) would NOT deduplicate unresolved
 -- citations — Postgres treats NULL target_case_id as always-distinct.
-CREATE UNIQUE INDEX "case_citation_uk_resolved" ON "public"."case_citation"
-    ("source_case_id", "target_case_id", "relation_type", "source_dataset")
-    WHERE "target_case_id" IS NOT NULL;
-CREATE UNIQUE INDEX "case_citation_uk_unresolved_celex" ON "public"."case_citation"
-    ("source_case_id", "target_celex_raw", "relation_type", "source_dataset")
-    WHERE "target_case_id" IS NULL AND "target_celex_raw" IS NOT NULL;
-CREATE UNIQUE INDEX "case_citation_uk_unresolved_ecli" ON "public"."case_citation"
-    ("source_case_id", "target_ecli_raw", "relation_type", "source_dataset")
-    WHERE "target_case_id" IS NULL AND "target_ecli_raw" IS NOT NULL;
-CREATE INDEX "case_citation_idx_source"        ON "public"."case_citation" ("source_case_id");
-CREATE INDEX "case_citation_idx_target"        ON "public"."case_citation" ("target_case_id");
-CREATE INDEX "case_citation_idx_relation_type" ON "public"."case_citation" ("relation_type");
-CREATE INDEX "case_citation_idx_source_target" ON "public"."case_citation" ("source_case_id", "target_case_id");
-CREATE INDEX "case_citation_idx_weight"        ON "public"."case_citation" ("weight") WHERE weight > 1;
-CREATE INDEX "case_citation_idx_target_ecli_raw"  ON "public"."case_citation" ("target_ecli_raw")  WHERE target_ecli_raw  IS NOT NULL;
-CREATE INDEX "case_citation_idx_target_celex_raw" ON "public"."case_citation" ("target_celex_raw") WHERE target_celex_raw IS NOT NULL;
 
-CREATE TABLE "public"."case_citation_counts" (
+
+CREATE TABLE "cle_v2"."case_citation_counts" (
     -- Pre-computed cite counts per case. Maintained by trigger on case_citation.
     -- Replaces per-corpus echr_citation_counts + rs_citation_counts from legacy.
     "case_id" bigint NOT NULL,
@@ -510,16 +479,12 @@ CREATE TABLE "public"."case_citation_counts" (
     PRIMARY KEY ("case_id")
 );
 
-CREATE TRIGGER trg_case_citation_counts
-AFTER INSERT OR UPDATE OR DELETE ON "public"."case_citation"
-FOR EACH ROW EXECUTE FUNCTION "public".case_citation_counts_maintain();
-
 
 -- =============================================================================
 -- CJEU-specific extensions
 -- =============================================================================
 
-CREATE TABLE "public"."cjeu_document" (
+CREATE TABLE "cle_v2"."cjeu_document" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint NOT NULL,
     "celex_id" text,                 -- denormalized from cases.celex_id for convenience
@@ -543,7 +508,7 @@ CREATE TABLE "public"."cjeu_document" (
     UNIQUE ("case_id")
 );
 
-CREATE TABLE "public"."cjeu_ag_opinion" (
+CREATE TABLE "cle_v2"."cjeu_ag_opinion" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint NOT NULL,
     "parent_case_id" bigint,         -- the judgment this opinion is for
@@ -555,7 +520,7 @@ CREATE TABLE "public"."cjeu_ag_opinion" (
 );
 
 -- Sector-8 satellite (~1,800 CJEU cases involving national court referrals)
-CREATE TABLE "public"."cjeu_national_document" (
+CREATE TABLE "cle_v2"."cjeu_national_document" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint NOT NULL,
     "national_court_uri" text,
@@ -578,7 +543,7 @@ CREATE TABLE "public"."cjeu_national_document" (
 -- ECHR-specific extensions — enriched from legacy production
 -- =============================================================================
 
-CREATE TABLE "public"."echr_document" (
+CREATE TABLE "cle_v2"."echr_document" (
     -- One row per HUDOC document variant (per language, sometimes several per
     -- (case, language)). Preserves every HUDOC variant.
     -- IMPORTANT (verified against live legacy data): each language variant has
@@ -624,20 +589,9 @@ CREATE TABLE "public"."echr_document" (
     -- are preserved; case_text picks one text per (case, language).
     PRIMARY KEY ("item_id")
 );
-CREATE INDEX "echr_document_idx_case_lang" ON "public"."echr_document" ("case_id", "language");
-CREATE INDEX "echr_document_idx_doctype"          ON "public"."echr_document" ("doctype");
-CREATE INDEX "echr_document_idx_doctype_branch"   ON "public"."echr_document" ("doctype_branch");
-CREATE INDEX "echr_document_idx_judgement_date"   ON "public"."echr_document" ("judgement_date");
-CREATE INDEX "echr_document_idx_reference_date"   ON "public"."echr_document" ("reference_date");
-CREATE INDEX "echr_document_idx_judgement_year"   ON "public"."echr_document" ("judgement_year");
-CREATE INDEX "echr_document_idx_originating_body" ON "public"."echr_document" ("originating_body");
-CREATE INDEX "echr_document_idx_docname_trgm"     ON "public"."echr_document" USING gin ("docname" gin_trgm_ops);
-CREATE INDEX "echr_document_idx_issue_trgm"       ON "public"."echr_document" USING gin ("issue" gin_trgm_ops);
-CREATE TRIGGER trg_echr_document_updated_at
-BEFORE UPDATE ON "public"."echr_document"
-FOR EACH ROW EXECUTE FUNCTION "public".touch_updated_at();
 
-CREATE TABLE "public"."echr_document_appno" (
+
+CREATE TABLE "cle_v2"."echr_document_appno" (
     -- Normalized appnos — one row per (variant × appno × source), anchored on
     -- the variant's HUDOC item_id (mirrors the legacy key structure).
     -- 'source' distinguishes case's own appno from those parsed from references.
@@ -647,10 +601,9 @@ CREATE TABLE "public"."echr_document_appno" (
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("item_id", "appno", "source")
 );
-CREATE INDEX "echr_document_appno_idx_appno"      ON "public"."echr_document_appno" ("appno");
-CREATE INDEX "echr_document_appno_idx_source"     ON "public"."echr_document_appno" ("source");
 
-CREATE TABLE "public"."echr_document_article" (
+
+CREATE TABLE "cle_v2"."echr_document_article" (
     -- ECHR Convention articles applied to / violated by / not-violated by this
     -- case, anchored on the variant's HUDOC item_id.
     "item_id" text NOT NULL,
@@ -662,9 +615,9 @@ CREATE TABLE "public"."echr_document_article" (
     CONSTRAINT echr_document_article_kind_check
         CHECK ("kind" IN ('applied', 'violation', 'nonviolation'))
 );
-CREATE INDEX "echr_document_article_idx_filter" ON "public"."echr_document_article" ("kind", "article_code");
 
-CREATE TABLE "public"."echr_extractor_segments" (
+
+CREATE TABLE "cle_v2"."echr_extractor_segments" (
     -- Section-level text extraction (procedure / facts / law / operative / …).
     -- Preserved from legacy — this is a segmentation that carries ECHR-specific
     -- semantics not captured by the generic case_segment table.
@@ -685,15 +638,13 @@ CREATE TABLE "public"."echr_extractor_segments" (
     "extractor_version" text,
     PRIMARY KEY ("item_id")
 );
-CREATE INDEX "echr_extractor_segments_idx_parser"      ON "public"."echr_extractor_segments" ("parser_mode");
-CREATE INDEX "echr_extractor_segments_idx_num_sections" ON "public"."echr_extractor_segments" ("num_sections");
 
 
 -- =============================================================================
 -- Rechtspraak-specific extensions — enriched from legacy production
 -- =============================================================================
 
-CREATE TABLE "public"."rs_document" (
+CREATE TABLE "cle_v2"."rs_document" (
     -- One row per case_id. All Rechtspraak-specific metadata from legacy.
     "case_id" bigint PRIMARY KEY,
     "date_decision" date,                                  -- Rechtspraak's own date_decision (may differ from cases.date_decision if late correction)
@@ -726,16 +677,11 @@ CREATE TABLE "public"."rs_document" (
     CONSTRAINT rs_document_opendata_status_check
         CHECK ("opendata_status" IN ('public', 'depublicated'))
 );
-CREATE INDEX "rs_document_idx_date_decision" ON "public"."rs_document" ("date_decision");
--- /api/rechtspraak domains && ARRAY[...] filter
-CREATE INDEX "rs_document_idx_domains_gin"   ON "public"."rs_document" USING gin ("domains");
-CREATE INDEX "rs_document_idx_date_issued"   ON "public"."rs_document" ("date_issued");
-CREATE INDEX "rs_document_idx_date_modified" ON "public"."rs_document" ("date_modified");
-CREATE TRIGGER trg_rs_document_updated_at
-BEFORE UPDATE ON "public"."rs_document"
-FOR EACH ROW EXECUTE FUNCTION "public".touch_updated_at();
 
-CREATE TABLE "public"."rs_document_external_authority" (
+-- /api/rechtspraak domains && ARRAY[...] filter
+
+
+CREATE TABLE "cle_v2"."rs_document_external_authority" (
     "case_id" bigint NOT NULL,
     "kind" text DEFAULT 'other' NOT NULL,
     "name" text NOT NULL,
@@ -745,7 +691,7 @@ CREATE TABLE "public"."rs_document_external_authority" (
     PRIMARY KEY ("case_id", "raw")
 );
 
-CREATE TABLE "public"."rs_document_formal_relation" (
+CREATE TABLE "cle_v2"."rs_document_formal_relation" (
     -- Structured ECLI-to-ECLI relations from Rechtspraak's dcterms:relation.
     -- Also fanned out into case_citation for cross-corpus querying.
     "case_id" bigint NOT NULL,
@@ -760,7 +706,7 @@ CREATE TABLE "public"."rs_document_formal_relation" (
     PRIMARY KEY ("case_id", "target_identifier", "relation_type", "aanleg")
 );
 
-CREATE TABLE "public"."rs_document_publication" (
+CREATE TABLE "cle_v2"."rs_document_publication" (
     "case_id" bigint NOT NULL,
     "raw" text NOT NULL,
     "kind" text DEFAULT 'other' NOT NULL,
@@ -771,7 +717,7 @@ CREATE TABLE "public"."rs_document_publication" (
     "created_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("case_id", "raw")
 );
-CREATE INDEX "rs_document_publication_idx_journal" ON "public"."rs_document_publication" ("journal_abbr");
+
 
 -- NOTE: legacy rs_document_law_reference is NOT ported as an rs_* table.
 -- Dutch BWB references load into the shared case_law_reference with
@@ -792,7 +738,7 @@ CREATE INDEX "rs_document_publication_idx_journal" ON "public"."rs_document_publ
 -- Cross-corpus bridges
 -- =============================================================================
 
-CREATE TABLE "public"."lido_link" (
+CREATE TABLE "cle_v2"."lido_link" (
     -- LIDO (Dutch government) links: usually RS → ECLI or RS → BWB provision.
     -- Complements case_citation (structured cases) and case_law_reference
     -- (structured law refs); lido_link keeps the raw fetched URI shape.
@@ -808,15 +754,13 @@ CREATE TABLE "public"."lido_link" (
     "fetched_at" timestamptz DEFAULT now(),
     PRIMARY KEY ("id")
 );
-CREATE INDEX "lido_link_idx_source_case" ON "public"."lido_link" ("source_case_id");
-CREATE INDEX "lido_link_idx_target_case" ON "public"."lido_link" ("target_case_id");
 
 
 -- =============================================================================
 -- Downstream analytics (populated by pipelines from case_text / case_citation)
 -- =============================================================================
 
-CREATE TABLE "public"."case_segment" (
+CREATE TABLE "cle_v2"."case_segment" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint,
     "language" text,
@@ -831,11 +775,9 @@ CREATE TABLE "public"."case_segment" (
     PRIMARY KEY ("id"),
     UNIQUE ("case_id", "segment_hash")
 );
-CREATE INDEX "case_segment_idx_case_id"        ON "public"."case_segment" ("case_id");
-CREATE INDEX "case_segment_idx_embedding_hnsw" ON "public"."case_segment" USING hnsw ("embedding" vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
 
-CREATE TABLE "public"."case_entity" (
+
+CREATE TABLE "cle_v2"."case_entity" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint,
     "entity_type" text,
@@ -847,12 +789,12 @@ CREATE TABLE "public"."case_entity" (
     "confidence" real,
     PRIMARY KEY ("id")
 );
-CREATE INDEX "case_entity_idx_case_id" ON "public"."case_entity" ("case_id");
+
 
 -- Versioned GENERATED summaries (LLM pipeline) with human-review workflow.
 -- Distinct from case_text.summary, which holds upstream/source summaries.
 -- Adopted from the interim schema draft (2026-07-06).
-CREATE TABLE "public"."case_summary_version" (
+CREATE TABLE "cle_v2"."case_summary_version" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "case_id" bigint NOT NULL,
     "language" text,
@@ -871,12 +813,9 @@ CREATE TABLE "public"."case_summary_version" (
     PRIMARY KEY ("id")
 );
 -- One current, non-rejected summary per (case, scope, model)
-CREATE UNIQUE INDEX "case_summary_version_uk_current"
-    ON "public"."case_summary_version" ("case_id", "segment_scope", "summarization_model")
-    WHERE "is_current" = true AND "rejected_at" IS NULL;
-CREATE INDEX "case_summary_version_idx_case" ON "public"."case_summary_version" ("case_id");
 
-CREATE TABLE "public"."case_cluster" (
+
+CREATE TABLE "cle_v2"."case_cluster" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "snapshot_id" bigint,
     "algorithm" text,
@@ -885,13 +824,13 @@ CREATE TABLE "public"."case_cluster" (
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."case_cluster_membership" (
+CREATE TABLE "cle_v2"."case_cluster_membership" (
     "cluster_id" bigint,
     "case_id" bigint,
     PRIMARY KEY ("cluster_id", "case_id")
 );
 
-CREATE TABLE "public"."case_network_metric" (
+CREATE TABLE "cle_v2"."case_network_metric" (
     "snapshot_id" bigint,
     "case_id" bigint,
     "in_degree" int,
@@ -903,9 +842,9 @@ CREATE TABLE "public"."case_network_metric" (
     "eigenvector" real,
     PRIMARY KEY ("snapshot_id", "case_id")
 );
-CREATE INDEX "case_network_metric_idx_case" ON "public"."case_network_metric" ("case_id");
 
-CREATE TABLE "public"."network_snapshot" (
+
+CREATE TABLE "cle_v2"."network_snapshot" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "snapshot_date" date,
     "description" text,
@@ -915,7 +854,7 @@ CREATE TABLE "public"."network_snapshot" (
     PRIMARY KEY ("id")
 );
 
-CREATE TABLE "public"."search_query_log" (
+CREATE TABLE "cle_v2"."search_query_log" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "user_id" text,
     "raw_query" text,
@@ -934,103 +873,24 @@ CREATE TABLE "public"."search_query_log" (
 -- =============================================================================
 
 -- Convenience view: ECHR document + fulltext joined on (case_id, language).
-CREATE OR REPLACE VIEW "public"."echr_v_document_with_text" AS
-SELECT d.*, t."fulltext", t."fulltext_tsv"
-FROM "public"."echr_document" d
-LEFT JOIN "public"."case_text" t
-       ON t."case_id" = d."case_id"
-      AND t."language" = d."language";
+
 
 -- Judgments and decisions only (excludes press releases / communications).
-CREATE OR REPLACE VIEW "public"."echr_v_judgments_decisions" AS
-SELECT * FROM "public"."echr_document"
-WHERE "doctype" ILIKE '%JUD%' OR "doctype" ILIKE '%DEC%';
+
 
 -- Rechtspraak document + fulltext (only Dutch text — RS is monolingual).
 -- Re-exposes summary from case_text for API compatibility with the legacy
 -- rs_document.summary column.
-CREATE OR REPLACE VIEW "public"."rs_v_document_with_text" AS
-SELECT d.*, t."summary", t."fulltext", t."fulltext_tsv"
-FROM "public"."rs_document" d
-LEFT JOIN "public"."case_text" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
+
 
 -- Legacy-shaped Dutch law-reference rows, reconstructed from the shared
 -- case_law_reference (raw_scheme='bwb'). Replaces the legacy
 -- rs_document_law_reference table 1:1 — including the two deeplink URL
 -- columns that used to be GENERATED columns on that table.
-CREATE OR REPLACE VIEW "public"."rs_v_document_law_reference" AS
-SELECT
-    r."case_id",
-    c."ecli",
-    r."raw_resource"                  AS "bwb_resource",
-    COALESCE(r."raw_subdivision", '') AS "article",
-    r."version_date",
-    r."raw_label_id"                  AS "bwb_label_id",
-    r."source_dataset"                AS "source",
-    r."raw_reference"                 AS "opschrift",
-    'http://wetten.overheid.nl/id/' || r."raw_resource" || '/' ||
-        COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01') || '/0'
-        AS "legal_provision_url",
-    CASE
-        WHEN r."raw_label_id" IS NULL THEN NULL::text
-        ELSE 'http://linkeddata.overheid.nl/terms/bwb/id/' || r."raw_resource" || '/'
-             || r."raw_label_id"::text || '/'
-             || COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01') || '/'
-             || COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01')
-    END AS "legal_provision_url_lido"
-FROM "public"."case_law_reference" r
-JOIN "public"."cases" c ON c."id" = r."case_id"
-WHERE r."raw_scheme" = 'bwb';
+
 
 -- Legal-provision display labels for /api/rechtspraak — mirrors the legacy view,
 -- reading from the shared case_law_reference (raw_scheme='bwb').
-CREATE OR REPLACE VIEW "public"."rs_v_document_legal_provisions" AS
-SELECT DISTINCT c."ecli", lr."raw_reference" AS legal_provision
-FROM "public"."case_law_reference" lr
-JOIN "public"."cases" c ON c."id" = lr."case_id"
-WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lr."raw_reference", '') IS NOT NULL
-UNION
-SELECT DISTINCT c."ecli", lp."title" AS legal_provision
-FROM "public"."case_law_reference" lr
-JOIN "public"."cases" c ON c."id" = lr."case_id"
-JOIN "public"."legal_provision" lp ON lp."bwb_label_id" = lr."raw_label_id"
-WHERE lr."raw_scheme" = 'bwb' AND lr."raw_label_id" IS NOT NULL
-  AND NULLIF(lp."title", '') IS NOT NULL
-UNION
-SELECT DISTINCT c."ecli", lp."title" AS legal_provision
-FROM "public"."case_law_reference" lr
-JOIN "public"."cases" c ON c."id" = lr."case_id"
-JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
-JOIN "public"."legal_provision" lp
-  ON lp."legislation_id" = lg."id"
- AND lower(lp."article_label") = lower(lr."raw_subdivision")
- AND lp."element_type" = 'artikel'
-WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lp."title", '') IS NOT NULL
-UNION
-SELECT DISTINCT c."ecli", lg."title" AS legal_provision
-FROM "public"."case_law_reference" lr
-JOIN "public"."cases" c ON c."id" = lr."case_id"
-JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
-WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
-UNION
-SELECT DISTINCT c."ecli", (lg."title" || ', Artikel ' || lr."raw_subdivision") AS legal_provision
-FROM "public"."case_law_reference" lr
-JOIN "public"."cases" c ON c."id" = lr."case_id"
-JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
-WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
-  AND NULLIF(lr."raw_subdivision", '') IS NOT NULL
-UNION
-SELECT DISTINCT c."ecli", (lg."title" || ', Bijlage ' || lr."raw_subdivision") AS legal_provision
-FROM "public"."case_law_reference" lr
-JOIN "public"."cases" c ON c."id" = lr."case_id"
-JOIN "public"."legislation" lg
-  ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
-WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
-  AND NULLIF(lr."raw_subdivision", '') IS NOT NULL
-  AND lr."raw_reference" ILIKE '%bijlage%';
 
 
 -- =============================================================================
@@ -1038,100 +898,42 @@ WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
 -- =============================================================================
 
 -- Lookups
-ALTER TABLE "public"."court"             ADD CONSTRAINT fk_court_jurisdiction         FOREIGN KEY ("jurisdiction_id")     REFERENCES "public"."jurisdiction"("id");
-ALTER TABLE "public"."court"             ADD CONSTRAINT fk_court_parent_court         FOREIGN KEY ("parent_court_id")     REFERENCES "public"."court"("id");
-ALTER TABLE "public"."judge"             ADD CONSTRAINT fk_judge_court                FOREIGN KEY ("court_id")            REFERENCES "public"."court"("id");
-ALTER TABLE "public"."party"             ADD CONSTRAINT fk_party_country              FOREIGN KEY ("country_iso")         REFERENCES "public"."jurisdiction"("iso_code");
-ALTER TABLE "public"."legislation"       ADD CONSTRAINT fk_legislation_jurisdiction   FOREIGN KEY ("jurisdiction_id")     REFERENCES "public"."jurisdiction"("id");
-ALTER TABLE "public"."legislation_alias" ADD CONSTRAINT fk_legislation_alias          FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
-ALTER TABLE "public"."legal_provision"   ADD CONSTRAINT fk_legal_provision            FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
-ALTER TABLE "public"."legal_provision"   ADD CONSTRAINT fk_legal_provision_parent     FOREIGN KEY ("parent_id")           REFERENCES "public"."legal_provision"("id");
-ALTER TABLE "public"."domain"            ADD CONSTRAINT fk_domain_parent              FOREIGN KEY ("parent_id")           REFERENCES "public"."domain"("id");
-ALTER TABLE "public"."domain_label"      ADD CONSTRAINT fk_domain_label_domain        FOREIGN KEY ("domain_id")           REFERENCES "public"."domain"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."domain_label"      ADD CONSTRAINT fk_domain_label_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
+
 
 -- Case & satellites
-ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_court                 FOREIGN KEY ("court_id")            REFERENCES "public"."court"("id");
-ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_document_type         FOREIGN KEY ("document_type_id")    REFERENCES "public"."document_type"("id");
-ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_procedure_type        FOREIGN KEY ("procedure_type_id")   REFERENCES "public"."procedure_type"("id");
-ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_instance              FOREIGN KEY ("instance_id")         REFERENCES "public"."instance"("id");
-ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_language              FOREIGN KEY ("language_iso")        REFERENCES "public"."language"("iso_code");
 
-ALTER TABLE "public"."case_text"         ADD CONSTRAINT fk_case_text_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_text"         ADD CONSTRAINT fk_case_text_language         FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
 
-ALTER TABLE "public"."case_judge"        ADD CONSTRAINT fk_case_judge_case            FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_judge"        ADD CONSTRAINT fk_case_judge_judge           FOREIGN KEY ("judge_id")            REFERENCES "public"."judge"("id");
-
-ALTER TABLE "public"."case_party"        ADD CONSTRAINT fk_case_party_case            FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_party"        ADD CONSTRAINT fk_case_party_party           FOREIGN KEY ("party_id")            REFERENCES "public"."party"("id");
-
-ALTER TABLE "public"."case_domain"       ADD CONSTRAINT fk_case_domain_case           FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_domain"       ADD CONSTRAINT fk_case_domain_domain         FOREIGN KEY ("domain_id")           REFERENCES "public"."domain"("id");
-
-ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_case   FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_leg    FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
-ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_prov   FOREIGN KEY ("provision_id")        REFERENCES "public"."legal_provision"("id");
-
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_source       FOREIGN KEY ("source_case_id")      REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 -- ON DELETE SET NULL: deleting a cited case degrades the citation to
 -- "unresolved" (target_*_raw keeps the identifier) instead of blocking the
 -- delete or dropping the edge. Loader must therefore ALWAYS populate
 -- target_ecli_raw / target_celex_raw, even when target_case_id resolves.
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id") ON DELETE SET NULL;
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "public"."case_segment"("id");
 
-ALTER TABLE "public"."case_citation_counts" ADD CONSTRAINT fk_case_citation_counts    FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 
 -- CJEU
-ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_case          FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_formation     FOREIGN KEY ("formation_id")          REFERENCES "public"."court_formation"("id");
-ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "public"."cases"("id");
-ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_case        FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "public"."cases"("id");
-ALTER TABLE "public"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_document_case FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
+
 
 -- ECHR
-ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_case          FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
+
+
 -- Satellites FK to echr_document(item_id) — an appno / article / segmentation
 -- row can only exist for a HUDOC variant we actually hold. (case existence is
 -- enforced transitively via echr_document's own FK to cases.)
-ALTER TABLE "public"."echr_document_appno"     ADD CONSTRAINT fk_echr_document_appno_doc     FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_doc   FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
+
 
 -- Rechtspraak
-ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_external_authority" ADD CONSTRAINT fk_rs_document_ext_authority    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_source    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."cases"("ecli");
-ALTER TABLE "public"."rs_document_publication"        ADD CONSTRAINT fk_rs_document_publication_case FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
+
 
 -- Cross-corpus bridge
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."cases"("id");
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id");
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_provision FOREIGN KEY ("target_provision_id") REFERENCES "public"."legal_provision"("id");
+
 
 -- Downstream
-ALTER TABLE "public"."case_segment"            ADD CONSTRAINT fk_case_segment_case             FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_segment"            ADD CONSTRAINT fk_case_segment_language         FOREIGN KEY ("language")    REFERENCES "public"."language"("iso_code");
-ALTER TABLE "public"."case_entity"             ADD CONSTRAINT fk_case_entity_case              FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_case     FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_language FOREIGN KEY ("language")    REFERENCES "public"."language"("iso_code");
-ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_parent   FOREIGN KEY ("parent_version_id") REFERENCES "public"."case_summary_version"("id");
-ALTER TABLE "public"."case_cluster"            ADD CONSTRAINT fk_case_cluster_snapshot         FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id");
-ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_case  FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_clus  FOREIGN KEY ("cluster_id")  REFERENCES "public"."case_cluster"("id");
-ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_case      FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_snapshot  FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id");
 
 
 -- =============================================================================
 -- Seed data — language lookup (24 official EU languages, lowercase ISO 639-1)
 -- =============================================================================
 
-INSERT INTO "public"."language" (iso_code, name) VALUES
+INSERT INTO "cle_v2"."language" (iso_code, name) VALUES
     ('bg', 'Bulgarian'), ('cs', 'Czech'),      ('da', 'Danish'),
     ('de', 'German'),    ('el', 'Greek'),      ('en', 'English'),
     ('es', 'Spanish'),   ('et', 'Estonian'),   ('fi', 'Finnish'),
@@ -1145,7 +947,7 @@ INSERT INTO "public"."language" (iso_code, name) VALUES
 -- Seed data — court_formation lookup (CJEU only)
 -- =============================================================================
 
-INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
+INSERT INTO "cle_v2"."court_formation" (code, label, judge_count) VALUES
     ('GC',   'Grand Chamber',              15),
     ('FC',   'Full Court',                 27),
     ('1C',   'First Chamber (5 judges)',    5),
