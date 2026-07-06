@@ -169,12 +169,26 @@ afgedaan` 28k, `gevolgd` 25k, …) don't fit the shared edge model.
 **Verified: every language variant has its own HUDOC `itemid`**
 (197,011 distinct itemids across 197,011 rows). The case identity is the
 **ECLI** (150,737 rows have one) — variants sharing an ECLI are the same
-case. Loader groups `echr_document` by `ecli`:
+case. Live case counts (grouped by ECLI): **81,717 cases** — 62,087 have
+an ENG variant (76%), 19,620 are FRE-only (24%, the French-only
+Commission era), 10 have neither (8 GER, 1 GEO, 1 TUR).
+
+Loader groups `echr_document` by `ecli`:
 
 - one `cases` row per distinct ECLI (`source='ECHR'`)
-- `cases.item_id` = the **ENG variant's itemid** (fallback: first seen)
-- each language variant → one new `echr_document` row carrying its own
-  `item_id` (new column, UNIQUE)
+- `cases.item_id` = the canonical variant's itemid, selected
+  **deterministically**: prefer **ENG**, else **FRE**, else any other
+  language; within a language, doctype rank **JUD > DEC > COM > other**,
+  tie-broken by lowest itemid. (Rule covers all 81,717 cases.)
+- each language variant → one `echr_document` row carrying its own
+  `item_id` — which is the table's **primary key**.
+
+⚠ **(case, language) is NOT unique**: 3,261 (ecli, language) pairs carry
+multiple variants (6,901 rows — e.g. two admissibility decisions sharing
+one ECLI+ENG). That is why `echr_document`'s PK is `item_id`, with
+`(case_id, language)` as a plain index — no variant is dropped. The ECHR
+satellites (`appno`, `article`, `extractor_segments`) anchor on `item_id`
+too, mirroring the legacy key structure.
 
 Rows without ECLI: `PR` (13,979), `CLIN`/`CLINF` (12,964) have **zero**
 ECLIs — they are press releases and info notes, not decisions. See §5.1.
@@ -217,20 +231,22 @@ ECLIs — they are press releases and info notes, not decisions. See §5.1.
 
 (155,474 rows) keyed (itemid, languageisocode) → (case_id, language).
 `fulltext` carries over; `source='HUDOC'`; tsv regenerated.
-⚠ If two variants of the same case share a language (e.g. two ENG
-doctypes), `case_text UNIQUE(case_id, language)` forces a pick — prefer
-JUD > DEC > COM, keep the loser's text out (it remains reachable in
-legacy; flag count in the load report).
+⚠ If two variants of the same case share a language (3,261 such pairs,
+see §2.1), `case_text UNIQUE(case_id, language)` forces a pick — doctype
+rank JUD > DEC > COM > other, then lowest itemid. The losing variant's
+metadata is still fully present in `echr_document`; only its fulltext is
+not the case_text pick (flag count in the load report).
 
 ### 2.5 `echr_document_appno` → `echr_document_appno`
 
 (1.86M rows) `(itemid, languageisocode, appno, source)` →
-`(case_id, language, appno, source)` via the variant's `item_id`.
+`(item_id, appno, source)` — direct carry-over, language now implied by
+the variant.
 
 ### 2.6 `echr_document_article` → `echr_document_article`
 
 (932k rows: `applied` 771,748; `violation` 185,208; `nonviolation`
-40,740.) Same keys re-anchored; the new `protocol` column is parsed from
+40,740.) Re-keyed to `(item_id, kind, article_code)`; the new `protocol` column is parsed from
 `article_code` (`P1-1` → protocol `P1`), `raw` gets the source fragment
 when the parser has it (NULL for migrated rows).
 
@@ -238,7 +254,7 @@ when the parser has it (NULL for migrated rows).
 
 (108k rows; parser modes: `commission_decision` 47k, `standard` 29k,
 `communicated_case` 15k, `info_note` 11k, `press_release` 7k.) Direct
-carry-over re-keyed to (case_id, language).
+carry-over, PK `item_id`.
 
 ### 2.8 `echr_edge` → `case_citation`
 

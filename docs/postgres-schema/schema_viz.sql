@@ -494,15 +494,18 @@ CREATE TABLE "public"."cjeu_national_document" (
 -- =============================================================================
 
 CREATE TABLE "public"."echr_document" (
-    -- One row per (case_id, language). Preserves HUDOC's per-language variants.
+    -- One row per HUDOC document variant (per language, sometimes several per
+    -- (case, language)). Preserves every HUDOC variant.
     -- IMPORTANT (verified against live legacy data): each language variant has
     -- its OWN HUDOC itemid — itemid does NOT identify the case. The per-variant
-    -- itemid lives here; cases.item_id holds the canonical one (the ENG
-    -- variant's itemid, falling back to the first seen). echr_edge citation
-    -- itemids resolve through THIS column (~95% point at ENG variants).
+    -- itemid lives here; cases.item_id holds the canonical one, selected
+    -- deterministically: ENG variant (76% of cases) → FRE (24%, the
+    -- French-only Commission era) → any other language (10 cases); within a
+    -- language, doctype rank JUD > DEC > COM > other, then lowest itemid.
+    -- echr_edge citation itemids resolve through THIS column (~95% ENG).
+    "item_id" text NOT NULL,                               -- this variant's HUDOC itemid — the true unique key
     "case_id" bigint NOT NULL,
     "language" text NOT NULL,                              -- normalized from HUDOC languageisocode (30+ observed: ENG, FRE, TUR, RUS, UKR, RUM, GER, CZE, …)
-    "item_id" text UNIQUE,                                 -- this language variant's HUDOC itemid
     "extractedappno" text,
     "docname" text,
     "doctype" text,
@@ -528,8 +531,13 @@ CREATE TABLE "public"."echr_document" (
     "judgement_year" int,
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
-    PRIMARY KEY ("case_id", "language")
+    -- PK is item_id, NOT (case_id, language): verified against live data,
+    -- 3,261 (ecli, language) pairs carry MULTIPLE variants (6,901 rows —
+    -- e.g. two admissibility decisions sharing one ECLI+ENG). All variants
+    -- are preserved; case_text picks one text per (case, language).
+    PRIMARY KEY ("item_id")
 );
+CREATE INDEX "echr_document_idx_case_lang" ON "public"."echr_document" ("case_id", "language");
 CREATE INDEX "echr_document_idx_doctype"          ON "public"."echr_document" ("doctype");
 CREATE INDEX "echr_document_idx_doctype_branch"   ON "public"."echr_document" ("doctype_branch");
 CREATE INDEX "echr_document_idx_judgement_date"   ON "public"."echr_document" ("judgement_date");
@@ -540,40 +548,37 @@ CREATE INDEX "echr_document_idx_issue_trgm"       ON "public"."echr_document" US
 
 
 CREATE TABLE "public"."echr_document_appno" (
-    -- Normalized appnos — one row per (case × language × appno × source).
+    -- Normalized appnos — one row per (variant × appno × source), anchored on
+    -- the variant's HUDOC item_id (mirrors the legacy key structure).
     -- 'source' distinguishes case's own appno from those parsed from references.
-    "case_id" bigint NOT NULL,
-    "language" text NOT NULL,
+    "item_id" text NOT NULL,
     "appno" text NOT NULL,
     "source" text NOT NULL,                                -- 'appno' | 'extractedappno'
     "created_at" timestamptz DEFAULT now() NOT NULL,
-    PRIMARY KEY ("case_id", "language", "appno", "source")
+    PRIMARY KEY ("item_id", "appno", "source")
 );
 CREATE INDEX "echr_document_appno_idx_appno_left" ON "public"."echr_document_appno" (left("appno", 500));
-CREATE INDEX "echr_document_appno_idx_case_lang"  ON "public"."echr_document_appno" ("case_id", "language");
 CREATE INDEX "echr_document_appno_idx_source"     ON "public"."echr_document_appno" ("source");
 
 CREATE TABLE "public"."echr_document_article" (
-    -- ECHR Convention articles applied to / violated by / not-violated by this case.
-    "case_id" bigint NOT NULL,
-    "language" text NOT NULL,
+    -- ECHR Convention articles applied to / violated by / not-violated by this
+    -- case, anchored on the variant's HUDOC item_id.
+    "item_id" text NOT NULL,
     "kind" text NOT NULL,                                  -- 'applied' | 'violation' | 'nonviolation'
     "article_code" text NOT NULL,                          -- e.g. '6' | '6-1' | '13' | 'P1-1'
     "protocol" text,                                       -- extracted protocol ('P1', 'P4', …) — NULL for Convention articles
     "raw" text,                                            -- verbatim source fragment the row was parsed from
-    PRIMARY KEY ("case_id", "language", "kind", "article_code"),
+    PRIMARY KEY ("item_id", "kind", "article_code"),
     CONSTRAINT echr_document_article_kind_check
         CHECK ("kind" IN ('applied', 'violation', 'nonviolation'))
 );
-CREATE INDEX "echr_document_article_idx_filter"    ON "public"."echr_document_article" ("kind", "article_code");
-CREATE INDEX "echr_document_article_idx_case_lang" ON "public"."echr_document_article" ("case_id", "language");
+CREATE INDEX "echr_document_article_idx_filter" ON "public"."echr_document_article" ("kind", "article_code");
 
 CREATE TABLE "public"."echr_extractor_segments" (
     -- Section-level text extraction (procedure / facts / law / operative / …).
     -- Preserved from legacy — this is a segmentation that carries ECHR-specific
     -- semantics not captured by the generic case_segment table.
-    "case_id" bigint NOT NULL,
-    "language" text NOT NULL,
+    "item_id" text NOT NULL,
     "parser_mode" text,
     "error" text,
     "procedure" text,
@@ -588,7 +593,7 @@ CREATE TABLE "public"."echr_extractor_segments" (
     "num_sections" int DEFAULT 0 NOT NULL,
     "segmented_at" timestamptz DEFAULT now() NOT NULL,
     "extractor_version" text,
-    PRIMARY KEY ("case_id", "language")
+    PRIMARY KEY ("item_id")
 );
 CREATE INDEX "echr_extractor_segments_idx_parser"      ON "public"."echr_extractor_segments" ("parser_mode");
 CREATE INDEX "echr_extractor_segments_idx_num_sections" ON "public"."echr_extractor_segments" ("num_sections");
@@ -915,12 +920,12 @@ ALTER TABLE "public"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_d
 -- ECHR
 ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_case          FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
--- Satellites FK to echr_document(case_id, language) — an appno / article /
--- segmentation row can only exist for a language variant we actually hold.
--- (case existence is enforced transitively via echr_document's own FK.)
-ALTER TABLE "public"."echr_document_appno"     ADD CONSTRAINT fk_echr_document_appno_doc     FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_doc   FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
-ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
+-- Satellites FK to echr_document(item_id) — an appno / article / segmentation
+-- row can only exist for a HUDOC variant we actually hold. (case existence is
+-- enforced transitively via echr_document's own FK to cases.)
+ALTER TABLE "public"."echr_document_appno"     ADD CONSTRAINT fk_echr_document_appno_doc     FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
+ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_doc   FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
+ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
 
 -- Rechtspraak
 ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
