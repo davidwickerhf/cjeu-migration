@@ -2,7 +2,7 @@
 -- schema_viz.sql — GENERATED from schema_full.sql. DO NOT EDIT; DO NOT DEPLOY.
 -- Visualization-friendly variant for chartdb / drawdb DDL import:
 -- tables + PKs + FKs + indexes only. Functions, triggers, views, extensions,
--- and GENERATED-column expressions are stripped (those parsers choke on them).
+-- GENERATED-column expressions stripped; IDENTITY shown as bigserial.
 -- The deployable schema is schema_full.sql.
 -- =============================================================================
 
@@ -82,11 +82,14 @@ CREATE SCHEMA IF NOT EXISTS "public";
 -- =============================================================================
 
 -- DECIDED: canonical language codes are lowercase ISO 639-1 ('en', 'fr',
--- 'nl', 'bg', …), normalized at load time (HUDOC ENG→en, FRE→fr; CJEU
--- EN→en). Everything that joins on language (case_text UNIQUE,
--- echr_document PK, the *_v_document_with_text views, all FKs to this
--- table) uses this convention. Seeded below with the 24 official EU
--- languages, which covers all three corpora.
+-- 'nl', 'bg', …), normalized at load time. Everything that joins on
+-- language (case_text UNIQUE, echr_document PK, the views, all FKs to
+-- this table) uses this convention.
+-- CAUTION (verified against live legacy data): HUDOC carries translations
+-- in 30+ languages beyond the EU 24 (TUR, RUS, UKR, SRP, …) and uses ISO
+-- 639-2/B codes (FRE→fr, GER→de, RUM→ro, CZE→cs). The seed below covers
+-- the EU 24 only — the loader MUST upsert unseen languages
+-- (INSERT … ON CONFLICT DO NOTHING) before inserting dependent rows.
 CREATE TABLE "public"."language" (
     "iso_code" text NOT NULL,
     "name" text,
@@ -112,21 +115,21 @@ CREATE TABLE "public"."court" (
 );
 
 CREATE TABLE "public"."instance" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "code" text UNIQUE,
     "name" text,
     PRIMARY KEY ("id")
 );
 
 CREATE TABLE "public"."document_type" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "code" text UNIQUE,
     "name" text,
     PRIMARY KEY ("id")
 );
 
 CREATE TABLE "public"."procedure_type" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "code" text UNIQUE,
     "name" text,
     PRIMARY KEY ("id")
@@ -141,7 +144,7 @@ CREATE TABLE "public"."judge" (
 );
 
 CREATE TABLE "public"."party" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "canonical_name" text,
     "aliases" text[],
     "role_class" text,
@@ -201,11 +204,11 @@ CREATE INDEX "legal_provision_idx_bwb_label" ON "public"."legal_provision" ("bwb
 CREATE INDEX "legal_provision_idx_lookup"    ON "public"."legal_provision" ("legislation_id", lower("article_label"), "element_type");
 
 CREATE TABLE "public"."domain" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "scheme" text,                   -- 'eurovoc' | 'cjeu_subject_matter' | 'cjeu_keyword' | 'cjeu_directory_code' | 'rs_domain' | 'echr_article' | ...
     "name" text,                     -- canonical label (English for eurovoc)
     "uri" text,                      -- concept URI (e.g. http://eurovoc.europa.eu/<id>) — the stable join key for thesaurus ingests
-    "parent_id" int,                 -- hierarchy (eurovoc broader-term, directory-code nesting)
+    "parent_id" bigint,                 -- hierarchy (eurovoc broader-term, directory-code nesting)
     PRIMARY KEY ("id")
 );
 
@@ -214,7 +217,7 @@ CREATE TABLE "public"."domain" (
 -- distribution carries ~7k concepts × 24 language prefLabels (~170k rows).
 -- Any scheme can use it; eurovoc is the first customer.
 CREATE TABLE "public"."domain_label" (
-    "domain_id" int NOT NULL,
+    "domain_id" bigint NOT NULL,
     "language" text NOT NULL,
     "label" text NOT NULL,
     PRIMARY KEY ("domain_id", "language")
@@ -222,7 +225,7 @@ CREATE TABLE "public"."domain_label" (
 
 -- CJEU-specific formation lookup (~15 rows, seeded at bottom)
 CREATE TABLE "public"."court_formation" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "code" text UNIQUE,              -- 'GC' | 'FC' | '1C' | ... | 'PR' | 'SOLE'
     "label" text,
     "judge_count" smallint,
@@ -247,9 +250,9 @@ CREATE TABLE "public"."cases" (
     "date_published" date,
     "court_id" bigint,
     "language_iso" text,             -- procedure language (best-guess primary)
-    "document_type_id" int,
-    "procedure_type_id" int,
-    "instance_id" int,
+    "document_type_id" bigint,
+    "procedure_type_id" bigint,
+    "instance_id" bigint,
     "case_number" text,
     "importance" smallint,           -- harmonized 1–4 scale, 1 = most important
                                      -- (ECHR/HUDOC convention). ECHR: HUDOC value as-is.
@@ -314,7 +317,7 @@ CREATE INDEX "case_judge_idx_judge_id" ON "public"."case_judge" ("judge_id");
 
 CREATE TABLE "public"."case_party" (
     "case_id" bigint,
-    "party_id" int,
+    "party_id" bigint,
     "role" text,                     -- 'applicant' | 'defendant' | 'referring_state' | 'defendant_agent' | ...
     "ordinal" smallint DEFAULT 1,    -- disambiguate multiple parties in same role
     PRIMARY KEY ("case_id", "party_id", "role", "ordinal")
@@ -323,7 +326,7 @@ CREATE INDEX "case_party_idx_party" ON "public"."case_party" ("party_id");
 
 CREATE TABLE "public"."case_domain" (
     "case_id" bigint,
-    "domain_id" int,
+    "domain_id" bigint,
     PRIMARY KEY ("case_id", "domain_id")
 );
 CREATE INDEX "case_domain_idx_domain_id" ON "public"."case_domain" ("domain_id");
@@ -438,7 +441,7 @@ CREATE TABLE "public"."cjeu_document" (
     "ecli" text,                     -- denormalized from cases.ecli
     "sector" text,                   -- '6' (CJEU direct) | '8' (national CJEU-referred)
     "case_number" text,
-    "formation_id" int,              -- FK → court_formation (replaces legacy typo "formation timestamp")
+    "formation_id" bigint,              -- FK → court_formation (replaces legacy typo "formation timestamp")
     "proc_type" text,
     "procedure_result" text,         -- 'successful' | 'unfounded' | 'inadmissible' (parsed from type_procedure)
     -- (legacy draft had subject_matter + parties_text here — dropped: no CJEU
@@ -456,7 +459,7 @@ CREATE TABLE "public"."cjeu_document" (
 );
 
 CREATE TABLE "public"."cjeu_ag_opinion" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "case_id" bigint NOT NULL,
     "parent_case_id" bigint,         -- the judgment this opinion is for
     "advocate_general" text,
@@ -492,10 +495,14 @@ CREATE TABLE "public"."cjeu_national_document" (
 
 CREATE TABLE "public"."echr_document" (
     -- One row per (case_id, language). Preserves HUDOC's per-language variants.
-    -- Every legacy column from "public".echr_document is kept; itemid and languageisocode
-    -- become (case_id via FK, language) — HUDOC itemid stored on cases.item_id.
+    -- IMPORTANT (verified against live legacy data): each language variant has
+    -- its OWN HUDOC itemid — itemid does NOT identify the case. The per-variant
+    -- itemid lives here; cases.item_id holds the canonical one (the ENG
+    -- variant's itemid, falling back to the first seen). echr_edge citation
+    -- itemids resolve through THIS column (~95% point at ENG variants).
     "case_id" bigint NOT NULL,
-    "language" text NOT NULL,                              -- HUDOC's languageisocode (ENG/FRE/…)
+    "language" text NOT NULL,                              -- normalized from HUDOC languageisocode (30+ observed: ENG, FRE, TUR, RUS, UKR, RUM, GER, CZE, …)
+    "item_id" text UNIQUE,                                 -- this language variant's HUDOC itemid
     "extractedappno" text,
     "docname" text,
     "doctype" text,
@@ -770,8 +777,8 @@ CREATE UNIQUE INDEX "case_summary_version_uk_current"
 CREATE INDEX "case_summary_version_idx_case" ON "public"."case_summary_version" ("case_id");
 
 CREATE TABLE "public"."case_cluster" (
-    "id" serial NOT NULL,
-    "snapshot_id" int,
+    "id" bigserial NOT NULL,
+    "snapshot_id" bigint,
     "algorithm" text,
     "label" text,
     "size" int,
@@ -779,13 +786,13 @@ CREATE TABLE "public"."case_cluster" (
 );
 
 CREATE TABLE "public"."case_cluster_membership" (
-    "cluster_id" int,
+    "cluster_id" bigint,
     "case_id" bigint,
     PRIMARY KEY ("cluster_id", "case_id")
 );
 
 CREATE TABLE "public"."case_network_metric" (
-    "snapshot_id" int,
+    "snapshot_id" bigint,
     "case_id" bigint,
     "in_degree" int,
     "out_degree" int,
@@ -799,7 +806,7 @@ CREATE TABLE "public"."case_network_metric" (
 CREATE INDEX "case_network_metric_idx_case" ON "public"."case_network_metric" ("case_id");
 
 CREATE TABLE "public"."network_snapshot" (
-    "id" serial NOT NULL,
+    "id" bigserial NOT NULL,
     "snapshot_date" date,
     "description" text,
     "node_count" int,
