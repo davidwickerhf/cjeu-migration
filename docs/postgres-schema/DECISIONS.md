@@ -116,6 +116,23 @@ absorbed:
 Query rule: everything reads `case_law_reference`; Dutch-specific API
 endpoints read the compat view.
 
+## Adoptions from the interim schema draft (reviewed 2026-07-06)
+
+A colleague's interim schema (predating the ECHR/RS/CJEU extension work) was
+compared against `schema_full.sql`. Five things were adopted:
+
+| # | Adoption | Why |
+|---|---|---|
+| A1 | **Table renamed `case` → `cases`** | `CASE` is a reserved SQL keyword; the old name forced `"case"` quoting in every query forever |
+| A2 | **New `case_summary_version` table** | versioned LLM-generated summaries with human-review workflow (`is_current`, `rejected_at`, `parent_version_id`, partial unique on current-per-(case, scope, model)). Distinct from `case_text.summary`, which holds upstream/source summaries |
+| A3 | **`case_text.summary_tsv`** generated column + GIN index | concretely implements D3's "summary is searched separately" |
+| A4 | **Trigram index on `cases.title`** | title is now always populated (D6); search-by-name needs it |
+| A5 | **`echr_document_article` gains `protocol` + `raw`** | absorbed from the draft's `echr_violation` table — clean protocol filtering ('P1' vs Convention articles) + verbatim provenance. Our 3-state `kind` (incl. `applied`) and per-language dimension are kept |
+
+Everything else in the interim draft was already superseded by the current
+schema (flattened ECHR, dual-FK cjeu_document, no BWB handling, no citation
+counts, etc.).
+
 ## Ratified structural choices
 
 | # | Choice | Rationale |

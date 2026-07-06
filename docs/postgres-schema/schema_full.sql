@@ -299,7 +299,7 @@ CREATE TABLE "public"."court_formation" (
 -- Core case data (shared across CJEU / ECHR / Rechtspraak)
 -- =============================================================================
 
-CREATE TABLE "public"."case" (
+CREATE TABLE "public"."cases" (
     "id" bigserial NOT NULL,
     "ecli" text UNIQUE,
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
@@ -327,11 +327,12 @@ CREATE TABLE "public"."case" (
     "updated_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id")
 );
-CREATE INDEX "case_idx_court"          ON "public"."case" ("court_id");
-CREATE INDEX "case_idx_date_decision"  ON "public"."case" ("date_decision");
-CREATE INDEX "case_idx_ecli"           ON "public"."case" ("ecli");
-CREATE INDEX "case_idx_source"         ON "public"."case" ("source");
-CREATE INDEX "case_idx_item_id"        ON "public"."case" ("item_id");
+CREATE INDEX "case_idx_court"          ON "public"."cases" ("court_id");
+CREATE INDEX "case_idx_date_decision"  ON "public"."cases" ("date_decision");
+CREATE INDEX "case_idx_ecli"           ON "public"."cases" ("ecli");
+CREATE INDEX "case_idx_source"         ON "public"."cases" ("source");
+CREATE INDEX "case_idx_item_id"        ON "public"."cases" ("item_id");
+CREATE INDEX "case_idx_title_trgm"     ON "public"."cases" USING gin ("title" gin_trgm_ops);
 
 CREATE TABLE "public"."case_text" (
     "id" bigserial NOT NULL,
@@ -349,6 +350,9 @@ CREATE TABLE "public"."case_text" (
     "fulltext_tsv" tsvector GENERATED ALWAYS AS (
         to_tsvector('simple'::regconfig, COALESCE("fulltext", ''::text))
     ) STORED,
+    "summary_tsv" tsvector GENERATED ALWAYS AS (
+        to_tsvector('simple'::regconfig, COALESCE("summary", ''::text))
+    ) STORED,
     "summary_embedding" vector(768),                       -- DECIDED: 768 (legacy model dimension); a model switch means an index rebuild, decide before bulk load
     "embedding_model" text,
     "source" text,                                         -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
@@ -361,6 +365,7 @@ CREATE TABLE "public"."case_text" (
 );
 CREATE INDEX "case_text_idx_case_id"          ON "public"."case_text" ("case_id");
 CREATE INDEX "case_text_idx_fulltext_tsv"     ON "public"."case_text" USING gin ("fulltext_tsv");
+CREATE INDEX "case_text_idx_summary_tsv"      ON "public"."case_text" USING gin ("summary_tsv");
 CREATE INDEX "case_text_idx_summary_embedding" ON "public"."case_text" USING hnsw ("summary_embedding" vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
 CREATE TRIGGER trg_case_text_updated_at
@@ -504,8 +509,8 @@ FOR EACH ROW EXECUTE FUNCTION "public".case_citation_counts_maintain();
 CREATE TABLE "public"."cjeu_document" (
     "id" bigserial NOT NULL,
     "case_id" bigint NOT NULL,
-    "celex_id" text,                 -- denormalized from case.celex_id for convenience
-    "ecli" text,                     -- denormalized from case.ecli
+    "celex_id" text,                 -- denormalized from cases.celex_id for convenience
+    "ecli" text,                     -- denormalized from cases.ecli
     "sector" text,                   -- '6' (CJEU direct) | '8' (national CJEU-referred)
     "case_number" text,
     "formation_id" int,              -- FK → court_formation (replaces legacy typo "formation timestamp")
@@ -563,7 +568,7 @@ CREATE TABLE "public"."cjeu_national_document" (
 CREATE TABLE "public"."echr_document" (
     -- One row per (case_id, language). Preserves HUDOC's per-language variants.
     -- Every legacy column from "public".echr_document is kept; itemid and languageisocode
-    -- become (case_id via FK, language) — HUDOC itemid stored on case.item_id.
+    -- become (case_id via FK, language) — HUDOC itemid stored on cases.item_id.
     "case_id" bigint NOT NULL,
     "language" text NOT NULL,                              -- HUDOC's languageisocode (ENG/FRE/…)
     "extractedappno" text,
@@ -626,6 +631,8 @@ CREATE TABLE "public"."echr_document_article" (
     "language" text NOT NULL,
     "kind" text NOT NULL,                                  -- 'applied' | 'violation' | 'nonviolation'
     "article_code" text NOT NULL,                          -- e.g. '6' | '6-1' | '13' | 'P1-1'
+    "protocol" text,                                       -- extracted protocol ('P1', 'P4', …) — NULL for Convention articles
+    "raw" text,                                            -- verbatim source fragment the row was parsed from
     PRIMARY KEY ("case_id", "language", "kind", "article_code"),
     CONSTRAINT echr_document_article_kind_check
         CHECK ("kind" IN ('applied', 'violation', 'nonviolation'))
@@ -666,7 +673,7 @@ CREATE INDEX "echr_extractor_segments_idx_num_sections" ON "public"."echr_extrac
 CREATE TABLE "public"."rs_document" (
     -- One row per case_id. All Rechtspraak-specific metadata from legacy.
     "case_id" bigint PRIMARY KEY,
-    "date_decision" date,                                  -- Rechtspraak's own date_decision (may differ from case.date_decision if late correction)
+    "date_decision" date,                                  -- Rechtspraak's own date_decision (may differ from cases.date_decision if late correction)
     "document_type" text,
     "instance" text,
     "domains" text[],
@@ -816,6 +823,33 @@ CREATE TABLE "public"."case_entity" (
 );
 CREATE INDEX "case_entity_idx_case_id" ON "public"."case_entity" ("case_id");
 
+-- Versioned GENERATED summaries (LLM pipeline) with human-review workflow.
+-- Distinct from case_text.summary, which holds upstream/source summaries.
+-- Adopted from the interim schema draft (2026-07-06).
+CREATE TABLE "public"."case_summary_version" (
+    "id" bigserial NOT NULL,
+    "case_id" bigint NOT NULL,
+    "language" text,
+    "summary_text" text NOT NULL,
+    "summary_embedding" vector(768),
+    "embedding_model" text,
+    "summarization_model" text,
+    "segment_scope" text NOT NULL,               -- what was summarized: 'full' | 'facts' | 'operative' | …
+    "version_number" int NOT NULL DEFAULT 1,
+    "is_current" boolean NOT NULL DEFAULT true,
+    "generation_source" text NOT NULL,           -- pipeline/run identifier
+    "rejected_at" timestamptz,
+    "rejection_reason" text,
+    "parent_version_id" bigint,
+    "created_at" timestamptz DEFAULT now() NOT NULL,
+    PRIMARY KEY ("id")
+);
+-- One current, non-rejected summary per (case, scope, model)
+CREATE UNIQUE INDEX "case_summary_version_uk_current"
+    ON "public"."case_summary_version" ("case_id", "segment_scope", "summarization_model")
+    WHERE "is_current" = true AND "rejected_at" IS NULL;
+CREATE INDEX "case_summary_version_idx_case" ON "public"."case_summary_version" ("case_id");
+
 CREATE TABLE "public"."case_cluster" (
     "id" serial NOT NULL,
     "snapshot_id" int,
@@ -919,7 +953,7 @@ SELECT
              || COALESCE("public".rs_date_to_iso(r."version_date"), '1900-01-01')
     END AS "legal_provision_url_lido"
 FROM "public"."case_law_reference" r
-JOIN "public"."case" c ON c."id" = r."case_id"
+JOIN "public"."cases" c ON c."id" = r."case_id"
 WHERE r."raw_scheme" = 'bwb';
 
 -- Legal-provision display labels for /api/rechtspraak — mirrors the legacy view,
@@ -927,19 +961,19 @@ WHERE r."raw_scheme" = 'bwb';
 CREATE OR REPLACE VIEW "public"."rs_v_document_legal_provisions" AS
 SELECT DISTINCT c."ecli", lr."raw_reference" AS legal_provision
 FROM "public"."case_law_reference" lr
-JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."cases" c ON c."id" = lr."case_id"
 WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lr."raw_reference", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", lp."title" AS legal_provision
 FROM "public"."case_law_reference" lr
-JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."cases" c ON c."id" = lr."case_id"
 JOIN "public"."legal_provision" lp ON lp."bwb_label_id" = lr."raw_label_id"
 WHERE lr."raw_scheme" = 'bwb' AND lr."raw_label_id" IS NOT NULL
   AND NULLIF(lp."title", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", lp."title" AS legal_provision
 FROM "public"."case_law_reference" lr
-JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."cases" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
   ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
 JOIN "public"."legal_provision" lp
@@ -950,14 +984,14 @@ WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lp."title", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", lg."title" AS legal_provision
 FROM "public"."case_law_reference" lr
-JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."cases" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
   ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
 WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", (lg."title" || ', Artikel ' || lr."raw_subdivision") AS legal_provision
 FROM "public"."case_law_reference" lr
-JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."cases" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
   ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
 WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
@@ -965,7 +999,7 @@ WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
 UNION
 SELECT DISTINCT c."ecli", (lg."title" || ', Bijlage ' || lr."raw_subdivision") AS legal_provision
 FROM "public"."case_law_reference" lr
-JOIN "public"."case" c ON c."id" = lr."case_id"
+JOIN "public"."cases" c ON c."id" = lr."case_id"
 JOIN "public"."legislation" lg
   ON lg."scheme" = 'bwb' AND lg."identifier" = lr."raw_resource"
 WHERE lr."raw_scheme" = 'bwb' AND NULLIF(lg."title", '') IS NOT NULL
@@ -991,48 +1025,48 @@ ALTER TABLE "public"."domain_label"      ADD CONSTRAINT fk_domain_label_domain  
 ALTER TABLE "public"."domain_label"      ADD CONSTRAINT fk_domain_label_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
 
 -- Case & satellites
-ALTER TABLE "public"."case"              ADD CONSTRAINT fk_case_court                 FOREIGN KEY ("court_id")            REFERENCES "public"."court"("id");
-ALTER TABLE "public"."case"              ADD CONSTRAINT fk_case_document_type         FOREIGN KEY ("document_type_id")    REFERENCES "public"."document_type"("id");
-ALTER TABLE "public"."case"              ADD CONSTRAINT fk_case_procedure_type        FOREIGN KEY ("procedure_type_id")   REFERENCES "public"."procedure_type"("id");
-ALTER TABLE "public"."case"              ADD CONSTRAINT fk_case_instance              FOREIGN KEY ("instance_id")         REFERENCES "public"."instance"("id");
-ALTER TABLE "public"."case"              ADD CONSTRAINT fk_case_language              FOREIGN KEY ("language_iso")        REFERENCES "public"."language"("iso_code");
+ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_court                 FOREIGN KEY ("court_id")            REFERENCES "public"."court"("id");
+ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_document_type         FOREIGN KEY ("document_type_id")    REFERENCES "public"."document_type"("id");
+ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_procedure_type        FOREIGN KEY ("procedure_type_id")   REFERENCES "public"."procedure_type"("id");
+ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_instance              FOREIGN KEY ("instance_id")         REFERENCES "public"."instance"("id");
+ALTER TABLE "public"."cases"              ADD CONSTRAINT fk_case_language              FOREIGN KEY ("language_iso")        REFERENCES "public"."language"("iso_code");
 
-ALTER TABLE "public"."case_text"         ADD CONSTRAINT fk_case_text_case             FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_text"         ADD CONSTRAINT fk_case_text_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_text"         ADD CONSTRAINT fk_case_text_language         FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
 
-ALTER TABLE "public"."case_judge"        ADD CONSTRAINT fk_case_judge_case            FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_judge"        ADD CONSTRAINT fk_case_judge_case            FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_judge"        ADD CONSTRAINT fk_case_judge_judge           FOREIGN KEY ("judge_id")            REFERENCES "public"."judge"("id");
 
-ALTER TABLE "public"."case_party"        ADD CONSTRAINT fk_case_party_case            FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_party"        ADD CONSTRAINT fk_case_party_case            FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_party"        ADD CONSTRAINT fk_case_party_party           FOREIGN KEY ("party_id")            REFERENCES "public"."party"("id");
 
-ALTER TABLE "public"."case_domain"       ADD CONSTRAINT fk_case_domain_case           FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_domain"       ADD CONSTRAINT fk_case_domain_case           FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_domain"       ADD CONSTRAINT fk_case_domain_domain         FOREIGN KEY ("domain_id")           REFERENCES "public"."domain"("id");
 
-ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_case   FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_case   FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_leg    FOREIGN KEY ("legislation_id")      REFERENCES "public"."legislation"("id");
 ALTER TABLE "public"."case_law_reference" ADD CONSTRAINT fk_case_law_reference_prov   FOREIGN KEY ("provision_id")        REFERENCES "public"."legal_provision"("id");
 
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_source       FOREIGN KEY ("source_case_id")      REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_source       FOREIGN KEY ("source_case_id")      REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 -- ON DELETE SET NULL: deleting a cited case degrades the citation to
 -- "unresolved" (target_*_raw keeps the identifier) instead of blocking the
 -- delete or dropping the edge. Loader must therefore ALWAYS populate
 -- target_ecli_raw / target_celex_raw, even when target_case_id resolves.
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "public"."case"("id") ON DELETE SET NULL;
+ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "public"."case_segment"("id");
 
-ALTER TABLE "public"."case_citation_counts" ADD CONSTRAINT fk_case_citation_counts    FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_citation_counts" ADD CONSTRAINT fk_case_citation_counts    FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 
 -- CJEU
-ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_case          FOREIGN KEY ("case_id")               REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_case          FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_formation     FOREIGN KEY ("formation_id")          REFERENCES "public"."court_formation"("id");
-ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "public"."case"("id");
-ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_case        FOREIGN KEY ("case_id")               REFERENCES "public"."case"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "public"."case"("id");
-ALTER TABLE "public"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_document_case FOREIGN KEY ("case_id")               REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "public"."cases"("id");
+ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_case        FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "public"."cases"("id");
+ALTER TABLE "public"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_document_case FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 
 -- ECHR
-ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_case          FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_case          FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_language      FOREIGN KEY ("language")            REFERENCES "public"."language"("iso_code");
 -- Satellites FK to echr_document(case_id, language) — an appno / article /
 -- segmentation row can only exist for a language variant we actually hold.
@@ -1042,25 +1076,28 @@ ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_a
 ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("case_id", "language") REFERENCES "public"."echr_document"("case_id", "language") ON DELETE CASCADE;
 
 -- Rechtspraak
-ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."rs_document_external_authority" ADD CONSTRAINT fk_rs_document_ext_authority    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_source    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."case"("ecli");
+ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."cases"("ecli");
 ALTER TABLE "public"."rs_document_publication"        ADD CONSTRAINT fk_rs_document_publication_case FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 
 -- Cross-corpus bridge
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."case"("id");
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "public"."case"("id");
+ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."cases"("id");
+ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id");
 ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_provision FOREIGN KEY ("target_provision_id") REFERENCES "public"."legal_provision"("id");
 
 -- Downstream
-ALTER TABLE "public"."case_segment"            ADD CONSTRAINT fk_case_segment_case             FOREIGN KEY ("case_id")     REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_segment"            ADD CONSTRAINT fk_case_segment_case             FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_segment"            ADD CONSTRAINT fk_case_segment_language         FOREIGN KEY ("language")    REFERENCES "public"."language"("iso_code");
-ALTER TABLE "public"."case_entity"             ADD CONSTRAINT fk_case_entity_case              FOREIGN KEY ("case_id")     REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_entity"             ADD CONSTRAINT fk_case_entity_case              FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_case     FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_language FOREIGN KEY ("language")    REFERENCES "public"."language"("iso_code");
+ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_parent   FOREIGN KEY ("parent_version_id") REFERENCES "public"."case_summary_version"("id");
 ALTER TABLE "public"."case_cluster"            ADD CONSTRAINT fk_case_cluster_snapshot         FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id");
-ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_case  FOREIGN KEY ("case_id")     REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_case  FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_clus  FOREIGN KEY ("cluster_id")  REFERENCES "public"."case_cluster"("id");
-ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_case      FOREIGN KEY ("case_id")     REFERENCES "public"."case"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_case      FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_snapshot  FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id");
 
 
@@ -1105,7 +1142,7 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 -- Legacy → new column-level moves
 --
 --   ECHR
---     echr_document.itemid                → case.item_id
+--     echr_document.itemid                → cases.item_id
 --     echr_document.languageisocode       → case_text.language + echr_document.language
 --     echr_document.fulltext              → case_text.fulltext (per language)
 --     echr_document.fulltext_tsv          → case_text.fulltext_tsv (generated)
@@ -1115,7 +1152,7 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --     echr_citation_counts                → case_citation_counts
 --
 --   Rechtspraak
---     rs_document.ecli (PK)               → resolves via case.ecli, keeps case_id FK
+--     rs_document.ecli (PK)               → resolves via cases.ecli, keeps case_id FK
 --     rs_document.summary                 → case_text.summary (language='nl')
 --     rs_document_text                    → merged into case_text
 --     rs_edge                             → case_citation
@@ -1132,9 +1169,9 @@ INSERT INTO "public"."court_formation" (code, label, judge_count) VALUES
 --                                             rs_v_document_law_reference view)
 --
 --   CJEU (loads from the HF parquet corpus, not from legacy Postgres)
---     case.title                          → synthesized "C-123/22, X v Y"
+--     cases.title                          → synthesized "C-123/22, X v Y"
 --                                           (work_title is 1.3% populated upstream)
---     case.importance                     → formation-based proxy on the
+--     cases.importance                     → formation-based proxy on the
 --                                           harmonized 1–4 scale (GC/FC→1,
 --                                           5-judge→2, 3-judge→3, sole/order→4)
 --     subject_matter / eurovoc /
