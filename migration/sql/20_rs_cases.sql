@@ -77,10 +77,11 @@ ON CONFLICT (case_id, raw) DO NOTHING;
 -- 6. formal relations (kept 1:1; fan-out to case_citation happens in 40_citations)
 INSERT INTO rs_document_formal_relation (case_id, target_ecli, target_identifier,
     relation_type, aanleg, name, disposition, gevolg, created_at)
-SELECT k.id, upper(btrim(fr.target_ecli)), fr.target_identifier,
+SELECT k.id, k2.ecli, fr.target_identifier,   -- target_ecli only when it resolves (FK); raw stays in target_identifier
        fr.relation_type, fr.aanleg, fr.name, fr.disposition, fr.gevolg, fr.created_at
 FROM legacy.rs_document_formal_relation fr
 JOIN cases k ON k.ecli = upper(btrim(fr.ecli))
+LEFT JOIN cases k2 ON k2.ecli = upper(btrim(fr.target_ecli))
 WHERE EXISTS (SELECT 1 FROM rs_document r WHERE r.case_id = k.id)
 ON CONFLICT (case_id, target_identifier, relation_type, aanleg) DO NOTHING;
 

@@ -15,6 +15,13 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 : "${TARGET_DB_URL:?}"; : "${LEGACY_DB_URL:?}"
+
+# Neon pooler endpoints (PgBouncer transaction mode) break session SET
+# (search_path roulette) — migrations must use the direct endpoint.
+if [[ "$TARGET_DB_URL" == *"-pooler."* ]]; then
+  echo "!! TARGET_DB_URL uses a Neon pooler endpoint — switching to direct endpoint"
+  TARGET_DB_URL="${TARGET_DB_URL/-pooler./.}"
+fi
 RS_FILTER="${RS_FILTER:-true}"
 ECHR_FILTER="${ECHR_FILTER:-true}"
 LEGIS_FILTER="${LEGIS_FILTER:-true}"          # predicate on rs_law_element AS le
