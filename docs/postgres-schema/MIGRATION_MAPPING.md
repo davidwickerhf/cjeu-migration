@@ -431,3 +431,66 @@ Loader rule: load them (flag intact) — the API filters on the column.
 **6.8 Sanity results that need no action.** No orphan ECHR edges (0 of
 424,721), no orphan text rows, no ECLI spanning both JUD and DEC doctypes,
 no future dates; 30 pre-1900 RS dates are plausible historical records.
+
+---
+
+## 7. Implementation status (audited against the pipeline, 2026-07-07)
+
+Legend: ✅ ported by the running pipeline · 🔜 deferred by design (named
+follow-up) · ⚠️ gap — mapped but not yet implemented · ∅ intentionally
+NULL (no source data exists)
+
+### 7.1 Fully implemented ✅
+
+| Area | Detail |
+|---|---|
+| `cases` | all three corpora: ecli, celex_id, item_id (ECHR canonical), source, title, dates, court_id, language_iso, document_type_id, procedure_type_id, case_number, importance (ECHR native / CJEU proxy), created/updated |
+| `case_text` | RS fulltext+summary · ECHR doctype-rank pick · CJEU per-language texts + summaries (+summary_source, text_format, missing_reasons) |
+| `rs_document` + publications + external authorities + formal relations | complete, incl. target-ECLI nulling |
+| `echr_document` (per variant) + appno + article (kind/code/protocol) + extractor_segments | complete |
+| `cjeu_document` core + `cjeu_ag_opinion` (parent best-effort) + `cjeu_national_document` | complete |
+| `domain`/`case_domain` | RS domains + CJEU's 4 schemes |
+| `case_judge` | CJEU rapporteur + judges |
+| `case_party` | ECHR respondent_state (exploded) · CJEU agents + referring_state |
+| `case_law_reference` | RS BWB refs (raw + resolved) · CJEU CELEX refs (raw) · LIDO registry fold (42) |
+| `case_citation` + counts | rs_edge, echr_edge, formal-relation fanout, CJEU relations; cross-corpus resolution; trigger + rebuild |
+| `legislation`/`legal_provision`/`legislation_alias` | BWB catalog (latest snapshot) + stubs |
+| `case_segment` | RS embeddings port (step 25; segment_type='legacy') |
+
+### 7.2 Gaps to close ⚠️ (mapped, not yet in the loader)
+
+| Column / mapping | What's missing |
+|---|---|
+| `cases.title` (CJEU) | synthesized as `"Case C-123/22"` only — party names ("X v Y") not appended (party-name source for sector 6 is unresolved; see loader-phase notes) |
+| `cjeu_document.cellar_uri` / `work_uri` | not derived from the HF corpus yet (derivable from CELEX; small loader addition) |
+| `cjeu_document.procedure_result` | not parsed from `type_procedure` yet (raw value is stored in `proc_type`) |
+| `cjeu_document.dossier_parent_case_id` | post-load resolution pass not written (dossier_uri IS stored) |
+| `case_party` role `national_party` (CJEU sector 8) | names are stored raw in `cjeu_national_document.national_parties_raw` but not exploded into case_party |
+| `echr_document_article.raw` | column exists; migrated rows carry NULL (legacy has no per-row source fragment; future parser emits it) |
+| CJEU `affecting_ids` | only `affecting_string` is staged into law references |
+| `case_citation.extractor_version` | loaders leave it NULL (schema supports it) |
+
+### 7.3 Deferred by design 🔜 (named follow-up projects)
+
+| Table / column | Populated by |
+|---|---|
+| `case_summary_version` | LLM summarization pipeline (schema ready, partial-unique guard in place) |
+| `case_entity` | NER pipeline |
+| `case_cluster` / `case_cluster_membership` / `case_network_metric` / `network_snapshot` | graph-analytics pipeline (recomputed, not migrated) |
+| `domain_label` + `domain.uri`/`parent_id` for eurovoc | EuroVoc SKOS ingest (DECISIONS.md) |
+| `lido_link` | future LIDO fetch pipeline (no live legacy data existed to port) |
+| `court.level` / `parent_court_id` for RS courts | Dutch court-name normalization task (§5.3) |
+| EU legislation catalog (CELEX acts/provisions) | future ingest; CJEU law refs stay raw-only until then |
+| `search_query_log` | application runtime, not migration |
+
+### 7.4 Intentionally NULL ∅ (no source data)
+
+| Column | Why |
+|---|---|
+| `cases.importance` (RS) | no native importance in legacy RS (D7) |
+| `cases.is_landmark` | future curated flag |
+| `cases.instance_id` + the `instance` lookup | no corpus carries instance-level data today (legacy RS "instance" = court names → `court`) |
+| `cases.language_iso` (ECHR) | HUDOC has no procedure language |
+| `case_judge` for RS/ECHR | legacy carries no judge data for these corpora |
+| `legal_provision.text` / `effective_from` / `effective_to` | BWB catalog carries structure + titles, not provision text |
+| `case_segment.segment_index` | unknown in legacy `ecli_segments` |
