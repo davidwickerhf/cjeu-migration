@@ -2,6 +2,7 @@
 -- case_text with doctype-rank pick, respondent explode.
 -- psql var :echr_filter — predicate on legacy.echr_document ('true' = full).
 SET search_path TO cle_v2, public;
+SET temp_buffers = '512MB';   -- _echr_variants holds ~170k wide rows; default 8MB starves local buffers
 
 -- 0. Working set: non-PR/CLIN variants with normalized language + case grouping key.
 --    Group = ECLI when present; ECLI-less communicated cases group by appno+refdate
@@ -10,8 +11,10 @@ CREATE TEMP TABLE _echr_variants AS
 SELECT d.itemid,
        upper(btrim(d.ecli))                                   AS ecli,
        coalesce(upper(btrim(d.ecli)),
-                'APPNO:' || coalesce(d.appno,'?') || ':' ||
-                coalesce(d.referencedate::date::text,''))     AS case_key,
+                -- appno lists can be multi-KB (mass applications) — hash the
+                -- fallback key so it stays groupable AND btree-indexable
+                'APPNO:' || md5(coalesce(d.appno,'?') || ':' ||
+                                coalesce(d.referencedate::date::text,'')))  AS case_key,
        coalesce(m.iso, lower(d.languageisocode))              AS lang,
        d.languageisocode                                      AS hudoc_lang,
        d.doctype,
@@ -30,6 +33,9 @@ FROM legacy.echr_document d
 LEFT JOIN _lang_map m ON m.hudoc = d.languageisocode
 WHERE d.doctype NOT IN ('PR','CLIN','CLINF')          -- §5.1: skip non-decisions
   AND :echr_filter;
+
+CREATE INDEX ON _echr_variants (case_key, lang_rank, doctype_rank, itemid);
+ANALYZE _echr_variants;
 
 -- 1. cases: one per case_key; canonical variant = ENG > FRE > any,
 --    doctype rank JUD > DEC > COM, lowest itemid. date: judgement ->
