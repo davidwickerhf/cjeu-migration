@@ -90,6 +90,25 @@ ORDER BY d.case_id, d.language,
          d.item_id
 ON CONFLICT (case_id, language, source) DO NOTHING;
 
+-- 3b. non-canonical variant texts — lossless remainder of step 3's pick.
+-- Where several text-bearing variants of a case share a language, rn=1
+-- (same ordering as above) landed in case_text; the rest land here.
+WITH ranked AS (
+    SELECT d.item_id, row_number() OVER (
+        PARTITION BY d.case_id, d.language
+        ORDER BY CASE WHEN d.doctype LIKE '%JUD%' THEN 1 WHEN d.doctype LIKE '%DEC%' THEN 2 ELSE 3 END,
+                 d.item_id) AS rn
+    FROM echr_document d
+    JOIN legacy.echr_document_text t ON t.itemid = d.item_id
+    WHERE t.fulltext IS NOT NULL
+)
+INSERT INTO echr_document_secondary_text (item_id, fulltext)
+SELECT r.item_id, t.fulltext
+FROM ranked r
+JOIN legacy.echr_document_text t ON t.itemid = r.item_id
+WHERE r.rn > 1 AND t.fulltext IS NOT NULL
+ON CONFLICT (item_id) DO NOTHING;
+
 -- 4. appnos + articles (per-variant satellites; protocol parsed for pure P-codes)
 INSERT INTO echr_document_appno (item_id, appno, source, created_at)
 SELECT a.itemid, a.appno, a.source, a.created_at

@@ -201,6 +201,8 @@ ALTER TABLE "cle_v2"."echr_document_article" DROP CONSTRAINT IF EXISTS fk_echr_d
 ALTER TABLE "cle_v2"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_doc   FOREIGN KEY ("item_id") REFERENCES "cle_v2"."echr_document"("item_id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."echr_extractor_segments" DROP CONSTRAINT IF EXISTS fk_echr_extractor_segments_doc;
 ALTER TABLE "cle_v2"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("item_id") REFERENCES "cle_v2"."echr_document"("item_id") ON DELETE CASCADE;
+ALTER TABLE "cle_v2"."echr_document_secondary_text" DROP CONSTRAINT IF EXISTS fk_echr_document_secondary_text_doc;
+ALTER TABLE "cle_v2"."echr_document_secondary_text" ADD CONSTRAINT fk_echr_document_secondary_text_doc FOREIGN KEY ("item_id") REFERENCES "cle_v2"."echr_document"("item_id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."rs_document" DROP CONSTRAINT IF EXISTS fk_rs_document_case;
 ALTER TABLE "cle_v2"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "cle_v2"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."rs_document_external_authority" DROP CONSTRAINT IF EXISTS fk_rs_document_ext_authority;

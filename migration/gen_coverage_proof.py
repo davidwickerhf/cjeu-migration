@@ -73,9 +73,9 @@ m("echr_document_article", {
  "kind": "echr_document_article.kind",
  "article_code": "echr_document_article.article_code (+ derived protocol)"})
 m("echr_document_text", {
- "itemid": "resolved → case_text.case_id (+language)",
+ "itemid": "resolved → case_text.case_id (+language); non-canonical variants keep item_id in echr_document_secondary_text",
  "languageisocode": "case_text.language (normalized)",
- "fulltext": "case_text.fulltext",
+ "fulltext": "case_text.fulltext (canonical variant per case × language) + echr_document_secondary_text.fulltext (the other text-bearing variants — lossless)",
  "fulltext_tsv": "REGENERATED (generated column)"})
 m("echr_edge", {
  "id": "DROPPED — surrogate key",
@@ -358,6 +358,8 @@ def main():
          ("edges (rs+echr)", "SELECT (SELECT count(*) FROM rs_edge)+(SELECT count(*) FROM echr_edge)", "SELECT count(*) FROM cle_v2.case_citation WHERE source_dataset IN ('rs_body_cite','rs_legacy_ddb','rs_formal_relation','echr_edge')", "dedup applies"),
          ("segments", "SELECT count(*) FROM ecli_segments", "SELECT count(*) FROM cle_v2.case_segment", "unresolvable ECLIs skipped"),
          ("BWB law refs", "SELECT count(*) FROM rs_document_law_reference", "SELECT count(*) FROM cle_v2.case_law_reference WHERE source_dataset LIKE 'rs_%'", "dedup applies"),
+         ("BWB aliases", "SELECT count(DISTINCT (bwb_id, alias)) FROM rs_law_alias", "SELECT count(*) FROM cle_v2.legislation_alias", "full register; 256k stub acts created"),
+         ("ECHR texts", "SELECT count(*) FROM echr_document_text t JOIN echr_document d ON d.itemid=t.itemid AND d.languageisocode=t.languageisocode WHERE d.doctype NOT IN ('PR','CLIN','CLINF') AND t.fulltext IS NOT NULL", "SELECT (SELECT count(*) FROM cle_v2.case_text WHERE source='HUDOC' AND fulltext IS NOT NULL) + (SELECT count(*) FROM cle_v2.echr_document_secondary_text)", "canonical in case_text + secondary variants"),
         ]
         for name, lq, tq_, note in pairs:
             lv, tv = q(legacy, lq), q(target, tq_)

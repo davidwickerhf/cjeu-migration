@@ -659,6 +659,14 @@ CREATE TABLE "cle_v2"."echr_extractor_segments" (
     PRIMARY KEY ("item_id")
 );
 
+CREATE TABLE "cle_v2"."echr_document_secondary_text" (
+    -- Fulltexts of NON-canonical ECHR variants (see schema_full.sql).
+    "item_id" text NOT NULL,
+    "fulltext" text NOT NULL,
+    "created_at" timestamptz DEFAULT now() NOT NULL,
+    PRIMARY KEY ("item_id")
+);
+
 
 -- =============================================================================
 -- Rechtspraak-specific extensions — enriched from legacy production

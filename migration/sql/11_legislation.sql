@@ -47,8 +47,22 @@ ORDER BY le.bwb_id, le.bwb_label_id, le.type, le.number, le.snapshot_date DESC
 ON CONFLICT DO NOTHING;
 
 -- 4. Aliases
+-- Stub catalog rows for alias-only BWB ids: rs_law_alias carries the FULL
+-- BWB register (~265k regulations — the bwbidlist), far beyond the ~8.8k
+-- acts in the LIDO structural catalog. Loaded lossless; title = first
+-- alias at the latest snapshot (the bwbidlist lists the official title
+-- first). Loads the full register even in sampled runs (reference data).
+INSERT INTO legislation (identifier, scheme, title, jurisdiction_id)
+SELECT DISTINCT ON (la.bwb_id) la.bwb_id, 'bwb', la.alias,
+       (SELECT id FROM jurisdiction WHERE iso_code='NL')
+FROM legacy.rs_law_alias la
+WHERE NOT EXISTS (SELECT 1 FROM legislation lg WHERE lg.scheme='bwb' AND lg.identifier = la.bwb_id)
+ORDER BY la.bwb_id, la.snapshot_date DESC NULLS LAST, la.id;
+
+-- All aliases, union across snapshots (lossless; DISTINCT guards
+-- within-batch snapshot duplicates)
 INSERT INTO legislation_alias (legislation_id, alias, source)
-SELECT lg.id, la.alias, 'bwbidlist'
+SELECT DISTINCT lg.id, la.alias, 'bwbidlist'
 FROM legacy.rs_law_alias la
 JOIN legislation lg ON lg.scheme = 'bwb' AND lg.identifier = la.bwb_id
 WHERE NOT EXISTS (SELECT 1 FROM legislation_alias x WHERE x.legislation_id = lg.id AND x.alias = la.alias);

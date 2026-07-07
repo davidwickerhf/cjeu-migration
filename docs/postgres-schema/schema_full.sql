@@ -718,6 +718,19 @@ CREATE TABLE "public"."echr_extractor_segments" (
 CREATE INDEX "echr_extractor_segments_idx_parser"      ON "public"."echr_extractor_segments" ("parser_mode");
 CREATE INDEX "echr_extractor_segments_idx_num_sections" ON "public"."echr_extractor_segments" ("num_sections");
 
+CREATE TABLE "public"."echr_document_secondary_text" (
+    -- Fulltexts of NON-canonical ECHR variants. When several text-bearing
+    -- variants of one case share a language (e.g. judgment + admissibility
+    -- decision, both English), the canonical variant's text (doctype rank
+    -- JUD > DEC > other, lowest item_id) lives in case_text; the remaining
+    -- variant texts (~3.2k, 2.4% of legacy echr_document_text) live here so
+    -- nothing is dropped. Not tsvector-indexed — search runs on case_text.
+    "item_id" text NOT NULL,
+    "fulltext" text NOT NULL,
+    "created_at" timestamptz DEFAULT now() NOT NULL,
+    PRIMARY KEY ("item_id")
+);
+
 
 -- =============================================================================
 -- Rechtspraak-specific extensions — enriched from legacy production
@@ -1144,6 +1157,7 @@ ALTER TABLE "public"."echr_document"           ADD CONSTRAINT fk_echr_document_l
 ALTER TABLE "public"."echr_document_appno"     ADD CONSTRAINT fk_echr_document_appno_doc     FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
 ALTER TABLE "public"."echr_document_article"   ADD CONSTRAINT fk_echr_document_article_doc   FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
 ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_segments_doc FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
+ALTER TABLE "public"."echr_document_secondary_text" ADD CONSTRAINT fk_echr_document_secondary_text_doc FOREIGN KEY ("item_id") REFERENCES "public"."echr_document"("item_id") ON DELETE CASCADE;
 
 -- Rechtspraak
 ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;

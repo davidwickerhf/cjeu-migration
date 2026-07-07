@@ -48,6 +48,18 @@ alpha-3 codes + 92 CJEU agent name strings) backing ~297k case links.
 |---|---|---|
 | 1,230 RS courts loaded verbatim, incl. historical duplicates | **LOADER (deliberate)** | "Rechtbank 's-Gravenhage" and "Rechtbank Den Haag" are the same court pre/post-2013 rename, currently two rows. Lossless-first choice (§5.3): merge via `parent_court_id`/rename mapping is a curated follow-up task. `level`/`parent_court_id` NULL for all RS courts until then. |
 
+## legislation (catalog breadth)
+
+| Limitation | Whose | Detail |
+|---|---|---|
+| 256,252 of 265,108 BWB acts are alias-only stubs | **LOADER (deliberate)** | `rs_law_alias` carries the FULL Dutch BWB register (bwbidlist: official + citation titles for every regulation ever). Only ~8.8k acts appear in the LIDO structural catalog or are cited by case law; the rest were loaded as stub rows (title = official bwbidlist title) so all 302,611 aliases port 1:1. Stubs have no provisions and no case links until cited. |
+
+## echr_document_secondary_text
+
+| Limitation | Whose | Detail |
+|---|---|---|
+| Holds only NON-canonical variant texts (3,222 rows) | **SCHEMA (deliberate)** | When several text-bearing variants of one case share a language (judgment + admissibility decision, both English), the canonical variant's text (doctype JUD > DEC > other, lowest item_id) lives in `case_text`; the remainder lives here. Together: 135,258 = legacy `echr_document_text` exactly. Not tsvector-indexed — search runs on the canonical text. |
+
 ## legal_provision.text / effective_from / effective_to
 
 | Limitation | Whose | Detail |

@@ -471,6 +471,8 @@
 | edges (rs+echr) | 2160277 | 2120098 | dedup applies |
 | segments | 3723546 | 3723546 | unresolvable ECLIs skipped |
 | BWB law refs | 7126490 | 7126490 | dedup applies |
+| BWB aliases | 302611 | 302611 | full register; 256k stub acts created |
+| ECHR texts | 135258 | 135258 | canonical in case_text + secondary variants |
 
 | CJEU metric | parquet | cle_v2 |
 |---|---:|---:|
