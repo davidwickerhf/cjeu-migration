@@ -4,10 +4,10 @@
 SET search_path TO cle_v2, public;
 
 -- 1. cases (ECLI normalized: trim + upper; MIGRATION_MAPPING §6.4)
-INSERT INTO cases (ecli, source, title, date_decision, date_published,
+INSERT INTO cases (ecli, sources, title, date_decision, date_published,
                    court_id, language_iso, document_type_id, procedure_type_id,
                    case_number, created_at, updated_at)
-SELECT upper(btrim(d.ecli)), 'RS', d.title, d.date_decision, d.date_published,
+SELECT upper(btrim(d.ecli)), ARRAY['RS'], d.title, d.date_decision, d.date_published,
        c.id, 'nl',
        (SELECT id FROM document_type WHERE code = CASE d.document_type
             WHEN 'Uitspraak' THEN 'judgment' WHEN 'Conclusie' THEN 'opinion' ELSE 'other' END),

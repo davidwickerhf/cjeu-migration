@@ -40,10 +40,10 @@ ANALYZE _echr_variants;
 -- 1. cases: one per case_key; canonical variant = ENG > FRE > any,
 --    doctype rank JUD > DEC > COM, lowest itemid. date: judgement ->
 --    reference -> parsed from the ECLI segment (§6.2).
-INSERT INTO cases (ecli, item_id, source, title, date_decision, importance,
+INSERT INTO cases (ecli, item_id, sources, title, date_decision, importance,
                    court_id, document_type_id, created_at)
 SELECT DISTINCT ON (v.case_key)
-       v.ecli, v.itemid, 'ECHR', v.docname,
+       v.ecli, v.itemid, ARRAY['ECHR'], v.docname,
        coalesce(v.judgementdate::date, v.referencedate::date,
                 CASE WHEN v.ecli ~ '^ECLI:CE:ECHR:[0-9]{4}:[0-9]{4}'
                      THEN to_date(split_part(v.ecli, ':', 4) ||

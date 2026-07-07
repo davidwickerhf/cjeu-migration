@@ -237,7 +237,13 @@ CREATE TABLE "public"."cases" (
     "id" bigserial NOT NULL,
     "ecli" text UNIQUE,
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
-    "source" text,                   -- 'CJEU' | 'ECHR' | 'RS'
+    "sources" text[] NOT NULL,       -- corpus coverage, e.g. '{RS}' or '{RS,CJEU}' (D13).
+                                     -- sources[1] is the ORIGIN corpus: the loader that
+                                     -- created the row and populated the shared columns;
+                                     -- later corpora APPEND when their satellite attaches.
+                                     -- Loaders set it during bulk load; the
+                                     -- trg_*_sources_attach/detach triggers keep it in
+                                     -- sync with satellite existence afterwards.
     "celex_id" text UNIQUE,
     "title" text,                    -- RS/ECHR: native title. CJEU: synthesized by the
                                      -- loader ("C-123/22, X v Y") — CELLAR's work_title
@@ -264,7 +270,7 @@ CREATE TABLE "public"."cases" (
 CREATE INDEX "case_idx_court"          ON "public"."cases" ("court_id");
 CREATE INDEX "case_idx_date_decision"  ON "public"."cases" ("date_decision");
 CREATE INDEX "case_idx_ecli"           ON "public"."cases" ("ecli");
-CREATE INDEX "case_idx_source"         ON "public"."cases" ("source");
+CREATE INDEX "case_idx_sources"        ON "public"."cases" USING gin ("sources");
 CREATE INDEX "case_idx_item_id"        ON "public"."cases" ("item_id");
 CREATE INDEX "case_idx_title_trgm"     ON "public"."cases" USING gin ("title" gin_trgm_ops);
 -- API keyset pagination: ORDER BY date_decision DESC NULLS LAST, ecli

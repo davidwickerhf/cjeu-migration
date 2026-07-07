@@ -164,6 +164,33 @@ BEGIN
 END;
 $$;
 
+-- D13: cases.sources maintenance. Loaders set the array during bulk load
+-- (triggers are only installed in 90_post_load, after the data); these keep
+-- it in sync with satellite existence for all later mutations, so the
+-- stored array cannot drift from the satellites that define membership.
+CREATE OR REPLACE FUNCTION "cle_v2".cases_sources_attach()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE "cle_v2".cases SET sources = sources || TG_ARGV[0]
+   WHERE id = NEW.case_id AND NOT sources @> ARRAY[TG_ARGV[0]];
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "cle_v2".cases_sources_detach()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  -- ECHR is per-variant: only detach when the LAST variant goes
+  IF TG_ARGV[0] = 'ECHR' AND EXISTS (
+       SELECT 1 FROM "cle_v2".echr_document WHERE case_id = OLD.case_id) THEN
+    RETURN OLD;
+  END IF;
+  UPDATE "cle_v2".cases SET sources = array_remove(sources, TG_ARGV[0])
+   WHERE id = OLD.case_id;
+  RETURN OLD;
+END;
+$$;
+
 
 -- =============================================================================
 -- Lookups
@@ -330,7 +357,13 @@ CREATE TABLE "cle_v2"."cases" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "ecli" text UNIQUE,
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
-    "source" text,                   -- 'CJEU' | 'ECHR' | 'RS'
+    "sources" text[] NOT NULL,       -- corpus coverage, e.g. '{RS}' or '{RS,CJEU}' (D13).
+                                     -- sources[1] is the ORIGIN corpus: the loader that
+                                     -- created the row and populated the shared columns;
+                                     -- later corpora APPEND when their satellite attaches.
+                                     -- Loaders set it during bulk load; the
+                                     -- trg_*_sources_attach/detach triggers keep it in
+                                     -- sync with satellite existence afterwards.
     "celex_id" text UNIQUE,
     "title" text,                    -- RS/ECHR: native title. CJEU: synthesized by the
                                      -- loader ("C-123/22, X v Y") — CELLAR's work_title

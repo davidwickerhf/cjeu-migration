@@ -160,6 +160,33 @@ BEGIN
 END;
 $$;
 
+-- D13: cases.sources maintenance. Loaders set the array during bulk load
+-- (triggers are only installed in 90_post_load, after the data); these keep
+-- it in sync with satellite existence for all later mutations, so the
+-- stored array cannot drift from the satellites that define membership.
+CREATE OR REPLACE FUNCTION "public".cases_sources_attach()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE "public".cases SET sources = sources || TG_ARGV[0]
+   WHERE id = NEW.case_id AND NOT sources @> ARRAY[TG_ARGV[0]];
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION "public".cases_sources_detach()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  -- ECHR is per-variant: only detach when the LAST variant goes
+  IF TG_ARGV[0] = 'ECHR' AND EXISTS (
+       SELECT 1 FROM "public".echr_document WHERE case_id = OLD.case_id) THEN
+    RETURN OLD;
+  END IF;
+  UPDATE "public".cases SET sources = array_remove(sources, TG_ARGV[0])
+   WHERE id = OLD.case_id;
+  RETURN OLD;
+END;
+$$;
+
 
 -- =============================================================================
 -- Lookups
@@ -327,12 +354,13 @@ CREATE TABLE "public"."cases" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "ecli" text UNIQUE,
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
-    "source" text,                   -- ORIGIN corpus only: 'CJEU' | 'ECHR' | 'RS' — the loader
-                                     -- that created the row and populated the shared columns.
-                                     -- NOT corpus coverage: a case in several corpora (the 175
-                                     -- Dutch sector-8 RS ∩ CJEU decisions) keeps one row + one
-                                     -- satellite per corpus. Query membership via the
-                                     -- case_source view, never by filtering this column (D13).
+    "sources" text[] NOT NULL,       -- corpus coverage, e.g. '{RS}' or '{RS,CJEU}' (D13).
+                                     -- sources[1] is the ORIGIN corpus: the loader that
+                                     -- created the row and populated the shared columns;
+                                     -- later corpora APPEND when their satellite attaches.
+                                     -- Loaders set it during bulk load; the
+                                     -- trg_*_sources_attach/detach triggers keep it in
+                                     -- sync with satellite existence afterwards.
     "celex_id" text UNIQUE,
     "title" text,                    -- RS/ECHR: native title. CJEU: synthesized by the
                                      -- loader ("C-123/22, X v Y") — CELLAR's work_title
@@ -359,7 +387,7 @@ CREATE TABLE "public"."cases" (
 CREATE INDEX "case_idx_court"          ON "public"."cases" ("court_id");
 CREATE INDEX "case_idx_date_decision"  ON "public"."cases" ("date_decision");
 CREATE INDEX "case_idx_ecli"           ON "public"."cases" ("ecli");
-CREATE INDEX "case_idx_source"         ON "public"."cases" ("source");
+CREATE INDEX "case_idx_sources"        ON "public"."cases" USING gin ("sources");
 CREATE INDEX "case_idx_item_id"        ON "public"."cases" ("item_id");
 CREATE INDEX "case_idx_title_trgm"     ON "public"."cases" USING gin ("title" gin_trgm_ops);
 -- API keyset pagination: ORDER BY date_decision DESC NULLS LAST, ecli
@@ -978,20 +1006,17 @@ CREATE TABLE "public"."search_query_log" (
 );
 
 
+-- D13: keep cases.sources in sync with satellite existence
+CREATE TRIGGER trg_rs_document_sources_attach   AFTER INSERT ON "public"."rs_document"   FOR EACH ROW EXECUTE FUNCTION "public".cases_sources_attach('RS');
+CREATE TRIGGER trg_rs_document_sources_detach   AFTER DELETE ON "public"."rs_document"   FOR EACH ROW EXECUTE FUNCTION "public".cases_sources_detach('RS');
+CREATE TRIGGER trg_cjeu_document_sources_attach AFTER INSERT ON "public"."cjeu_document" FOR EACH ROW EXECUTE FUNCTION "public".cases_sources_attach('CJEU');
+CREATE TRIGGER trg_cjeu_document_sources_detach AFTER DELETE ON "public"."cjeu_document" FOR EACH ROW EXECUTE FUNCTION "public".cases_sources_detach('CJEU');
+CREATE TRIGGER trg_echr_document_sources_attach AFTER INSERT ON "public"."echr_document" FOR EACH ROW EXECUTE FUNCTION "public".cases_sources_attach('ECHR');
+CREATE TRIGGER trg_echr_document_sources_detach AFTER DELETE ON "public"."echr_document" FOR EACH ROW EXECUTE FUNCTION "public".cases_sources_detach('ECHR');
+
 -- =============================================================================
 -- Views (adapted from legacy)
 -- =============================================================================
-
--- D13: corpus membership is DERIVED, never stored twice. The satellites are
--- the truth (an rs_document row IS the RS membership); this view exposes it
--- as the normalized (case_id, source) relation. Index-backed — every branch
--- scans a satellite keyed by case_id — and immune to drift by construction.
-CREATE OR REPLACE VIEW "public"."case_source" AS
-SELECT "case_id", 'RS'::text   AS "source" FROM "public"."rs_document"
-UNION ALL
-SELECT "case_id", 'CJEU'::text FROM "public"."cjeu_document"
-UNION ALL
-SELECT DISTINCT "case_id", 'ECHR'::text FROM "public"."echr_document";
 
 -- D12: one canonical text per (case × language) for single-text consumers
 -- (search, the legacy-shaped views, API defaults). The origin corpus wins

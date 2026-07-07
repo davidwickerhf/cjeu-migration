@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS "legal_provision_idx_lookup"    ON "cle_v2"."legal_pr
 CREATE INDEX IF NOT EXISTS "case_idx_court"          ON "cle_v2"."cases" ("court_id");
 CREATE INDEX IF NOT EXISTS "case_idx_date_decision"  ON "cle_v2"."cases" ("date_decision");
 CREATE INDEX IF NOT EXISTS "case_idx_ecli"           ON "cle_v2"."cases" ("ecli");
-CREATE INDEX IF NOT EXISTS "case_idx_source"         ON "cle_v2"."cases" ("source");
+CREATE INDEX IF NOT EXISTS "case_idx_sources"        ON "cle_v2"."cases" USING gin ("sources");
 CREATE INDEX IF NOT EXISTS "case_idx_item_id"        ON "cle_v2"."cases" ("item_id");
 CREATE INDEX IF NOT EXISTS "case_idx_title_trgm"     ON "cle_v2"."cases" USING gin ("title" gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS "case_idx_date_ecli"      ON "cle_v2"."cases" ("date_decision" DESC, "ecli");
@@ -258,14 +258,16 @@ FOR EACH ROW EXECUTE FUNCTION "cle_v2".touch_updated_at();
 CREATE OR REPLACE TRIGGER trg_rs_document_updated_at
 BEFORE UPDATE ON "cle_v2"."rs_document"
 FOR EACH ROW EXECUTE FUNCTION "cle_v2".touch_updated_at();
+-- D13: keep cases.sources in sync with satellite existence
+CREATE OR REPLACE TRIGGER trg_rs_document_sources_attach   AFTER INSERT ON "cle_v2"."rs_document"   FOR EACH ROW EXECUTE FUNCTION "cle_v2".cases_sources_attach('RS');
+CREATE OR REPLACE TRIGGER trg_rs_document_sources_detach   AFTER DELETE ON "cle_v2"."rs_document"   FOR EACH ROW EXECUTE FUNCTION "cle_v2".cases_sources_detach('RS');
+CREATE OR REPLACE TRIGGER trg_cjeu_document_sources_attach AFTER INSERT ON "cle_v2"."cjeu_document" FOR EACH ROW EXECUTE FUNCTION "cle_v2".cases_sources_attach('CJEU');
+CREATE OR REPLACE TRIGGER trg_cjeu_document_sources_detach AFTER DELETE ON "cle_v2"."cjeu_document" FOR EACH ROW EXECUTE FUNCTION "cle_v2".cases_sources_detach('CJEU');
+CREATE OR REPLACE TRIGGER trg_echr_document_sources_attach AFTER INSERT ON "cle_v2"."echr_document" FOR EACH ROW EXECUTE FUNCTION "cle_v2".cases_sources_attach('ECHR');
+CREATE OR REPLACE TRIGGER trg_echr_document_sources_detach AFTER DELETE ON "cle_v2"."echr_document" FOR EACH ROW EXECUTE FUNCTION "cle_v2".cases_sources_detach('ECHR');
+
 
 -- ============ Views ============
-CREATE OR REPLACE VIEW "cle_v2"."case_source" AS
-SELECT "case_id", 'RS'::text   AS "source" FROM "cle_v2"."rs_document"
-UNION ALL
-SELECT "case_id", 'CJEU'::text FROM "cle_v2"."cjeu_document"
-UNION ALL
-SELECT DISTINCT "case_id", 'ECHR'::text FROM "cle_v2"."echr_document";
 CREATE OR REPLACE VIEW "cle_v2"."case_text_canonical" AS
 SELECT DISTINCT ON (t."case_id", t."language") t.*
 FROM "cle_v2"."case_text" t

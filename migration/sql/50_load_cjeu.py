@@ -266,16 +266,25 @@ def main() -> int:
 
         # ---------- cases ----------
         cur.execute("""
-        INSERT INTO cases (ecli, celex_id, source, title, date_decision, court_id,
+        INSERT INTO cases (ecli, celex_id, sources, title, date_decision, court_id,
                            language_iso, document_type_id, procedure_type_id,
                            case_number, importance)
-        SELECT s.ecli, s.celex, 'CJEU', s.title, s.date_decision, c.id,
+        SELECT s.ecli, s.celex, ARRAY['CJEU'], s.title, s.date_decision, c.id,
                s.lang, dt.id, pt.id, s.case_number, s.importance
         FROM stg_case s
         LEFT JOIN court c ON c.code = s.court_code
         LEFT JOIN document_type dt ON dt.code = s.doctype
         LEFT JOIN procedure_type pt ON pt.code = s.proc
         ON CONFLICT (ecli) DO NOTHING
+        """)
+
+        # cross-corpus rows already exist (RS origin): append CJEU membership.
+        # After 90_post_load the cjeu_document attach trigger does this; during
+        # bulk load the loader is responsible (D13).
+        cur.execute("""
+        UPDATE cases c SET sources = c.sources || 'CJEU'::text
+        FROM stg_case s
+        WHERE c.ecli = s.ecli AND NOT c.sources @> '{CJEU}'
         """)
 
         # ---------- cjeu_document ----------
@@ -300,7 +309,7 @@ def main() -> int:
         JOIN cases k ON k.ecli = a.ecli
         LEFT JOIN LATERAL (
             SELECT c2.id FROM cases c2
-            WHERE c2.source = 'CJEU'
+            WHERE c2.sources @> '{CJEU}'
               AND c2.case_number = replace((regexp_match(coalesce(a.parent_raw,''), '(?:case/)([CTF]-[0-9]+%2F[0-9]+|[CTF]-[0-9]+/[0-9]+)'))[1], '%2F', '/')
             LIMIT 1
         ) p ON true

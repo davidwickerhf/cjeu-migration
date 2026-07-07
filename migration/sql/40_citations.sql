@@ -13,7 +13,7 @@ SELECT s.id, t.id,
                      WHEN 'legacy-ddb' THEN 'rs_legacy_ddb'
                      WHEN 'formal-relation' THEN 'rs_formal_relation'
                      ELSE 'rs_' || e.source END,
-       (t.id IS NOT NULL AND t.source <> 'RS')
+       (t.id IS NOT NULL AND NOT t.sources @> '{RS}')
 FROM legacy.rs_edge e
 JOIN cases s ON s.ecli = upper(btrim(e.source_ecli))
 LEFT JOIN cases t ON t.ecli = upper(btrim(e.target_ecli))

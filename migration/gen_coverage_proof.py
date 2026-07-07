@@ -350,8 +350,8 @@ def main():
         out.append("\n## Live reconciliation (legacy vs cle_v2, generated now)\n")
         out.append("| metric | legacy | cle_v2 | note |\n|---|---:|---:|---|")
         pairs = [
-         ("RS cases", "SELECT count(*) FROM rs_document", "SELECT count(*) FROM cle_v2.cases WHERE source='RS'", "1:1"),
-         ("RS texts", "SELECT count(*) FROM rs_document_text WHERE fulltext IS NOT NULL", "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cases c ON c.id=ct.case_id WHERE c.source='RS' AND ct.fulltext IS NOT NULL", "1:1"),
+         ("RS cases", "SELECT count(*) FROM rs_document", "SELECT count(*) FROM cle_v2.cases WHERE sources[1]='RS'", "1:1"),
+         ("RS texts", "SELECT count(*) FROM rs_document_text WHERE fulltext IS NOT NULL", "SELECT count(*) FROM cle_v2.case_text WHERE source='RECHTSPRAAK' AND fulltext IS NOT NULL", "1:1"),
          ("ECHR variants", "SELECT count(*) FROM echr_document WHERE doctype NOT IN ('PR','CLIN','CLINF')", "SELECT count(*) FROM cle_v2.echr_document", "PR/CLIN/CLINF excluded by design (§5.1)"),
          ("ECHR appnos", "SELECT count(*) FROM echr_document_appno a JOIN echr_document d ON d.itemid=a.itemid AND d.languageisocode=a.languageisocode WHERE d.doctype NOT IN ('PR','CLIN','CLINF')", "SELECT count(*) FROM cle_v2.echr_document_appno", "for loaded variants"),
          ("ECHR articles", "SELECT count(*) FROM echr_document_article a JOIN echr_document d ON d.itemid=a.itemid AND d.languageisocode=a.languageisocode WHERE d.doctype NOT IN ('PR','CLIN','CLINF')", "SELECT count(*) FROM cle_v2.echr_document_article", "for loaded variants"),
@@ -365,10 +365,10 @@ def main():
             lv, tv = q(legacy, lq), q(target, tq_)
             out.append(f"| {name} | {lv} | {tv} | {note} |")
         out.append("\n| CJEU metric | parquet | cle_v2 |\n|---|---:|---:|")
-        xover = q(target, "SELECT count(*) FROM cle_v2.cases c JOIN cle_v2.cjeu_document d ON d.case_id=c.id WHERE c.source='RS'")
-        out.append(f"| cases | 46,169 (ecli+celex bearing) | " + q(target, "SELECT count(*) FROM cle_v2.cases WHERE source='CJEU'")
+        xover = q(target, "SELECT count(*) FROM cle_v2.cases c JOIN cle_v2.cjeu_document d ON d.case_id=c.id JOIN cle_v2.rs_document r ON r.case_id=c.id")
+        out.append(f"| cases | 46,169 (ecli+celex bearing) | " + q(target, "SELECT count(*) FROM cle_v2.cases WHERE sources[1]='CJEU'")
                    + f" + {xover} cross-corpus (Dutch sector-8 decisions already present via Rechtspraak — ONE row carrying both corpora's satellites; zero loss) |")
-        out.append(f"| fulltexts | 591,021 rows in parquet | " + q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cases c ON c.id=ct.case_id WHERE c.source='CJEU'") + " |")
+        out.append(f"| fulltexts | 591,021 rows in parquet | " + q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cases c ON c.id=ct.case_id WHERE c.sources[1]='CJEU'") + " |")
         xtext = q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cjeu_document d ON d.case_id=ct.case_id JOIN cle_v2.rs_document r ON r.case_id=ct.case_id WHERE ct.source='CELLAR_ITEM' AND ct.fulltext IS NOT NULL")
         out.append(f"| cross-corpus nl fulltexts | 174 in parquet | {xtext} loaded as CELLAR_ITEM rows — dual-source with the Rechtspraak text where both exist (D12); case_text_canonical prefers the origin |")
 

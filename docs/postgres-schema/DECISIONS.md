@@ -174,28 +174,33 @@ CELLAR), which is exactly the "linked by shared ECLI" structure a split
 would try to recreate. Only the text needed multiplicity, so only
 `case_text` was relaxed.
 
-### D13 — Corpus membership: derived `case_source` view; `cases.source` = origin only
+### D13 — Corpus membership: stored `cases.sources text[]`, trigger-maintained
 
 A case covered by several corpora (the 175 RS ∩ CJEU decisions) is ONE
-`cases` row with one satellite per corpus. Two facts must not be conflated:
+`cases` row with one satellite per corpus. Membership is STORED on the row:
 
-- **`cases.source`** is the ORIGIN corpus: the loader that created the row
-  and populated the shared columns (title, dates, court). Single-valued by
-  construction (load order: RS → ECHR → CJEU). It is NOT coverage —
-  filtering `source='CJEU'` misses the 175 (this exact trap caused the
-  dropped cross-corpus texts bug).
-- **Coverage** is the normalized `(case_id, source)` relation exposed by
-  the **`case_source` view**, derived from satellite existence
-  (`rs_document` ∪ `cjeu_document` ∪ distinct `echr_document`). Index-backed
-  (each branch scans a satellite keyed on case_id) and immune to drift —
-  attaching a satellite IS joining the corpus.
+- **`cases.sources text[] NOT NULL`** — e.g. `{RS}` or `{RS,CJEU}`. GIN
+  index (`case_idx_sources`); coverage filter is `sources @> '{CJEU}'`
+  (46,169 = the full parquet corpus), origin filter is `sources[1] = 'CJEU'`
+  (45,994).
+- **`sources[1]` is the ORIGIN corpus**: the loader that created the row
+  and populated the shared columns (title, dates, court). Later corpora
+  APPEND when their satellite attaches, so array order is load order.
+- **Drift protection**: the single-valued predecessor column silently
+  under-reported the 175 (that trap caused the dropped cross-corpus texts
+  bug), and any stored denormalization can rot. So the array is maintained
+  the same way `case_citation_counts` is: loaders set it during bulk load
+  (triggers aren't installed yet — 90_post_load layout), and after that the
+  `trg_{rs,cjeu,echr}_document_sources_attach/detach` triggers keep it in
+  lockstep with satellite existence. ECHR detaches only when the LAST
+  variant goes. Verified live: deleting a cjeu_document row removes 'CJEU'
+  from the array.
 
-**Rejected**: storing coverage — `cases.sources text[]` or a physical
-junction table. Both duplicate what the satellites already assert and can
-silently drift (the migration itself would have written `{RS}` on the 175
-before the CJEU loader ran). Query patterns:
-`WHERE EXISTS (SELECT 1 FROM cjeu_document d WHERE d.case_id = c.id)` for
-filters, `JOIN case_source` / `array_agg(source)` for display.
+**History**: first shipped as a derived `case_source` view (satellites as
+the only truth); replaced 2026-07-07 at the maintainers' direction — key
+infrastructure should be stored and directly queryable on the row, not
+reconstructed through a view. The view is dropped; the single-valued
+`cases.source` column is dropped with it.
 
 ## Adoptions from the interim schema draft (reviewed 2026-07-06)
 

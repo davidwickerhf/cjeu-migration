@@ -1,9 +1,9 @@
 -- Reconciliation: new-schema counts vs legacy (respecting sample filters).
 SET search_path TO cle_v2, public;
 \echo === row counts ===
-SELECT 'cases_rs' k, count(*) FROM cases WHERE source='RS'
-UNION ALL SELECT 'cases_echr', count(*) FROM cases WHERE source='ECHR'
-UNION ALL SELECT 'cases_cjeu', count(*) FROM cases WHERE source='CJEU'
+SELECT 'cases_rs' k, count(*) FROM cases WHERE sources[1]='RS'
+UNION ALL SELECT 'cases_echr', count(*) FROM cases WHERE sources[1]='ECHR'
+UNION ALL SELECT 'cases_cjeu', count(*) FROM cases WHERE sources[1]='CJEU'
 UNION ALL SELECT 'echr_variants', count(*) FROM echr_document
 UNION ALL SELECT 'case_text', count(*) FROM case_text
 UNION ALL SELECT 'citations', count(*) FROM case_citation
