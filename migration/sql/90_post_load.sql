@@ -53,8 +53,6 @@ CREATE INDEX IF NOT EXISTS "case_idx_case_number" ON "cle_v2"."cases" ("case_num
 CREATE INDEX IF NOT EXISTS "case_text_idx_case_id"          ON "cle_v2"."case_text" ("case_id");
 CREATE INDEX IF NOT EXISTS "case_text_idx_fulltext_tsv"     ON "cle_v2"."case_text" USING gin ("fulltext_tsv");
 CREATE INDEX IF NOT EXISTS "case_text_idx_summary_tsv"      ON "cle_v2"."case_text" USING gin ("summary_tsv");
-CREATE INDEX IF NOT EXISTS "case_text_idx_summary_embedding" ON "cle_v2"."case_text" USING hnsw ("summary_embedding" vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
 CREATE INDEX IF NOT EXISTS "case_judge_idx_case_id"  ON "cle_v2"."case_judge" ("case_id");
 CREATE INDEX IF NOT EXISTS "case_judge_idx_judge_id" ON "cle_v2"."case_judge" ("judge_id");
 CREATE INDEX IF NOT EXISTS "case_party_idx_party" ON "cle_v2"."case_party" ("party_id");
@@ -111,8 +109,6 @@ CREATE INDEX IF NOT EXISTS "rs_document_publication_idx_journal" ON "cle_v2"."rs
 CREATE INDEX IF NOT EXISTS "lido_link_idx_source_case" ON "cle_v2"."lido_link" ("source_case_id");
 CREATE INDEX IF NOT EXISTS "lido_link_idx_target_case" ON "cle_v2"."lido_link" ("target_case_id");
 CREATE INDEX IF NOT EXISTS "case_segment_idx_case_id"        ON "cle_v2"."case_segment" ("case_id");
-CREATE INDEX IF NOT EXISTS "case_segment_idx_embedding_hnsw" ON "cle_v2"."case_segment" USING hnsw ("embedding" vector_cosine_ops)
-    WITH (m = 16, ef_construction = 64);
 CREATE INDEX IF NOT EXISTS "case_entity_idx_case_id" ON "cle_v2"."case_entity" ("case_id");
 CREATE UNIQUE INDEX IF NOT EXISTS "case_summary_version_uk_current"
     ON "cle_v2"."case_summary_version" ("case_id", "segment_scope", "summarization_model")

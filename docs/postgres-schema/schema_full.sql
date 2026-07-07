@@ -836,6 +836,7 @@ CREATE TABLE "public"."case_segment" (
     UNIQUE ("case_id", "segment_hash")
 );
 CREATE INDEX "case_segment_idx_case_id"        ON "public"."case_segment" ("case_id");
+-- NOTE: hours to build on millions of vectors; migration defers it (migration/sql/95_hnsw.sql)
 CREATE INDEX "case_segment_idx_embedding_hnsw" ON "public"."case_segment" USING hnsw ("embedding" vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
 

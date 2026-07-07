@@ -342,7 +342,7 @@
 | `missing_reasons` | represented per-language via fulltexts.parquet -> case_text.missing_reasons (case-level copy redundant) |
 | `summary_source` | case_text.summary_source |
 | `fulltext_source` | DROPPED — mirror of text_source |
-| `citations_extra_info` | NOT PORTED — citation paragraph detail strings; parquet remains source; revisit if API needs paragraph-level cites |
+| `citations_extra_info` | cjeu_document.citations_extra_info (raw; cited-case names + outcome descriptors — outcome parse is a future refinement) |
 | `affecting_string` | case_law_reference (role='affects') |
 | `affecting_ids` | §7.2 GAP — only affecting_string staged |
 | `judge_rapporteur` | case_judge (role='rapporteur') |
@@ -368,10 +368,10 @@
 | `language_procedure` | cases.language_iso |
 | `legal_resource` | case_law_reference (role='legal_basis') |
 | `local_identifier` | cjeu_document.local_identifier |
-| `national_judgement` | NOT PORTED — overlaps case_law_national_judgement_reference (which is ported) |
+| `national_judgement` | cjeu_document.national_judgement_xml (raw XML of national proceedings; cross-corpus citation fanout = future parser) |
 | `natural_number_celex` | DROPPED — internal CELLAR sort key |
 | `origin_country` | case_party (role='referring_state') |
-| `origin_country_or_role_qualifier` | NOT PORTED — qualifier tokens for origin_country; base value ported via case_party |
+| `origin_country_or_role_qualifier` | union-loaded into case_party referring_state (98.7% dup of origin_country; +2,421 rows only here) |
 | `references_journals` | cjeu_document.journal_refs |
 | `resource_legal_type` | DROPPED — CDM plumbing |
 | `resource_type` | DROPPED — CDM plumbing |
@@ -384,7 +384,7 @@
 | `case_law_defended_by_agent` | case_party (role='defendant_agent') |
 | `case_law_delivered_by_advocate_general` | DROPPED — redundant with advocate_general |
 | `case_law_delivered_by_judge` | case_judge (role='judge') |
-| `case_law_is_about_case_law_subject_matter` | NOT PORTED — overlaps subject_matter (ported via case_domain) |
+| `case_law_is_about_case_law_subject_matter` | case_domain (scheme='cjeu_is_about_subject') — verified distinct 157-term taxonomy, NOT a subject_matter dup |
 | `case_law_requested_by_agent` | case_party (role='applicant_agent') |
 | `date_creation_legacy` | DROPPED — CMR re-index timestamp |
 | `resource_legal_id_obsolete_document` | DROPPED — CDM plumbing |
@@ -416,7 +416,7 @@
 | `work_title` | cases.title (when present; else synthesized) |
 | `case_law_delivered_by_court_national` | cjeu_national_document.* (sector-8 satellite) |
 | `case_law_national_act_reference_national` | cjeu_national_document.* (sector-8 satellite) |
-| `case_law_national_based_on_resource_legal` | NOT PORTED — sector-8 detail; candidate cjeu_national_document extension |
+| `case_law_national_based_on_resource_legal` | cjeu_national_document.national_based_on_resource_legal |
 | `case_law_national_parties` | cjeu_national_document.* (sector-8 satellite) |
 | `case_law_subject_to_appeal_in_case_court` | case_citation (relation='subject_to_appeal') |
 | `case_law_immediately_enforces_resource_legal` | case_law_reference (role='immediately_enforces') |
@@ -470,7 +470,7 @@
 | ECHR articles | 928735 | 928735 | for loaded variants |
 | edges (rs+echr) | 2160277 | 2120098 | dedup applies |
 | segments | 3723546 | 3723546 | unresolvable ECLIs skipped |
-| BWB law refs | 7126490 | 22201886 | dedup applies |
+| BWB law refs | 7126490 | 7126490 | dedup applies |
 
 | CJEU metric | parquet | cle_v2 |
 |---|---:|---:|
