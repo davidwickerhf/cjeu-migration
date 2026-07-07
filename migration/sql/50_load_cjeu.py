@@ -377,7 +377,7 @@ def main() -> int:
         SELECT DISTINCT c.id, t.id, s.v, split_part(s.k, ':', 2), 'cellar_sparql', false
         FROM stg_kv s
         JOIN cases c ON c.ecli = s.ecli
-        LEFT JOIN cases t ON t.celex_id = s.v AND t.source = 'CJEU'
+        LEFT JOIN cases t ON t.celex_id = s.v   -- celex_id is UNIQUE; no source filter, so cross-corpus (RS-anchored) targets resolve too
         WHERE s.k LIKE 'cite:%'
         ON CONFLICT DO NOTHING
         """)
@@ -398,13 +398,20 @@ def main() -> int:
         # (no temp staging: the raw text is ~25 GB; we filter to loaded ECLIs
         #  and write case_text directly — (ecli, lang) is unique in the corpus)
         cur.execute("SET search_path TO cle_v2, public")
-        cur.execute("SELECT ecli, id FROM cases WHERE source = 'CJEU'")
+        # Map ALL CJEU-corpus ECLIs, including the ~175 cross-corpus Dutch
+        # sector-8 decisions anchored to RS-sourced cases rows (filtering on
+        # cases.source='CJEU' silently dropped their parquet texts).
+        cur.execute("""SELECT c.ecli, c.id FROM cases c
+                       JOIN cjeu_document d ON d.case_id = c.id""")
         ecli_to_id = dict(cur.fetchall())
         cur.execute("SELECT iso_code FROM language")
         known_langs = {r[0] for r in cur.fetchall()}
         cur.execute("""SELECT ct.case_id, ct.language FROM case_text ct
-                       JOIN cases c ON c.id = ct.case_id WHERE c.source='CJEU'""")
-        seen_pairs = set(cur.fetchall())   # resume-safe: skip already-loaded texts
+                       JOIN cjeu_document d ON d.case_id = ct.case_id""")
+        # resume-safe skip; also the origin-wins policy: for cross-corpus
+        # cases the RS-loaded 'nl' text (clean per-ECLI XML) beats the
+        # CELLAR pdf rendition (see DATA_QUALITY.md — case_text)
+        seen_pairs = set(cur.fetchall())
         pf = pq.ParquetFile(ft_p)
         n = 0
         for batch in pf.iter_batches(batch_size=2000,

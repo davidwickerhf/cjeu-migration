@@ -67,6 +67,22 @@ alpha-3 codes + 92 CJEU agent name strings) backing ~297k case links.
 | ~65% of ECHR variant rows have no judgement/reference date | **SOURCE** | Loader parses the decision date OUT OF THE ECLI (`ECLI:CE:ECHR:2020:0206JUD…` → 2020-02-06), raising case-level coverage to ~100% of ECLI-bearing cases. Dates for ECLI-less communicated cases remain NULL. |
 | `cases.date_published` semantics differ per corpus | **LOADER (accepted)** | RS: real publication date. CJEU/ECHR: NULL (no equivalent field). |
 
+## case_text — cross-corpus Dutch texts (the 175 RS∩CJEU cases)
+
+For the 175 Dutch sector-8 decisions present in both corpora, BOTH sources
+can provide a Dutch fulltext, and they are **never identical** (verified
+2026-07-07: 0 of 120 overlapping pairs match on whitespace-normalized md5).
+The CELLAR variant is a PDF extraction (`text_format='pdf'`): hard-wrapped
+lines, document header often missing, but frequently *longer* because the
+PDF bundles the judgment with the P-G conclusion — material Rechtspraak
+publishes as a separate ECLI (and which we therefore already carry).
+
+| Rule | Whose | Detail |
+|---|---|---|
+| RS text wins when both exist (120 cases) | **LOADER (deliberate)** | Rechtspraak is the ORIGIN for these national decisions (CELLAR's JURE collection redistributes them); its XML-sourced text is clean and exactly scoped to the ECLI. The CELLAR pdf rendition stays retrievable from the HF corpus. |
+| CELLAR text fills the gap when RS has none (55 cases) | **LOADER** | `source='CELLAR_ITEM'`, `text_format='pdf'`. Without this the 55 had no fulltext at all — the original loader filtered its ECLI map on `cases.source='CJEU'` and silently dropped every cross-corpus parquet text (fixed in 50_load_cjeu.py; staging backfilled 2026-07-07). |
+| One text per (case, language) | **SCHEMA (deliberate)** | `case_text` is UNIQUE on (case_id, language); the API and views join on that key. Storing both renditions would relax this to include source for the benefit of 120 lower-quality duplicates-with-extra-headers — not worth it. |
+
 ## case_citation
 
 | Limitation | Whose | Detail |
