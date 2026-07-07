@@ -40,6 +40,7 @@ CREATE INDEX IF NOT EXISTS "case_idx_title_trgm"     ON "cle_v2"."cases" USING g
 CREATE INDEX IF NOT EXISTS "case_idx_date_ecli"      ON "cle_v2"."cases" ("date_decision" DESC, "ecli");
 CREATE INDEX IF NOT EXISTS "case_idx_importance"     ON "cle_v2"."cases" ("importance") WHERE "importance" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS "case_idx_case_number_trgm" ON "cle_v2"."cases" USING gin ("case_number" gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS "case_idx_case_number" ON "cle_v2"."cases" ("case_number");
 CREATE INDEX IF NOT EXISTS "case_text_idx_case_id"          ON "cle_v2"."case_text" ("case_id");
 CREATE INDEX IF NOT EXISTS "case_text_idx_fulltext_tsv"     ON "cle_v2"."case_text" USING gin ("fulltext_tsv");
 CREATE INDEX IF NOT EXISTS "case_text_idx_summary_tsv"      ON "cle_v2"."case_text" USING gin ("summary_tsv");

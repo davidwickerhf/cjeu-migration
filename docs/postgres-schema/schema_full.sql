@@ -343,6 +343,7 @@ CREATE INDEX "case_idx_date_ecli"      ON "public"."cases" ("date_decision" DESC
 CREATE INDEX "case_idx_importance"     ON "public"."cases" ("importance") WHERE "importance" IS NOT NULL;
 -- API zaaknummer/case-number substring search (ILIKE '%…%')
 CREATE INDEX "case_idx_case_number_trgm" ON "public"."cases" USING gin ("case_number" gin_trgm_ops);
+CREATE INDEX "case_idx_case_number" ON "public"."cases" ("case_number");
 
 CREATE TABLE "public"."case_text" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,

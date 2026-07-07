@@ -292,7 +292,7 @@ def main() -> int:
         LEFT JOIN LATERAL (
             SELECT c2.id FROM cases c2
             WHERE c2.source = 'CJEU'
-              AND c2.case_number = (regexp_match(coalesce(a.parent_raw,''), '(?:case/)([CTF]-[0-9]+%2F[0-9]+|[CTF]-[0-9]+/[0-9]+)'))[1]
+              AND c2.case_number = replace((regexp_match(coalesce(a.parent_raw,''), '(?:case/)([CTF]-[0-9]+%2F[0-9]+|[CTF]-[0-9]+/[0-9]+)'))[1], '%2F', '/')
             LIMIT 1
         ) p ON true
         ON CONFLICT (case_id) DO NOTHING
