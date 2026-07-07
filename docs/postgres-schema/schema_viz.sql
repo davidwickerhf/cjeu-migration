@@ -917,16 +917,16 @@ ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_source 
 -- delete or dropping the edge. Loader must therefore ALWAYS populate
 -- target_ecli_raw / target_celex_raw, even when target_case_id resolves.
 ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id") ON DELETE SET NULL;
-ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "public"."case_segment"("id");
+ALTER TABLE "public"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "public"."case_segment"("id") ON DELETE SET NULL;
 
 ALTER TABLE "public"."case_citation_counts" ADD CONSTRAINT fk_case_citation_counts    FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 
 -- CJEU
 ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_case          FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_formation     FOREIGN KEY ("formation_id")          REFERENCES "public"."court_formation"("id");
-ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "public"."cases"("id");
+ALTER TABLE "public"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "public"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_case        FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "public"."cases"("id");
+ALTER TABLE "public"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "public"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "public"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_document_case FOREIGN KEY ("case_id")               REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 
 -- ECHR
@@ -943,12 +943,12 @@ ALTER TABLE "public"."echr_extractor_segments" ADD CONSTRAINT fk_echr_extractor_
 ALTER TABLE "public"."rs_document"                    ADD CONSTRAINT fk_rs_document_case             FOREIGN KEY ("case_id")             REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."rs_document_external_authority" ADD CONSTRAINT fk_rs_document_ext_authority    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_source    FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
-ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."cases"("ecli");
+ALTER TABLE "public"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "public"."cases"("ecli") ON DELETE SET NULL;
 ALTER TABLE "public"."rs_document_publication"        ADD CONSTRAINT fk_rs_document_publication_case FOREIGN KEY ("case_id")             REFERENCES "public"."rs_document"("case_id") ON DELETE CASCADE;
 
 -- Cross-corpus bridge
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."cases"("id");
-ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id");
+ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "public"."cases"("id") ON DELETE SET NULL;
+ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "public"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "public"."lido_link" ADD CONSTRAINT fk_lido_link_target_provision FOREIGN KEY ("target_provision_id") REFERENCES "public"."legal_provision"("id");
 
 -- Downstream
@@ -957,12 +957,12 @@ ALTER TABLE "public"."case_segment"            ADD CONSTRAINT fk_case_segment_la
 ALTER TABLE "public"."case_entity"             ADD CONSTRAINT fk_case_entity_case              FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_case     FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_language FOREIGN KEY ("language")    REFERENCES "public"."language"("iso_code");
-ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_parent   FOREIGN KEY ("parent_version_id") REFERENCES "public"."case_summary_version"("id");
-ALTER TABLE "public"."case_cluster"            ADD CONSTRAINT fk_case_cluster_snapshot         FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id");
+ALTER TABLE "public"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_parent   FOREIGN KEY ("parent_version_id") REFERENCES "public"."case_summary_version"("id") ON DELETE SET NULL;
+ALTER TABLE "public"."case_cluster"            ADD CONSTRAINT fk_case_cluster_snapshot         FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_case  FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_clus  FOREIGN KEY ("cluster_id")  REFERENCES "public"."case_cluster"("id");
+ALTER TABLE "public"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_clus  FOREIGN KEY ("cluster_id")  REFERENCES "public"."case_cluster"("id") ON DELETE CASCADE;
 ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_case      FOREIGN KEY ("case_id")     REFERENCES "public"."cases"("id") ON DELETE CASCADE;
-ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_snapshot  FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id");
+ALTER TABLE "public"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_snapshot  FOREIGN KEY ("snapshot_id") REFERENCES "public"."network_snapshot"("id") ON DELETE CASCADE;
 
 
 -- =============================================================================

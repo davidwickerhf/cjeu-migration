@@ -148,6 +148,22 @@ BEGIN
 END;
 $$;
 
+-- Lossless case deletion (DECISIONS.md D11): resolved citations carry no raw
+-- target (R5 keeps raw only while unresolved), so the ON DELETE SET NULL on
+-- case_citation.target_case_id would erase the link entirely. Before a case
+-- row disappears, stamp its identifiers back onto incoming citations — the
+-- SET NULL then degrades them to the ordinary unresolved state instead.
+CREATE OR REPLACE FUNCTION "cle_v2".case_delete_preserve_citation_raw()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE "cle_v2".case_citation
+     SET target_ecli_raw  = COALESCE(target_ecli_raw,  OLD.ecli),
+         target_celex_raw = COALESCE(target_celex_raw, OLD.celex_id)
+   WHERE target_case_id = OLD.id;
+  RETURN OLD;
+END;
+$$;
+
 
 -- =============================================================================
 -- Lookups

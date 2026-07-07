@@ -116,6 +116,35 @@ absorbed:
 Query rule: everything reads `case_law_reference`; Dutch-specific API
 endpoints read the compat view.
 
+### D11 — Deletion behavior: every FK carries a deliberate ON DELETE rule
+
+Case deletion is a real scenario (RS depublication — `opendata_status =
+'depublicated'` exists in the source feed — plus GDPR/correction requests),
+so `DELETE FROM cases WHERE ecli = …` must work in one statement, never be
+blocked by another case's data, and never silently lose link information.
+Three tiers (audited + smoke-tested live on the fully loaded staging DB,
+2026-07-07):
+
+| Tier | Rule | FKs |
+|---|---|---|
+| **Ownership → `CASCADE`** | satellite rows are meaningless without their anchor | all `case_id` FKs (case_text, case_judge, case_party, case_domain, case_law_reference, citation *source*, counts, cjeu/echr/rs documents, segments, entities, summaries, memberships, metrics); chained satellites (`item_id`→echr_document, `case_id`→rs_document, label→domain, alias→legislation); analytics ownership (`snapshot_id`→network_snapshot, `cluster_id`→case_cluster) |
+| **Cross-case link → `SET NULL`** | a link *about* another case must degrade, not block its deletion | `case_citation.target_case_id` (R5), `case_citation.context_segment_id` (also unblocks re-segmentation), `rs_document_formal_relation.target_ecli` (raw stays in `target_identifier`), `cjeu_ag_opinion.parent_case_id` (re-resolvable via `case_number`), `cjeu_document.dossier_parent_case_id` (raw stays in `dossier_uri`), `lido_link.source/target_case_id` (raw ECLIs/URIs kept), `case_summary_version.parent_version_id` |
+| **Lookup → default `NO ACTION`** | deleting a language/court/domain/judge/party/legislation still in use SHOULD fail loudly — that is a curation act, not a data operation | all remaining FKs |
+
+**Lossless degrade for resolved citations**: R5 keeps raw targets only while
+unresolved, so `SET NULL` alone would erase a resolved citation's target on
+case delete. `trg_cases_preserve_citation_raw` (BEFORE DELETE on `cases`)
+stamps the dying case's `ecli`/`celex_id` back onto incoming citations
+first — the row then degrades to the ordinary unresolved state and remains
+re-resolvable if the case is ever re-ingested. Edge case: if an identical
+unresolved row already exists, `case_citation_uk_unresolved_*` fails the
+delete loudly rather than merging silently.
+
+Verified live (transaction + rollback): deleting a CJEU case cascaded all
+satellites and degraded its 2 incoming citations with raw identifiers
+preserved; deleting an RS case removed its 17 segments and nulled the
+incoming formal relation while keeping `target_identifier`.
+
 ## Adoptions from the interim schema draft (reviewed 2026-07-06)
 
 A colleague's interim schema (predating the ECHR/RS/CJEU extension work) was

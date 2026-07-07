@@ -176,7 +176,7 @@ ALTER TABLE "cle_v2"."case_citation"     ADD CONSTRAINT fk_case_citation_source 
 ALTER TABLE "cle_v2"."case_citation" DROP CONSTRAINT IF EXISTS fk_case_citation_target;
 ALTER TABLE "cle_v2"."case_citation"     ADD CONSTRAINT fk_case_citation_target       FOREIGN KEY ("target_case_id")      REFERENCES "cle_v2"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."case_citation" DROP CONSTRAINT IF EXISTS fk_case_citation_context;
-ALTER TABLE "cle_v2"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "cle_v2"."case_segment"("id");
+ALTER TABLE "cle_v2"."case_citation"     ADD CONSTRAINT fk_case_citation_context      FOREIGN KEY ("context_segment_id")  REFERENCES "cle_v2"."case_segment"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."case_citation_counts" DROP CONSTRAINT IF EXISTS fk_case_citation_counts;
 ALTER TABLE "cle_v2"."case_citation_counts" ADD CONSTRAINT fk_case_citation_counts    FOREIGN KEY ("case_id")             REFERENCES "cle_v2"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."cjeu_document" DROP CONSTRAINT IF EXISTS fk_cjeu_document_case;
@@ -184,11 +184,11 @@ ALTER TABLE "cle_v2"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_c
 ALTER TABLE "cle_v2"."cjeu_document" DROP CONSTRAINT IF EXISTS fk_cjeu_document_formation;
 ALTER TABLE "cle_v2"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_formation     FOREIGN KEY ("formation_id")          REFERENCES "cle_v2"."court_formation"("id");
 ALTER TABLE "cle_v2"."cjeu_document" DROP CONSTRAINT IF EXISTS fk_cjeu_document_dossier;
-ALTER TABLE "cle_v2"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "cle_v2"."cases"("id");
+ALTER TABLE "cle_v2"."cjeu_document"           ADD CONSTRAINT fk_cjeu_document_dossier       FOREIGN KEY ("dossier_parent_case_id") REFERENCES "cle_v2"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."cjeu_ag_opinion" DROP CONSTRAINT IF EXISTS fk_cjeu_ag_opinion_case;
 ALTER TABLE "cle_v2"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_case        FOREIGN KEY ("case_id")               REFERENCES "cle_v2"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."cjeu_ag_opinion" DROP CONSTRAINT IF EXISTS fk_cjeu_ag_opinion_parent;
-ALTER TABLE "cle_v2"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "cle_v2"."cases"("id");
+ALTER TABLE "cle_v2"."cjeu_ag_opinion"         ADD CONSTRAINT fk_cjeu_ag_opinion_parent      FOREIGN KEY ("parent_case_id")        REFERENCES "cle_v2"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."cjeu_national_document" DROP CONSTRAINT IF EXISTS fk_cjeu_national_document_case;
 ALTER TABLE "cle_v2"."cjeu_national_document"  ADD CONSTRAINT fk_cjeu_national_document_case FOREIGN KEY ("case_id")               REFERENCES "cle_v2"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."echr_document" DROP CONSTRAINT IF EXISTS fk_echr_document_case;
@@ -208,13 +208,13 @@ ALTER TABLE "cle_v2"."rs_document_external_authority" ADD CONSTRAINT fk_rs_docum
 ALTER TABLE "cle_v2"."rs_document_formal_relation" DROP CONSTRAINT IF EXISTS fk_rs_document_formal_source;
 ALTER TABLE "cle_v2"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_source    FOREIGN KEY ("case_id")             REFERENCES "cle_v2"."rs_document"("case_id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."rs_document_formal_relation" DROP CONSTRAINT IF EXISTS fk_rs_document_formal_target;
-ALTER TABLE "cle_v2"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "cle_v2"."cases"("ecli");
+ALTER TABLE "cle_v2"."rs_document_formal_relation"    ADD CONSTRAINT fk_rs_document_formal_target    FOREIGN KEY ("target_ecli")         REFERENCES "cle_v2"."cases"("ecli") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."rs_document_publication" DROP CONSTRAINT IF EXISTS fk_rs_document_publication_case;
 ALTER TABLE "cle_v2"."rs_document_publication"        ADD CONSTRAINT fk_rs_document_publication_case FOREIGN KEY ("case_id")             REFERENCES "cle_v2"."rs_document"("case_id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."lido_link" DROP CONSTRAINT IF EXISTS fk_lido_link_source_case;
-ALTER TABLE "cle_v2"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "cle_v2"."cases"("id");
+ALTER TABLE "cle_v2"."lido_link" ADD CONSTRAINT fk_lido_link_source_case      FOREIGN KEY ("source_case_id")      REFERENCES "cle_v2"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."lido_link" DROP CONSTRAINT IF EXISTS fk_lido_link_target_case;
-ALTER TABLE "cle_v2"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "cle_v2"."cases"("id");
+ALTER TABLE "cle_v2"."lido_link" ADD CONSTRAINT fk_lido_link_target_case      FOREIGN KEY ("target_case_id")      REFERENCES "cle_v2"."cases"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."lido_link" DROP CONSTRAINT IF EXISTS fk_lido_link_target_provision;
 ALTER TABLE "cle_v2"."lido_link" ADD CONSTRAINT fk_lido_link_target_provision FOREIGN KEY ("target_provision_id") REFERENCES "cle_v2"."legal_provision"("id");
 ALTER TABLE "cle_v2"."case_segment" DROP CONSTRAINT IF EXISTS fk_case_segment_case;
@@ -228,17 +228,17 @@ ALTER TABLE "cle_v2"."case_summary_version"    ADD CONSTRAINT fk_case_summary_ve
 ALTER TABLE "cle_v2"."case_summary_version" DROP CONSTRAINT IF EXISTS fk_case_summary_version_language;
 ALTER TABLE "cle_v2"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_language FOREIGN KEY ("language")    REFERENCES "cle_v2"."language"("iso_code");
 ALTER TABLE "cle_v2"."case_summary_version" DROP CONSTRAINT IF EXISTS fk_case_summary_version_parent;
-ALTER TABLE "cle_v2"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_parent   FOREIGN KEY ("parent_version_id") REFERENCES "cle_v2"."case_summary_version"("id");
+ALTER TABLE "cle_v2"."case_summary_version"    ADD CONSTRAINT fk_case_summary_version_parent   FOREIGN KEY ("parent_version_id") REFERENCES "cle_v2"."case_summary_version"("id") ON DELETE SET NULL;
 ALTER TABLE "cle_v2"."case_cluster" DROP CONSTRAINT IF EXISTS fk_case_cluster_snapshot;
-ALTER TABLE "cle_v2"."case_cluster"            ADD CONSTRAINT fk_case_cluster_snapshot         FOREIGN KEY ("snapshot_id") REFERENCES "cle_v2"."network_snapshot"("id");
+ALTER TABLE "cle_v2"."case_cluster"            ADD CONSTRAINT fk_case_cluster_snapshot         FOREIGN KEY ("snapshot_id") REFERENCES "cle_v2"."network_snapshot"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."case_cluster_membership" DROP CONSTRAINT IF EXISTS fk_case_cluster_membership_case;
 ALTER TABLE "cle_v2"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_case  FOREIGN KEY ("case_id")     REFERENCES "cle_v2"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."case_cluster_membership" DROP CONSTRAINT IF EXISTS fk_case_cluster_membership_clus;
-ALTER TABLE "cle_v2"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_clus  FOREIGN KEY ("cluster_id")  REFERENCES "cle_v2"."case_cluster"("id");
+ALTER TABLE "cle_v2"."case_cluster_membership" ADD CONSTRAINT fk_case_cluster_membership_clus  FOREIGN KEY ("cluster_id")  REFERENCES "cle_v2"."case_cluster"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."case_network_metric" DROP CONSTRAINT IF EXISTS fk_case_network_metric_case;
 ALTER TABLE "cle_v2"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_case      FOREIGN KEY ("case_id")     REFERENCES "cle_v2"."cases"("id") ON DELETE CASCADE;
 ALTER TABLE "cle_v2"."case_network_metric" DROP CONSTRAINT IF EXISTS fk_case_network_metric_snapshot;
-ALTER TABLE "cle_v2"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_snapshot  FOREIGN KEY ("snapshot_id") REFERENCES "cle_v2"."network_snapshot"("id");
+ALTER TABLE "cle_v2"."case_network_metric"     ADD CONSTRAINT fk_case_network_metric_snapshot  FOREIGN KEY ("snapshot_id") REFERENCES "cle_v2"."network_snapshot"("id") ON DELETE CASCADE;
 
 -- ============ Triggers ============
 CREATE OR REPLACE TRIGGER trg_case_text_updated_at
@@ -247,6 +247,9 @@ FOR EACH ROW EXECUTE FUNCTION "cle_v2".touch_updated_at();
 CREATE OR REPLACE TRIGGER trg_case_citation_counts
 AFTER INSERT OR UPDATE OR DELETE ON "cle_v2"."case_citation"
 FOR EACH ROW EXECUTE FUNCTION "cle_v2".case_citation_counts_maintain();
+CREATE OR REPLACE TRIGGER trg_cases_preserve_citation_raw
+BEFORE DELETE ON "cle_v2"."cases"
+FOR EACH ROW EXECUTE FUNCTION "cle_v2".case_delete_preserve_citation_raw();
 CREATE OR REPLACE TRIGGER trg_echr_document_updated_at
 BEFORE UPDATE ON "cle_v2"."echr_document"
 FOR EACH ROW EXECUTE FUNCTION "cle_v2".touch_updated_at();
