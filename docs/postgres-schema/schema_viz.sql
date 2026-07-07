@@ -1,8 +1,4 @@
--- =============================================================================
--- schema_viz.sql — GENERATED from schema_full.sql. DO NOT EDIT; DO NOT DEPLOY.
--- Visualization-friendly variant for chartdb / drawdb DDL import.
--- The deployable schema is schema_full.sql.
--- =============================================================================
+-- GENERATED from schema_full.sql for chartdb/drawdb import. DO NOT DEPLOY.
 
 -- =============================================================================
 -- CLE unified schema — full target (CJEU + ECHR + Rechtspraak)
@@ -276,6 +272,7 @@ CREATE INDEX "case_idx_date_ecli"      ON "public"."cases" ("date_decision" DESC
 CREATE INDEX "case_idx_importance"     ON "public"."cases" ("importance") WHERE "importance" IS NOT NULL;
 -- API zaaknummer/case-number substring search (ILIKE '%…%')
 CREATE INDEX "case_idx_case_number_trgm" ON "public"."cases" USING gin ("case_number" gin_trgm_ops);
+CREATE INDEX "case_idx_case_number" ON "public"."cases" ("case_number");
 
 CREATE TABLE "public"."case_text" (
     "id" bigserial NOT NULL,
@@ -283,6 +280,7 @@ CREATE TABLE "public"."case_text" (
     "language" text NOT NULL,
     "fulltext" text,
     "summary" text,
+    "summary_source" text,                                 -- provenance of the upstream summary (CELLAR / RS inhoudsindicatie / …)
     -- DECIDED: fulltext_tsv stays a GENERATED column (covers fulltext only).
     -- The loader truncates to_tsvector input past ~1M chars so oversized
     -- judgments can't trip the 1 MB tsvector limit and fail the INSERT
@@ -376,10 +374,10 @@ CREATE INDEX "case_law_reference_idx_raw_label"   ON "public"."case_law_referenc
 -- UNIQUE constraint would treat NULL targets as always-distinct):
 CREATE UNIQUE INDEX "case_law_reference_uk_provision" ON "public"."case_law_reference"
     ("case_id", "provision_id", "role", "source_dataset")
-    WHERE "provision_id" IS NOT NULL;
+    WHERE "provision_id" IS NOT NULL AND "raw_resource" IS NULL;
 CREATE UNIQUE INDEX "case_law_reference_uk_legislation" ON "public"."case_law_reference"
     ("case_id", "legislation_id", "role", "source_dataset")
-    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL;
+    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL AND "raw_resource" IS NULL;
 CREATE UNIQUE INDEX "case_law_reference_uk_raw" ON "public"."case_law_reference"
     ("case_id", "raw_scheme", "raw_resource", COALESCE("raw_subdivision", ''), "role", "source_dataset")
     WHERE "provision_id" IS NULL AND "legislation_id" IS NULL AND "raw_resource" IS NOT NULL;
@@ -459,6 +457,8 @@ CREATE TABLE "public"."cjeu_document" (
     "journal_refs" text,             -- OJ references
     "erecueil_ref" text,             -- European Court Reports citation
     "local_identifier" text,
+    "citations_extra_info" text,     -- cited-case names + outcome descriptors (72% populated; outcome parse = future)
+    "national_judgement_xml" text,   -- raw XML of national proceedings behind preliminary rulings (22.5%; cross-corpus fanout = future)
     "dossier_uri" text,              -- groups Opinion + Judgment + Order (18.8% populated)
     "dossier_parent_case_id" bigint, -- resolved post-load
     PRIMARY KEY ("id"),
@@ -491,6 +491,7 @@ CREATE TABLE "public"."cjeu_national_document" (
     "national_act_reference_national" text,
     "national_act_reference_international" text,
     "national_act_reference_european" text,
+    "national_based_on_resource_legal" text, -- CELLAR URI(s) of the EU act the national decision was based on
     PRIMARY KEY ("id"),
     UNIQUE ("case_id")
 );
