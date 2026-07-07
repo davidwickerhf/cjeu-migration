@@ -406,11 +406,11 @@ def main() -> int:
         ecli_to_id = dict(cur.fetchall())
         cur.execute("SELECT iso_code FROM language")
         known_langs = {r[0] for r in cur.fetchall()}
-        cur.execute("""SELECT ct.case_id, ct.language FROM case_text ct
+        cur.execute("""SELECT ct.case_id, ct.language, ct.source FROM case_text ct
                        JOIN cjeu_document d ON d.case_id = ct.case_id""")
-        # resume-safe skip; also the origin-wins policy: for cross-corpus
-        # cases the RS-loaded 'nl' text (clean per-ECLI XML) beats the
-        # CELLAR pdf rendition (see DATA_QUALITY.md — case_text)
+        # resume-safe skip keyed on (case, language, SOURCE) — D12: for the
+        # cross-corpus cases the RS text and the CELLAR rendition are BOTH
+        # stored; case_text_canonical picks the origin for single-text reads
         seen_pairs = set(cur.fetchall())
         pf = pq.ParquetFile(ft_p)
         n = 0
@@ -423,13 +423,14 @@ def main() -> int:
             for e, l, t, s2, f2, m2 in rows:
                 cid = ecli_to_id.get(str(e).strip().upper()) if e else None
                 lang = (l or "").lower()
-                if not cid or not lang or (cid, lang) in seen_pairs:
+                src = s2 or "UNKNOWN"   # source is NOT NULL under the D12 unique key
+                if not cid or not lang or (cid, lang, src) in seen_pairs:
                     continue
-                seen_pairs.add((cid, lang))
+                seen_pairs.add((cid, lang, src))
                 if lang not in known_langs:
                     cur.execute("INSERT INTO language (iso_code, name) VALUES (%s,%s) ON CONFLICT DO NOTHING", (lang, lang))
                     known_langs.add(lang)
-                out.append((cid, lang, t, s2, f2, m2))
+                out.append((cid, lang, t, src, f2, m2))
             if out:
                 copy_rows(cur, "case_text",
                           ("case_id","language","fulltext","source","text_format","missing_reasons"), out)
@@ -450,12 +451,13 @@ def main() -> int:
         cur.execute("""
         UPDATE case_text ct SET summary = s.summary, summary_source = s.ssrc
         FROM stg_sum s JOIN cases c ON c.ecli = s.ecli
-        WHERE ct.case_id = c.id AND ct.language = s.lang AND ct.summary IS NULL""")
+        WHERE ct.case_id = c.id AND ct.language = s.lang AND ct.summary IS NULL
+          AND ct.source <> 'RECHTSPRAAK'  -- D12: CJEU summaries never land on the RS-origin text row""")
         cur.execute("""
         INSERT INTO case_text (case_id, language, summary, summary_source, source)
         SELECT c.id, s.lang, s.summary, s.ssrc, 'CELLAR_ITEM'
         FROM stg_sum s JOIN cases c ON c.ecli = s.ecli
-        ON CONFLICT (case_id, language) DO NOTHING""")
+        ON CONFLICT (case_id, language, source) DO NOTHING""")
 
         cur.execute("""INSERT INTO migration_manifest (step) VALUES ('50_load_cjeu')
                        ON CONFLICT (step) DO UPDATE SET completed_at = now()""")

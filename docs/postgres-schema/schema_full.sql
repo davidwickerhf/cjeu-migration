@@ -386,13 +386,16 @@ CREATE TABLE "public"."case_text" (
     ) STORED,
     "summary_embedding" vector(768),                       -- DECIDED: 768 (legacy model dimension); a model switch means an index rebuild, decide before bulk load
     "embedding_model" text,
-    "source" text,                                         -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
+    "source" text NOT NULL,                                -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
     "text_format" text,                                    -- xhtml | html | pdf | fmx4
     "missing_reasons" text,                                -- 'FULLTEXT_UNAVAILABLE_UPSTREAM' | ...
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id"),
-    UNIQUE ("case_id", "language")                         -- exactly one row per case × language
+    -- D12: one row per case × language × SOURCE. Cross-corpus cases (the 175
+    -- Dutch sector-8 decisions in both RS and CJEU) keep BOTH renditions of
+    -- the same-language text; single-text consumers read case_text_canonical.
+    UNIQUE ("case_id", "language", "source")
 );
 CREATE INDEX "case_text_idx_case_id"          ON "public"."case_text" ("case_id");
 CREATE INDEX "case_text_idx_fulltext_tsv"     ON "public"."case_text" USING gin ("fulltext_tsv");
@@ -961,11 +964,24 @@ CREATE TABLE "public"."search_query_log" (
 -- Views (adapted from legacy)
 -- =============================================================================
 
+-- D12: one canonical text per (case × language) for single-text consumers
+-- (search, the legacy-shaped views, API defaults). The origin corpus wins
+-- when several sources carry the same language; "show all renditions" reads
+-- case_text directly (source is the label).
+CREATE OR REPLACE VIEW "public"."case_text_canonical" AS
+SELECT DISTINCT ON (t."case_id", t."language") t.*
+FROM "public"."case_text" t
+ORDER BY t."case_id", t."language",
+         CASE t."source" WHEN 'RECHTSPRAAK' THEN 1 WHEN 'HUDOC' THEN 2
+                         WHEN 'INFOCURIA_BLOB_HTML' THEN 3 WHEN 'CELLAR_ITEM' THEN 4
+                         ELSE 5 END,
+         t."id";
+
 -- Convenience view: ECHR document + fulltext joined on (case_id, language).
 CREATE OR REPLACE VIEW "public"."echr_v_document_with_text" AS
 SELECT d.*, t."fulltext", t."fulltext_tsv"
 FROM "public"."echr_document" d
-LEFT JOIN "public"."case_text" t
+LEFT JOIN "public"."case_text_canonical" t
        ON t."case_id" = d."case_id"
       AND t."language" = d."language";
 
@@ -980,7 +996,7 @@ WHERE "doctype" ILIKE '%JUD%' OR "doctype" ILIKE '%DEC%';
 CREATE OR REPLACE VIEW "public"."rs_v_document_with_text" AS
 SELECT d.*, t."summary", t."fulltext", t."fulltext_tsv"
 FROM "public"."rs_document" d
-LEFT JOIN "public"."case_text" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
+LEFT JOIN "public"."case_text_canonical" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
 
 -- Legacy-shaped Dutch law-reference rows, reconstructed from the shared
 -- case_law_reference (raw_scheme='bwb'). Replaces the legacy

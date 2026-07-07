@@ -41,7 +41,7 @@ FROM legacy.rs_document d
 LEFT JOIN legacy.rs_document_text t ON t.ecli = d.ecli
 JOIN cases k ON k.ecli = upper(btrim(d.ecli))
 WHERE :rs_filter AND (t.fulltext IS NOT NULL OR d.summary IS NOT NULL)
-ON CONFLICT (case_id, language) DO NOTHING;
+ON CONFLICT (case_id, language, source) DO NOTHING;
 
 -- 4. domains -> domain + case_domain
 INSERT INTO domain (scheme, name)

@@ -367,8 +367,8 @@ def main():
         out.append(f"| cases | 46,169 (ecli+celex bearing) | " + q(target, "SELECT count(*) FROM cle_v2.cases WHERE source='CJEU'")
                    + f" + {xover} cross-corpus (Dutch sector-8 decisions already present via Rechtspraak — ONE row carrying both corpora's satellites; zero loss) |")
         out.append(f"| fulltexts | 591,021 rows in parquet | " + q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cases c ON c.id=ct.case_id WHERE c.source='CJEU'") + " |")
-        xtext = q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cjeu_document d ON d.case_id=ct.case_id JOIN cle_v2.rs_document r ON r.case_id=ct.case_id WHERE ct.source='CELLAR_ITEM'")
-        out.append(f"| cross-corpus nl fulltexts | 174 in parquet | {xtext} loaded (CELLAR_ITEM, where RS had no text); the rest keep the Rechtspraak-origin text — the CELLAR pdf rendition differs and is NOT a duplicate (DATA_QUALITY.md — case_text) |")
+        xtext = q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cjeu_document d ON d.case_id=ct.case_id JOIN cle_v2.rs_document r ON r.case_id=ct.case_id WHERE ct.source='CELLAR_ITEM' AND ct.fulltext IS NOT NULL")
+        out.append(f"| cross-corpus nl fulltexts | 174 in parquet | {xtext} loaded as CELLAR_ITEM rows — dual-source with the Rechtspraak text where both exist (D12); case_text_canonical prefers the origin |")
 
     open("docs/postgres-schema/COVERAGE_PROOF.md", "w").write("\n".join(out) + "\n")
     print(f"OK — {len(legacy_cols)} legacy cols + {len(cj_cols)}+{len(ft_cols)} CJEU fields all accounted for")

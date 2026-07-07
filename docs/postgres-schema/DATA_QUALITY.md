@@ -70,7 +70,7 @@ alpha-3 codes + 92 CJEU agent name strings) backing ~297k case links.
 ## case_text — cross-corpus Dutch texts (the 175 RS∩CJEU cases)
 
 For the 175 Dutch sector-8 decisions present in both corpora, BOTH sources
-can provide a Dutch fulltext, and they are **never identical** (verified
+provide a Dutch fulltext, and they are **never identical** (verified
 2026-07-07: 0 of 120 overlapping pairs match on whitespace-normalized md5).
 The CELLAR variant is a PDF extraction (`text_format='pdf'`): hard-wrapped
 lines, document header often missing, but frequently *longer* because the
@@ -79,9 +79,10 @@ publishes as a separate ECLI (and which we therefore already carry).
 
 | Rule | Whose | Detail |
 |---|---|---|
-| RS text wins when both exist (120 cases) | **LOADER (deliberate)** | Rechtspraak is the ORIGIN for these national decisions (CELLAR's JURE collection redistributes them); its XML-sourced text is clean and exactly scoped to the ECLI. The CELLAR pdf rendition stays retrievable from the HF corpus. |
-| CELLAR text fills the gap when RS has none (55 cases) | **LOADER** | `source='CELLAR_ITEM'`, `text_format='pdf'`. Without this the 55 had no fulltext at all — the original loader filtered its ECLI map on `cases.source='CJEU'` and silently dropped every cross-corpus parquet text (fixed in 50_load_cjeu.py; staging backfilled 2026-07-07). |
-| One text per (case, language) | **SCHEMA (deliberate)** | `case_text` is UNIQUE on (case_id, language); the API and views join on that key. Storing both renditions would relax this to include source for the benefit of 120 lower-quality duplicates-with-extra-headers — not worth it. |
+| Both renditions stored (D12) | **SCHEMA (deliberate)** | `case_text` is UNIQUE on (case_id, language, **source**); the 120 overlap cases carry an RS row AND a CELLAR row for 'nl' (294 rows across the 175 cases). The frontend lists renditions with `source` as the label. |
+| Single-text reads go through `case_text_canonical` | **SCHEMA (deliberate)** | one row per (case × language), origin preferred: RECHTSPRAAK > HUDOC > INFOCURIA_BLOB_HTML > CELLAR_ITEM. The `rs_v_`/`echr_v_` views join it, so they never fan out. |
+| CELLAR text is the ONLY text for 55 cases | **SOURCE** | Rechtspraak has no text for them; canonical resolves to the CELLAR pdf rendition there. (These 55 — and the other 119 renditions — were originally dropped by a loader ECLI-map filter on `cases.source='CJEU'`; fixed in 50_load_cjeu.py, staging backfilled 2026-07-07.) |
+| CELLAR pdf renditions are lower typographic quality | **SOURCE** | pdf-extracted: hard line wraps, missing headers. Stored verbatim; the clean RS text stays canonical where it exists. |
 
 ## case_citation
 

@@ -476,4 +476,4 @@
 |---|---:|---:|
 | cases | 46,169 (ecli+celex bearing) | 45994 + 175 cross-corpus (Dutch sector-8 decisions already present via Rechtspraak — ONE row carrying both corpora's satellites; zero loss) |
 | fulltexts | 591,021 rows in parquet | 620726 |
-| cross-corpus nl fulltexts | 174 in parquet | 55 loaded (CELLAR_ITEM, where RS had no text); the rest keep the Rechtspraak-origin text — the CELLAR pdf rendition differs and is NOT a duplicate (DATA_QUALITY.md — case_text) |
+| cross-corpus nl fulltexts | 174 in parquet | 174 loaded as CELLAR_ITEM rows — dual-source with the Rechtspraak text where both exist (D12); case_text_canonical prefers the origin |

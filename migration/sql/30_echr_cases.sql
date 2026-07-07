@@ -88,7 +88,7 @@ WHERE t.fulltext IS NOT NULL
 ORDER BY d.case_id, d.language,
          CASE WHEN d.doctype LIKE '%JUD%' THEN 1 WHEN d.doctype LIKE '%DEC%' THEN 2 ELSE 3 END,
          d.item_id
-ON CONFLICT (case_id, language) DO NOTHING;
+ON CONFLICT (case_id, language, source) DO NOTHING;
 
 -- 4. appnos + articles (per-variant satellites; protocol parsed for pure P-codes)
 INSERT INTO echr_document_appno (item_id, appno, source, created_at)

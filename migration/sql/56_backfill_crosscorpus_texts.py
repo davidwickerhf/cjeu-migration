@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""One-off backfill: CELLAR Dutch fulltexts for the cross-corpus cases.
+"""Backfill: CELLAR Dutch fulltexts for the cross-corpus cases (D12).
 
 The original 50_load_cjeu.py built its ECLI map from cases.source='CJEU',
 which silently skipped every fulltexts.parquet row belonging to the ~175
-Dutch sector-8 decisions anchored to RS-sourced cases rows. For 55 of them
-Rechtspraak provided no text either — this script loads those from the HF
-parquet. Where an RS text exists it is kept (origin-wins policy, see
-DATA_QUALITY.md — case_text): the guard `WHERE case_text.fulltext IS NULL`
-makes the script idempotent and RS-preserving.
+Dutch sector-8 decisions anchored to RS-sourced cases rows. Under the D12
+dual-source model every CELLAR rendition is stored as its own case_text row
+(unique on case_id × language × source); where Rechtspraak also provides
+the text, both rows coexist and case_text_canonical prefers the origin.
 
-Applied to the caselaw staging DB on 2026-07-07 (55 rows). Fresh runs do
-not need it — 50_load_cjeu.py now maps ECLIs via cjeu_document.
+Idempotent: rows already present (same case/language/source triple) are
+left alone, except that a summary-only row from the loader's summary pass
+gets its fulltext filled in.
+
+Applied to the caselaw staging DB on 2026-07-07 (55 gap texts, then the
+119 remaining renditions after D12). Fresh runs do not need it —
+50_load_cjeu.py now maps ECLIs via cjeu_document and keys its resume set
+on the full triple.
 
 Deps beyond the loader env: duckdb (streams the 25 GB parquet remotely via
 range requests instead of downloading it). Env: TARGET_DB_URL.
@@ -29,17 +34,11 @@ cur.execute("""
     SELECT c.ecli, c.id FROM cases c
     JOIN cjeu_document d ON d.case_id = c.id
     JOIN rs_document r  ON r.case_id = c.id
-    WHERE NOT EXISTS (SELECT 1 FROM case_text t
-                      WHERE t.case_id = c.id AND t.language = 'nl'
-                        AND t.fulltext IS NOT NULL)
 """)
-gap = dict(cur.fetchall())
-print(f"{len(gap)} cross-corpus cases without Dutch fulltext")
-if not gap:
-    pg.close()
-    raise SystemExit(0)
+xover = dict(cur.fetchall())
+print(f"{len(xover)} cross-corpus cases")
 
-inlist = ",".join("'" + e + "'" for e in gap)
+inlist = ",".join("'" + e + "'" for e in xover)
 rows = duckdb.connect().execute(f"""
     SELECT upper(trim(ecli)), lower(text_language), text,
            text_source, text_format, missing_reasons
@@ -55,12 +54,12 @@ for ecli, lang, text, src, fmt, miss in rows:
         INSERT INTO case_text (case_id, language, fulltext, source,
                                text_format, missing_reasons)
         VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (case_id, language) DO UPDATE
-           SET fulltext = EXCLUDED.fulltext, source = EXCLUDED.source,
+        ON CONFLICT (case_id, language, source) DO UPDATE
+           SET fulltext = EXCLUDED.fulltext,
                text_format = EXCLUDED.text_format,
                missing_reasons = EXCLUDED.missing_reasons
          WHERE case_text.fulltext IS NULL
-    """, (gap[ecli], lang or "nl", text, src, fmt, miss))
+    """, (xover[ecli], lang or "nl", text, src or "UNKNOWN", fmt, miss))
     n += cur.rowcount
 pg.commit()
 print(f"{n} case_text rows written")

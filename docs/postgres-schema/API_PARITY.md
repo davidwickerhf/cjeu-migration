@@ -46,9 +46,11 @@
 ### POST /api/echr/text
 
 Legacy: `echr_document ⋈ echr_document_text` by (itemid, language), ordered
-ENG→FRE→rest. New: `cases → case_text` (one row per case × language,
-`UNIQUE(case_id, language)`), same ordering by language rank. One join
-instead of a two-column text-cast join.
+ENG→FRE→rest. New: `cases → case_text_canonical` (one row per case × language;
+the base table is `UNIQUE(case_id, language, source)` since D12 — dual
+renditions for cross-corpus cases — and the canonical view picks the
+origin-preferred row), same ordering by language rank. One join instead
+of a two-column text-cast join.
 
 ### POST /api/rechtspraak — main search
 

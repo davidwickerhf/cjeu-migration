@@ -292,13 +292,14 @@ CREATE TABLE "public"."case_text" (
     "summary_tsv" tsvector,
     "summary_embedding" vector(768),                       -- DECIDED: 768 (legacy model dimension); a model switch means an index rebuild, decide before bulk load
     "embedding_model" text,
-    "source" text,                                         -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
+    "source" text NOT NULL,                                -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
     "text_format" text,                                    -- xhtml | html | pdf | fmx4
     "missing_reasons" text,                                -- 'FULLTEXT_UNAVAILABLE_UPSTREAM' | ...
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id"),
-    UNIQUE ("case_id", "language")                         -- exactly one row per case × language
+    -- D12: one row per case × language × SOURCE (dual-source cross-corpus texts)
+    UNIQUE ("case_id", "language", "source")
 );
 CREATE INDEX "case_text_idx_case_id"          ON "public"."case_text" ("case_id");
 CREATE INDEX "case_text_idx_fulltext_tsv"     ON "public"."case_text" USING gin ("fulltext_tsv");

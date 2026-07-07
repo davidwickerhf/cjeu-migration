@@ -145,6 +145,35 @@ satellites and degraded its 2 incoming citations with raw identifiers
 preserved; deleting an RS case removed its 17 segments and nulled the
 incoming formal relation while keeping `target_identifier`.
 
+### D12 — Dual-source fulltexts: relax `case_text`, never split `cases`
+
+The 175 cross-corpus cases (Dutch sector-8 decisions in both RS and CELLAR)
+can carry the same-language fulltext from BOTH sources, and the renditions
+are never identical (0/120 matched on normalized md5 — CELLAR ships a PDF
+extraction that bundles the P-G conclusion; Rechtspraak ships the clean
+per-ECLI XML text). Both must be stored (lossless rule) and shown per
+source in the frontend.
+
+**Decided**: `case_text` unique key becomes `(case_id, language, source)`
+(`source` now NOT NULL — verified: no NULLs in 1.68M loaded rows). All
+renditions of a case's text in one language coexist as sibling rows;
+`source` is the display label. Single-text consumers (search, the
+legacy-shaped `rs_v_`/`echr_v_` views, API defaults) read the new
+`case_text_canonical` view, which picks one row per (case × language) by
+origin preference: RECHTSPRAAK > HUDOC > INFOCURIA_BLOB_HTML > CELLAR_ITEM.
+CJEU summaries never land on the RS-origin row (loader guard).
+
+**Rejected**: splitting `cases` into one row per source sharing an ECLI.
+That breaks the identity model the whole schema hangs on (R3: one row per
+ECLI is the FK anchor): every natural-key resolution — citations, formal
+relations, segments, LIDO — joins by ECLI and would become ambiguous;
+citation counts would split across rows; graph queries would double-count.
+And it buys nothing: per-source *metadata* is already separated on the
+single row by the satellites (`rs_document` = RS, `cjeu_document` =
+CELLAR), which is exactly the "linked by shared ECLI" structure a split
+would try to recreate. Only the text needed multiplicity, so only
+`case_text` was relaxed.
+
 ## Adoptions from the interim schema draft (reviewed 2026-07-06)
 
 A colleague's interim schema (predating the ECHR/RS/CJEU extension work) was

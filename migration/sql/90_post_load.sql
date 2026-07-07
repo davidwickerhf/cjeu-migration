@@ -258,10 +258,18 @@ BEFORE UPDATE ON "cle_v2"."rs_document"
 FOR EACH ROW EXECUTE FUNCTION "cle_v2".touch_updated_at();
 
 -- ============ Views ============
+CREATE OR REPLACE VIEW "cle_v2"."case_text_canonical" AS
+SELECT DISTINCT ON (t."case_id", t."language") t.*
+FROM "cle_v2"."case_text" t
+ORDER BY t."case_id", t."language",
+         CASE t."source" WHEN 'RECHTSPRAAK' THEN 1 WHEN 'HUDOC' THEN 2
+                         WHEN 'INFOCURIA_BLOB_HTML' THEN 3 WHEN 'CELLAR_ITEM' THEN 4
+                         ELSE 5 END,
+         t."id";
 CREATE OR REPLACE VIEW "cle_v2"."echr_v_document_with_text" AS
 SELECT d.*, t."fulltext", t."fulltext_tsv"
 FROM "cle_v2"."echr_document" d
-LEFT JOIN "cle_v2"."case_text" t
+LEFT JOIN "cle_v2"."case_text_canonical" t
        ON t."case_id" = d."case_id"
       AND t."language" = d."language";
 CREATE OR REPLACE VIEW "cle_v2"."echr_v_judgments_decisions" AS
@@ -270,7 +278,7 @@ WHERE "doctype" ILIKE '%JUD%' OR "doctype" ILIKE '%DEC%';
 CREATE OR REPLACE VIEW "cle_v2"."rs_v_document_with_text" AS
 SELECT d.*, t."summary", t."fulltext", t."fulltext_tsv"
 FROM "cle_v2"."rs_document" d
-LEFT JOIN "cle_v2"."case_text" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
+LEFT JOIN "cle_v2"."case_text_canonical" t ON t."case_id" = d."case_id" AND t."language" = 'nl';
 CREATE OR REPLACE VIEW "cle_v2"."rs_v_document_law_reference" AS
 SELECT
     r."case_id",
