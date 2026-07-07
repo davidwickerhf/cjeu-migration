@@ -173,6 +173,7 @@ def main() -> int:
     with psycopg.connect(url, autocommit=False) as conn:
         cur = conn.cursor()
         cur.execute("SET search_path TO cle_v2, public")
+        cur.execute("SET temp_buffers = '512MB'")   # staging temp tables hold millions of rows; default 8MB starves
 
         # ---------- staging ----------
         cur.execute("""
