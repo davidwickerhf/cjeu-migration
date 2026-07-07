@@ -260,6 +260,12 @@ BEFORE UPDATE ON "cle_v2"."rs_document"
 FOR EACH ROW EXECUTE FUNCTION "cle_v2".touch_updated_at();
 
 -- ============ Views ============
+CREATE OR REPLACE VIEW "cle_v2"."case_source" AS
+SELECT "case_id", 'RS'::text   AS "source" FROM "cle_v2"."rs_document"
+UNION ALL
+SELECT "case_id", 'CJEU'::text FROM "cle_v2"."cjeu_document"
+UNION ALL
+SELECT DISTINCT "case_id", 'ECHR'::text FROM "cle_v2"."echr_document";
 CREATE OR REPLACE VIEW "cle_v2"."case_text_canonical" AS
 SELECT DISTINCT ON (t."case_id", t."language") t.*
 FROM "cle_v2"."case_text" t

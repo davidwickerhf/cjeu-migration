@@ -174,6 +174,29 @@ CELLAR), which is exactly the "linked by shared ECLI" structure a split
 would try to recreate. Only the text needed multiplicity, so only
 `case_text` was relaxed.
 
+### D13 — Corpus membership: derived `case_source` view; `cases.source` = origin only
+
+A case covered by several corpora (the 175 RS ∩ CJEU decisions) is ONE
+`cases` row with one satellite per corpus. Two facts must not be conflated:
+
+- **`cases.source`** is the ORIGIN corpus: the loader that created the row
+  and populated the shared columns (title, dates, court). Single-valued by
+  construction (load order: RS → ECHR → CJEU). It is NOT coverage —
+  filtering `source='CJEU'` misses the 175 (this exact trap caused the
+  dropped cross-corpus texts bug).
+- **Coverage** is the normalized `(case_id, source)` relation exposed by
+  the **`case_source` view**, derived from satellite existence
+  (`rs_document` ∪ `cjeu_document` ∪ distinct `echr_document`). Index-backed
+  (each branch scans a satellite keyed on case_id) and immune to drift —
+  attaching a satellite IS joining the corpus.
+
+**Rejected**: storing coverage — `cases.sources text[]` or a physical
+junction table. Both duplicate what the satellites already assert and can
+silently drift (the migration itself would have written `{RS}` on the 175
+before the CJEU loader ran). Query patterns:
+`WHERE EXISTS (SELECT 1 FROM cjeu_document d WHERE d.case_id = c.id)` for
+filters, `JOIN case_source` / `array_agg(source)` for display.
+
 ## Adoptions from the interim schema draft (reviewed 2026-07-06)
 
 A colleague's interim schema (predating the ECHR/RS/CJEU extension work) was

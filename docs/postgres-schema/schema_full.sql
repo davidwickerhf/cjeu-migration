@@ -327,7 +327,12 @@ CREATE TABLE "public"."cases" (
     "id" bigint GENERATED ALWAYS AS IDENTITY,
     "ecli" text UNIQUE,
     "item_id" text UNIQUE,           -- external primary identifier (HUDOC itemid, CELLAR cellar_id, RS ecli)
-    "source" text,                   -- 'CJEU' | 'ECHR' | 'RS'
+    "source" text,                   -- ORIGIN corpus only: 'CJEU' | 'ECHR' | 'RS' — the loader
+                                     -- that created the row and populated the shared columns.
+                                     -- NOT corpus coverage: a case in several corpora (the 175
+                                     -- Dutch sector-8 RS ∩ CJEU decisions) keeps one row + one
+                                     -- satellite per corpus. Query membership via the
+                                     -- case_source view, never by filtering this column (D13).
     "celex_id" text UNIQUE,
     "title" text,                    -- RS/ECHR: native title. CJEU: synthesized by the
                                      -- loader ("C-123/22, X v Y") — CELLAR's work_title
@@ -976,6 +981,17 @@ CREATE TABLE "public"."search_query_log" (
 -- =============================================================================
 -- Views (adapted from legacy)
 -- =============================================================================
+
+-- D13: corpus membership is DERIVED, never stored twice. The satellites are
+-- the truth (an rs_document row IS the RS membership); this view exposes it
+-- as the normalized (case_id, source) relation. Index-backed — every branch
+-- scans a satellite keyed by case_id — and immune to drift by construction.
+CREATE OR REPLACE VIEW "public"."case_source" AS
+SELECT "case_id", 'RS'::text   AS "source" FROM "public"."rs_document"
+UNION ALL
+SELECT "case_id", 'CJEU'::text FROM "public"."cjeu_document"
+UNION ALL
+SELECT DISTINCT "case_id", 'ECHR'::text FROM "public"."echr_document";
 
 -- D12: one canonical text per (case × language) for single-text consumers
 -- (search, the legacy-shaped views, API defaults). The origin corpus wins
