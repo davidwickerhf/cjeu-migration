@@ -9,12 +9,21 @@ SET maintenance_work_mem = '512MB';
 -- Dedupe before unique-index builds: bulk steps run without the dedup
 -- indexes (created below), so a partially-failed-then-resumed load can
 -- have double-inserted. Keep the lowest id of each logical row.
+-- raw-bearing rows: the raw tuple IS the identity; keep the row with the
+-- best (highest) provision resolution, then lowest id — resolution columns
+-- deliberately NOT in the partition (snapshot fanout made them differ)
+DELETE FROM "cle_v2"."case_law_reference" a USING (
+    SELECT id, row_number() OVER (
+        PARTITION BY case_id, role, source_dataset, raw_scheme, raw_resource,
+                     COALESCE(raw_subdivision,'')
+        ORDER BY provision_id DESC NULLS LAST, id) AS rn
+    FROM "cle_v2"."case_law_reference" WHERE raw_resource IS NOT NULL
+) d WHERE a.id = d.id AND d.rn > 1;
+
+-- resolved-only rows (no raw identifier): dedupe on the resolved tuple
 DELETE FROM "cle_v2"."case_law_reference" a USING "cle_v2"."case_law_reference" b
-WHERE a.id > b.id AND a.case_id = b.case_id
-  AND a.role = b.role AND a.source_dataset = b.source_dataset
-  AND a.raw_scheme    IS NOT DISTINCT FROM b.raw_scheme
-  AND a.raw_resource  IS NOT DISTINCT FROM b.raw_resource
-  AND COALESCE(a.raw_subdivision,'') = COALESCE(b.raw_subdivision,'')
+WHERE a.id > b.id AND a.raw_resource IS NULL AND b.raw_resource IS NULL
+  AND a.case_id = b.case_id AND a.role = b.role AND a.source_dataset = b.source_dataset
   AND a.legislation_id IS NOT DISTINCT FROM b.legislation_id
   AND a.provision_id   IS NOT DISTINCT FROM b.provision_id;
 
@@ -57,10 +66,10 @@ CREATE INDEX IF NOT EXISTS "case_law_reference_idx_raw"         ON "cle_v2"."cas
 CREATE INDEX IF NOT EXISTS "case_law_reference_idx_raw_label"   ON "cle_v2"."case_law_reference" ("raw_label_id") WHERE "raw_label_id" IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS "case_law_reference_uk_provision" ON "cle_v2"."case_law_reference"
     ("case_id", "provision_id", "role", "source_dataset")
-    WHERE "provision_id" IS NOT NULL;
+    WHERE "provision_id" IS NOT NULL AND "raw_resource" IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS "case_law_reference_uk_legislation" ON "cle_v2"."case_law_reference"
     ("case_id", "legislation_id", "role", "source_dataset")
-    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL;
+    WHERE "provision_id" IS NULL AND "legislation_id" IS NOT NULL AND "raw_resource" IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS "case_law_reference_uk_raw" ON "cle_v2"."case_law_reference"
     ("case_id", "raw_scheme", "raw_resource", COALESCE("raw_subdivision", ''), "role", "source_dataset")
     WHERE "provision_id" IS NULL AND "legislation_id" IS NULL AND "raw_resource" IS NOT NULL;

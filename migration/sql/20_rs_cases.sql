@@ -99,7 +99,10 @@ SELECT k.id, lg.id, lp.id,
 FROM legacy.rs_document_law_reference lr
 JOIN cases k ON k.ecli = upper(btrim(lr.ecli))
 LEFT JOIN legislation lg ON lg.scheme='bwb' AND lg.identifier = lr.bwb_resource
-LEFT JOIN legal_provision lp ON lp.bwb_label_id = lr.bwb_label_id AND lr.bwb_label_id IS NOT NULL
+LEFT JOIN LATERAL (   -- bwb_label_id matches multiple provision rows (snapshots) — pick latest
+    SELECT id FROM legal_provision p WHERE p.bwb_label_id = lr.bwb_label_id
+    ORDER BY p.snapshot_date DESC NULLS LAST, p.id LIMIT 1
+) lp ON lr.bwb_label_id IS NOT NULL
 WHERE EXISTS (SELECT 1 FROM rs_document r WHERE r.case_id = k.id)
 ON CONFLICT DO NOTHING;
 
