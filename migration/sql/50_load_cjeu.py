@@ -75,6 +75,7 @@ NATIONAL_COLUMNS = [
     ("case_law_national_act_reference_national", "national_act_reference_national"),
     ("case_law_national_act_reference_international", "national_act_reference_international"),
     ("case_law_national_act_reference_european", "national_act_reference_european"),
+    ("case_law_national_based_on_resource_legal", "national_based_on_resource_legal"),
 ]
 
 
@@ -181,7 +182,8 @@ def main() -> int:
             court_code text, lang text, doctype text, proc text, case_number text,
             importance smallint, sector text, formation_code text, formation_raw text,
             proc_type_raw text, date_lodged date, journal_refs text, erecueil_ref text,
-            local_identifier text, dossier_uri text) ON COMMIT DROP;
+            local_identifier text, dossier_uri text,
+            citations_extra_info text, national_judgement_xml text) ON COMMIT DROP;
         CREATE TEMP TABLE stg_kv (ecli text, k text, v text) ON COMMIT DROP;      -- domains/judges/parties/cites/lawrefs
         CREATE TEMP TABLE stg_ag (ecli text, ag text, opinion_uri text, parent_raw text) ON COMMIT DROP;
         CREATE TEMP TABLE stg_nat (ecli text, col text, val text) ON COMMIT DROP;
@@ -206,7 +208,13 @@ def main() -> int:
                 first(d.get("references_journals")),
                 first(d.get("case_law_published_in_erecueil")),
                 first(d.get("local_identifier")), first(d.get("work_part_of_dossier")),
+                d.get("citations_extra_info") if not pd.isna(d.get("citations_extra_info")) else None,
+                d.get("national_judgement") if not pd.isna(d.get("national_judgement")) else None,
             ))
+            for t in toks(d.get("case_law_is_about_case_law_subject_matter")):
+                kv_rows.append((ecli, "dom:cjeu_is_about_subject", t))
+            for t in toks(d.get("origin_country_or_role_qualifier")):
+                kv_rows.append((ecli, "party:referring_state", t))   # union with origin_country; dedup downstream
             for col, scheme in DOMAIN_COLUMNS.items():
                 for t in toks(d.get(col)):
                     kv_rows.append((ecli, f"dom:{scheme}", t))
@@ -239,8 +247,8 @@ def main() -> int:
         copy_rows(cur, "stg_case", ("ecli","celex","title","date_decision","court_code","lang",
                   "doctype","proc","case_number","importance","sector","formation_code",
                   "formation_raw","proc_type_raw","date_lodged","journal_refs","erecueil_ref",
-                  "local_identifier","dossier_uri"),
-                  [(c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7],c[8],c[9],c[10],c[11],c[12],c[13],c[14],c[15],c[16],c[17],c[18]) for c in case_rows])
+                  "local_identifier","dossier_uri","citations_extra_info","national_judgement_xml"),
+                  case_rows)
         copy_rows(cur, "stg_kv", ("ecli","k","v"), kv_rows)
         copy_rows(cur, "stg_ag", ("ecli","ag","opinion_uri","parent_raw"), ag_rows)
         copy_rows(cur, "stg_nat", ("ecli","col","val"), nat_rows)
@@ -274,10 +282,10 @@ def main() -> int:
         cur.execute("""
         INSERT INTO cjeu_document (case_id, celex_id, ecli, sector, case_number,
             formation_id, proc_type, date_lodged, journal_refs, erecueil_ref,
-            local_identifier, dossier_uri)
+            local_identifier, dossier_uri, citations_extra_info, national_judgement_xml)
         SELECT k.id, s.celex, s.ecli, s.sector, s.case_number,
                f.id, s.proc_type_raw, s.date_lodged, s.journal_refs, s.erecueil_ref,
-               s.local_identifier, s.dossier_uri
+               s.local_identifier, s.dossier_uri, s.citations_extra_info, s.national_judgement_xml
         FROM stg_case s
         JOIN cases k ON k.ecli = s.ecli
         LEFT JOIN court_formation f ON f.code = s.formation_code
@@ -306,7 +314,7 @@ def main() -> int:
             national_reference_publication, national_reference_publication_conclusion,
             national_follow_up, national_judgement_reference,
             national_act_reference_national, national_act_reference_international,
-            national_act_reference_european)
+            national_act_reference_european, national_based_on_resource_legal)
         SELECT k.id,
             max(val) FILTER (WHERE col='national_court_uri'),
             max(val) FILTER (WHERE col='national_decision_internal_id'),
@@ -318,7 +326,8 @@ def main() -> int:
             max(val) FILTER (WHERE col='national_judgement_reference'),
             max(val) FILTER (WHERE col='national_act_reference_national'),
             max(val) FILTER (WHERE col='national_act_reference_international'),
-            max(val) FILTER (WHERE col='national_act_reference_european')
+            max(val) FILTER (WHERE col='national_act_reference_european'),
+            max(val) FILTER (WHERE col='national_based_on_resource_legal')
         FROM stg_nat n JOIN cases k ON k.ecli = n.ecli
         GROUP BY k.id
         ON CONFLICT (case_id) DO NOTHING

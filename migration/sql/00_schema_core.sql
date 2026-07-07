@@ -502,6 +502,8 @@ CREATE TABLE "cle_v2"."cjeu_document" (
     "journal_refs" text,             -- OJ references
     "erecueil_ref" text,             -- European Court Reports citation
     "local_identifier" text,
+    "citations_extra_info" text,     -- cited-case names + outcome descriptors (72% populated; outcome parse = future)
+    "national_judgement_xml" text,   -- raw XML of national proceedings behind preliminary rulings (22.5%; cross-corpus fanout = future)
     "dossier_uri" text,              -- groups Opinion + Judgment + Order (18.8% populated)
     "dossier_parent_case_id" bigint, -- resolved post-load
     PRIMARY KEY ("id"),
@@ -534,6 +536,7 @@ CREATE TABLE "cle_v2"."cjeu_national_document" (
     "national_act_reference_national" text,
     "national_act_reference_international" text,
     "national_act_reference_european" text,
+    "national_based_on_resource_legal" text, -- CELLAR URI(s) of the EU act the national decision was based on
     PRIMARY KEY ("id"),
     UNIQUE ("case_id")
 );

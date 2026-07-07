@@ -46,7 +46,7 @@ PSQL=(psql "$TARGET_DB_URL" -v ON_ERROR_STOP=1
 # order: corpora first, citations after ALL corpora, the 32GB embeddings
 # port second-to-last (heavy, optional), indexes last.
 steps=(${STEPS:-00_schema_core 01_fdw_setup 10_lookups 11_legislation 20_rs_cases
-       30_echr_cases 50_load_cjeu 40_citations 41_counts 42_lido_registry
+       30_echr_cases 50_load_cjeu 55_backfill_cjeu_extras 40_citations 41_counts 42_lido_registry
        25_rs_segments 90_post_load})
 
 # runner owns the manifest (so even 00/01/90 are resumable)

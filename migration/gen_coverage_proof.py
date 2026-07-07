@@ -290,12 +290,12 @@ DROPPED_CJ = {
 }
 for c, why in DROPPED_CJ.items(): CJ[c] = f"DROPPED — {why}"
 CJ["missing_reasons"] = "represented per-language via fulltexts.parquet -> case_text.missing_reasons (case-level copy redundant)"
-CJ["citations_extra_info"] = "NOT PORTED — citation paragraph detail strings; parquet remains source; revisit if API needs paragraph-level cites"
-CJ["national_judgement"] = "NOT PORTED — overlaps case_law_national_judgement_reference (which is ported)"
-CJ["origin_country_or_role_qualifier"] = "NOT PORTED — qualifier tokens for origin_country; base value ported via case_party"
-CJ["case_law_is_about_case_law_subject_matter"] = "NOT PORTED — overlaps subject_matter (ported via case_domain)"
+CJ["citations_extra_info"] = "cjeu_document.citations_extra_info (raw; cited-case names + outcome descriptors — outcome parse is a future refinement)"
+CJ["national_judgement"] = "cjeu_document.national_judgement_xml (raw XML of national proceedings; cross-corpus citation fanout = future parser)"
+CJ["origin_country_or_role_qualifier"] = "union-loaded into case_party referring_state (98.7% dup of origin_country; +2,421 rows only here)"
+CJ["case_law_is_about_case_law_subject_matter"] = "case_domain (scheme='cjeu_is_about_subject') — verified distinct 157-term taxonomy, NOT a subject_matter dup"
 CJ["work_part_of_collection_document"] = "DROPPED — CDM collection plumbing"
-CJ["case_law_national_based_on_resource_legal"] = "NOT PORTED — sector-8 detail; candidate cjeu_national_document extension"
+CJ["case_law_national_based_on_resource_legal"] = "cjeu_national_document.national_based_on_resource_legal"
 CJ["summary_case_law_id_celex"] = "DROPPED — summary document id; summary text+source ported"
 CJ["summary_summarizes_work"] = "DROPPED — summary work-uri; summary text+source ported"
 
