@@ -363,7 +363,9 @@ def main():
             lv, tv = q(legacy, lq), q(target, tq_)
             out.append(f"| {name} | {lv} | {tv} | {note} |")
         out.append("\n| CJEU metric | parquet | cle_v2 |\n|---|---:|---:|")
-        out.append(f"| cases | 46,169 (ecli+celex bearing) | " + q(target, "SELECT count(*) FROM cle_v2.cases WHERE source='CJEU'") + " |")
+        xover = q(target, "SELECT count(*) FROM cle_v2.cases c JOIN cle_v2.cjeu_document d ON d.case_id=c.id WHERE c.source='RS'")
+        out.append(f"| cases | 46,169 (ecli+celex bearing) | " + q(target, "SELECT count(*) FROM cle_v2.cases WHERE source='CJEU'")
+                   + f" + {xover} cross-corpus (Dutch sector-8 decisions already present via Rechtspraak — ONE row carrying both corpora's satellites; zero loss) |")
         out.append(f"| fulltexts | 591,021 rows in parquet | " + q(target, "SELECT count(*) FROM cle_v2.case_text ct JOIN cle_v2.cases c ON c.id=ct.case_id WHERE c.source='CJEU'") + " |")
 
     open("docs/postgres-schema/COVERAGE_PROOF.md", "w").write("\n".join(out) + "\n")

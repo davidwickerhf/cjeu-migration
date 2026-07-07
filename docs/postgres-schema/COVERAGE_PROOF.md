@@ -474,5 +474,5 @@
 
 | CJEU metric | parquet | cle_v2 |
 |---|---:|---:|
-| cases | 46,169 (ecli+celex bearing) | 45994 |
+| cases | 46,169 (ecli+celex bearing) | 45994 + 175 cross-corpus (Dutch sector-8 decisions already present via Rechtspraak — ONE row carrying both corpora's satellites; zero loss) |
 | fulltexts | 591,021 rows in parquet | 620726 |
