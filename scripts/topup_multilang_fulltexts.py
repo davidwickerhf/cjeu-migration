@@ -365,6 +365,106 @@ def append_new_rows_streaming(
     return len(deduped)
 
 
+def stream_stub_index(
+    fulltexts_path: Path,
+    *,
+    ratio: float = 0.25,
+    min_median: int = 10_000,
+    batch_size: int = 2_000,
+) -> dict:
+    """Find stub texts: rows whose length is far below the case's median.
+
+    These are headnotes / OJ notices captured (mostly from InfoCuria)
+    before the full CELLAR manifestation existed. The language *counts* as
+    covered, so the MIN_LANGS topup never revisits it — this index feeds
+    the upgrade mode, which does.
+
+    Returns ``dict[ecli] -> dict[LANG] -> current_length`` for every row
+    with ``length < ratio * median(case lengths)`` where the median itself
+    is ``>= min_median`` (short cases where every rendition is small are
+    not stubs).
+    """
+    per_ecli: dict = {}
+    pf = pq.ParquetFile(fulltexts_path)
+    for batch in pf.iter_batches(
+        batch_size=batch_size, columns=["ecli", "text_language", "text"]
+    ):
+        eclis = batch.column("ecli").to_pylist()
+        langs = batch.column("text_language").to_pylist()
+        # lengths only — the text strings are dropped with the batch
+        lens = [len(t) if t else 0 for t in batch.column("text").to_pylist()]
+        for e, l, n in zip(eclis, langs, lens):
+            lang = (l or "").upper()
+            if not e or not lang or n <= 0:
+                continue
+            per_ecli.setdefault(e, []).append((lang, n))
+
+    stubs: dict = {}
+    for ecli, pairs in per_ecli.items():
+        lengths = sorted(n for _, n in pairs)
+        mid = len(lengths) // 2
+        median = (lengths[mid] if len(lengths) % 2
+                  else (lengths[mid - 1] + lengths[mid]) / 2)
+        if median < min_median:
+            continue
+        for lang, n in pairs:
+            if n < ratio * median:
+                stubs.setdefault(ecli, {})[lang] = n
+    return stubs
+
+
+def replace_rows_streaming(
+    original_path: Path,
+    replacement_rows: list,
+    output_path: Path,
+) -> int:
+    """Stream-copy *original_path* to *output_path*, DROPPING rows whose
+    (ecli, language) matches a replacement, then append the replacements.
+
+    The upgrade counterpart of :func:`append_new_rows_streaming` — that one
+    refuses to touch existing keys; this one exists precisely to supersede
+    them. Returns the number of replacement rows written.
+    """
+    if not replacement_rows:
+        return 0
+
+    # last-in wins per key, so a retried ECLI can't duplicate
+    by_key = {}
+    for r in replacement_rows:
+        key = (str(r.get("ecli") or ""), (r.get("text_language") or "").upper())
+        by_key[key] = r
+    replace_keys = set(by_key)
+
+    reader = pq.ParquetFile(original_path)
+    orig_schema = reader.schema_arrow
+    new_table = pa.Table.from_pandas(
+        pd.DataFrame(list(by_key.values())), preserve_index=False)
+    target_schema = _union_schema(orig_schema, new_table.schema)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = pq.ParquetWriter(
+        output_path, schema=target_schema,
+        compression="zstd", write_page_index=True,
+    )
+    try:
+        for batch in reader.iter_batches(batch_size=FULLTEXTS_ROW_GROUP_SIZE):
+            eclis = batch.column("ecli").to_pylist()
+            langs = batch.column("text_language").to_pylist()
+            mask = [
+                (str(e or ""), (l or "").upper()) not in replace_keys
+                for e, l in zip(eclis, langs)
+            ]
+            if not all(mask):
+                batch = batch.filter(pa.array(mask))
+            if batch.num_rows:
+                writer.write_batch(_conform_batch(batch, target_schema))
+        for nb in new_table.to_batches(max_chunksize=FULLTEXTS_ROW_GROUP_SIZE):
+            writer.write_batch(_conform_batch(nb, target_schema))
+    finally:
+        writer.close()
+    return len(by_key)
+
+
 # ---------------------------------------------------------------------------
 # CELLAR query (per ECLI) — uses cellar-extractor's helpers
 # ---------------------------------------------------------------------------
@@ -421,6 +521,63 @@ def _topup_one_ecli(
             "__source_window": "topup_v2_multilang",
         })
     return new_rows
+
+
+def _upgrade_one_ecli(
+    ecli: str,
+    celex: str,
+    stub_langs: dict,
+    *,
+    work_uri_fn,
+    items_fn,
+    fanout_fn,
+) -> list:
+    """For one ECLI, fetch CELLAR manifestations for its stub languages and
+    return replacement rows — only where the fetched text is materially
+    longer (> 2x) than the stored stub, so a genuine short rendition is
+    never clobbered by an equally short refetch.
+    """
+    try:
+        work_uri = work_uri_fn(celex, sector="6")
+    except Exception as exc:
+        log.debug("work_uri lookup failed for %s: %s", celex, exc)
+        return []
+    if not work_uri:
+        return []
+
+    try:
+        candidates = items_fn(work_uri)
+    except Exception as exc:
+        log.debug("items fetch failed for %s: %s", celex, exc)
+        return []
+    wanted = [c for c in candidates
+              if (c.get("language") or "").upper() in stub_langs]
+    if not wanted:
+        return []
+
+    try:
+        cellar_fulltexts = fanout_fn(wanted, source_label="CELLAR_ITEM")
+    except Exception as exc:
+        log.debug("fanout failed for %s: %s", celex, exc)
+        return []
+
+    rows = []
+    for ft in cellar_fulltexts:
+        lang = (ft.get("text_language") or "").upper()
+        text = ft.get("text") or ""
+        if lang not in stub_langs or len(text) <= 2 * stub_langs[lang]:
+            continue
+        rows.append({
+            "celex": celex,
+            "ecli": ecli,
+            "text": text,
+            "text_source": "CELLAR_ITEM",
+            "text_language": lang,
+            "text_format": ft.get("text_format", ""),
+            "missing_reasons": "",
+            "__source_window": "upgrade_stub_texts",
+        })
+    return rows
 
 
 def topup_dataset(
@@ -719,6 +876,156 @@ def run(
     return stats
 
 
+def run_upgrade(
+    repo_id: str,
+    workdir: Path,
+    *,
+    dry_run: bool = False,
+    token: str | None = None,
+    stub_ratio: float = 0.25,
+    stub_min_median: int = 10_000,
+    max_workers: int = 6,
+    checkpoint_every: int = 0,
+    local_cases: Path | None = None,
+    local_fulltexts: Path | None = None,
+    downloader=_download,
+    uploader=_upload,
+    work_uri_fn=None,
+    items_fn=None,
+    fanout_fn=None,
+) -> dict:
+    """Upgrade mode: replace stub texts (headnotes captured before the full
+    CELLAR manifestation existed) with the full judgment text. Same
+    checkpointed shape as :func:`run`, but flushes go through
+    :func:`replace_rows_streaming` — existing (ecli, language) rows are
+    superseded, not skipped. Idempotent: an upgraded row is no longer below
+    the stub threshold, so re-runs shrink to a no-op.
+    """
+    workdir.mkdir(parents=True, exist_ok=True)
+    if not dry_run and not token:
+        raise SystemExit("HUGGINGFACE_TOKEN required to upload. Set DRY_RUN=1 to skip.")
+
+    cases_path = Path(local_cases) if local_cases else workdir / "cases.parquet"
+    fulltexts_path = (
+        Path(local_fulltexts) if local_fulltexts else workdir / "fulltexts.parquet"
+    )
+    if not local_cases:
+        downloader(repo_id, "cases.parquet", cases_path)
+    if not local_fulltexts:
+        downloader(repo_id, "fulltexts.parquet", fulltexts_path)
+
+    cases_df = pd.read_parquet(cases_path)
+
+    def _first_celex(v):
+        if pd.isna(v):
+            return None
+        parts = [p.strip() for p in str(v).split(";") if p.strip()]
+        return parts[0] if parts else None
+
+    celex_by_ecli = {
+        str(e): str(c)
+        for e, c in zip(cases_df["ecli"], cases_df["celex"].map(_first_celex))
+        if not pd.isna(e) and c
+    }
+
+    log.info("indexing stub texts (streaming) ← %s", fulltexts_path)
+    stubs = stream_stub_index(
+        fulltexts_path, ratio=stub_ratio, min_median=stub_min_median)
+    work = [(e, celex_by_ecli[e], langs)
+            for e, langs in stubs.items() if e in celex_by_ecli]
+    n_stub_rows = sum(len(l) for _, _, l in work)
+    log.info("found %d stub rows across %d ECLIs (ratio<%.2f, median>=%d)",
+             n_stub_rows, len(work), stub_ratio, stub_min_median)
+
+    if work_uri_fn is None or items_fn is None or fanout_fn is None:
+        from cellar_extractor.eurlex_scraping import (
+            _fetch_sector8_work_uri as _default_work_uri,
+            _fetch_sector8_items_for_work as _default_items,
+            _fanout_fulltexts_from_candidates as _default_fanout,
+        )
+        work_uri_fn = work_uri_fn or _default_work_uri
+        items_fn = items_fn or _default_items
+        fanout_fn = fanout_fn or _default_fanout
+
+    pending: list = []
+    total_generated = 0
+    total_replaced = 0
+    failures = 0
+    processed = 0
+    ckpt_n = 0
+    start = time.monotonic()
+    current_base = fulltexts_path
+
+    def _flush(rows: list) -> int:
+        nonlocal ckpt_n, current_base
+        if not rows:
+            return 0
+        ckpt_n += 1
+        out = workdir / f"fulltexts.upgrade{ckpt_n % 2}.parquet"
+        replaced = replace_rows_streaming(current_base, rows, out)
+        if replaced == 0:
+            return 0
+        current_base = out
+        if dry_run:
+            log.info("checkpoint %d: %d rows upgraded (DRY_RUN — not uploaded)",
+                     ckpt_n, replaced)
+        else:
+            uploader(repo_id, out, "fulltexts.parquet", token)
+            log.info("checkpoint %d: %d rows upgraded + uploaded", ckpt_n, replaced)
+        return replaced
+
+    def _task(item):
+        ecli, celex, langs = item
+        return _upgrade_one_ecli(
+            ecli, celex, langs,
+            work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_task, w): w for w in work}
+        for fut in as_completed(futures):
+            processed += 1
+            try:
+                rows = fut.result()
+                pending.extend(rows)
+                total_generated += len(rows)
+            except Exception as exc:
+                failures += 1
+                log.warning("upgrade failed for %s: %s", futures[fut][0], exc)
+            if processed % 100 == 0:
+                rate = processed / (time.monotonic() - start)
+                eta_min = ((len(work) - processed) / rate / 60) if rate else 0
+                log.info("upgrade progress: %d/%d  (+%d rows, %.1f ECLIs/s, ETA %.1f min)",
+                         processed, len(work), total_generated, rate, eta_min)
+            if checkpoint_every and processed % checkpoint_every == 0:
+                total_replaced += _flush(pending)
+                pending = []
+
+    log.info("upgrade network phase complete: %d rows generated, %d failures",
+             total_generated, failures)
+    total_replaced += _flush(pending)
+
+    if total_replaced:
+        final_path = workdir / "fulltexts.upgraded.parquet"
+        os.replace(current_base, final_path)
+        current_base = final_path
+
+    stats = {
+        "stub_eclis": len(work),
+        "stub_rows": n_stub_rows,
+        "rows_upgraded": total_replaced,
+        "failures": failures,
+    }
+    if total_replaced == 0:
+        log.info("no stub rows could be upgraded — nothing uploaded.")
+    elif dry_run:
+        log.info("DRY_RUN — %d rows upgraded locally, nothing uploaded.", total_replaced)
+    else:
+        log.info("upgrade complete: %d rows across %d checkpoint(s).",
+                 total_replaced, ckpt_n)
+    return stats
+
+
 def main() -> int:
     repo_id = os.environ.get("HF_DATASET_REPO", "davidwickerhf/cjeu-opendata")
     dry_run = os.environ.get("DRY_RUN") == "1"
@@ -730,16 +1037,29 @@ def main() -> int:
     local_cases = os.environ.get("LOCAL_CASES_PARQUET")
     local_fulltexts = os.environ.get("LOCAL_FULLTEXTS_PARQUET")
 
+    mode = os.environ.get("MODE", "topup")
     with tempfile.TemporaryDirectory(prefix="hf-topup-") as tmp:
-        stats = run(
-            repo_id, Path(tmp),
-            dry_run=dry_run, token=token,
-            min_langs=min_langs, year_threshold=year_threshold,
-            max_workers=max_workers,
-            checkpoint_every=checkpoint_every,
-            local_cases=Path(local_cases) if local_cases else None,
-            local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
-        )
+        if mode == "upgrade":
+            stats = run_upgrade(
+                repo_id, Path(tmp),
+                dry_run=dry_run, token=token,
+                stub_ratio=float(os.environ.get("STUB_RATIO", "0.25")),
+                stub_min_median=int(os.environ.get("STUB_MIN_MEDIAN", "10000")),
+                max_workers=max_workers,
+                checkpoint_every=checkpoint_every,
+                local_cases=Path(local_cases) if local_cases else None,
+                local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
+            )
+        else:
+            stats = run(
+                repo_id, Path(tmp),
+                dry_run=dry_run, token=token,
+                min_langs=min_langs, year_threshold=year_threshold,
+                max_workers=max_workers,
+                checkpoint_every=checkpoint_every,
+                local_cases=Path(local_cases) if local_cases else None,
+                local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
+            )
     log.info("done. stats: %s", stats)
     return 0
 

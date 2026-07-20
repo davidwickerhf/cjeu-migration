@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""Supplement cle_v2.case_text with CJEU fulltext rows added to the HF
-corpus after the bulk load (multilang topups).
+"""Sync cle_v2.case_text with the CJEU fulltext corpus on HF.
 
-Diffs fulltexts.parquet against the loaded (case_id, language, source)
-triples and inserts only what is missing — append-only and idempotent, so
-it can run after every topup. Mirrors the 50_load_cjeu.py text rules:
-ECLIs map via cjeu_document (cross-corpus cases included, D13), language
-rows without a text_language are skipped, unseen languages are upserted
-into the language lookup.
+Two operations, both idempotent:
+
+1. Append: parquet rows whose (case_id, language, source) triple is not in
+   the DB are inserted (multilang topups add languages).
+2. Upgrade in place: when the parquet's row for a (case, language) pair
+   carries a DIFFERENT source than the DB row (the upgrade pass replaces
+   InfoCuria stub texts with the full CELLAR manifestation), the DB row is
+   updated — source, fulltext, text_format, missing_reasons — keeping its
+   id and any summary that lives on it. Rechtspraak-origin rows are never
+   touched (D12: the RS text is a sibling rendition, not a stale one).
+
+Mirrors the bulk-loader rules otherwise: ECLI mapping via cjeu_document
+(cross-corpus cases included), rows without a text_language skipped,
+unseen languages upserted into the language lookup.
 
 Env:
   TARGET_DB_URL       required
@@ -39,14 +46,20 @@ def main() -> int:
     cur.execute("""SELECT c.ecli, c.id FROM cases c
                    JOIN cjeu_document d ON d.case_id = c.id""")
     ecli_to_id = dict(cur.fetchall())
-    cur.execute("""SELECT ct.case_id, ct.language, ct.source FROM case_text ct
+    cur.execute("""SELECT ct.id, ct.case_id, ct.language, ct.source
+                   FROM case_text ct
                    JOIN cjeu_document d ON d.case_id = ct.case_id""")
-    seen = set(cur.fetchall())
+    seen = set()          # (case_id, language, source)
+    db_pair_rows = {}     # (case_id, language) -> [(row_id, source), ...]
+    for row_id, cid, lang, src in cur.fetchall():
+        seen.add((cid, lang, src))
+        db_pair_rows.setdefault((cid, lang), []).append((row_id, src))
     cur.execute("SELECT iso_code FROM language")
     known_langs = {r[0] for r in cur.fetchall()}
     print(f"{len(ecli_to_id)} CJEU-corpus ECLIs, {len(seen)} text rows already loaded")
 
     inserted = 0
+    upgraded = 0
     scanned = 0
     pf = pq.ParquetFile(path)
     for batch in pf.iter_batches(batch_size=2000, columns=list(COLS)):
@@ -66,7 +79,24 @@ def main() -> int:
                 cur.execute("INSERT INTO language (iso_code, name) VALUES (%s,%s) "
                             "ON CONFLICT DO NOTHING", (lang, lang))
                 known_langs.add(lang)
+            # superseded CJEU-source row for the same pair -> upgrade in place
+            stale = [(rid, s) for rid, s in db_pair_rows.get((cid, lang), [])
+                     if s not in ("RECHTSPRAAK", src)]
+            if stale:
+                rid, old_src = stale[0]
+                cur.execute("""UPDATE case_text
+                               SET source=%s, fulltext=%s, text_format=%s,
+                                   missing_reasons=%s
+                               WHERE id=%s""",
+                            (src, t, f2 or None, m2 or None, rid))
+                seen.discard((cid, lang, old_src))
+                db_pair_rows[(cid, lang)] = [
+                    (r, s if r != rid else src)
+                    for r, s in db_pair_rows[(cid, lang)]]
+                upgraded += 1
+                continue
             out.append((cid, lang, t, src, f2, m2))
+            db_pair_rows.setdefault((cid, lang), []).append((None, src))
         if out:
             cur.execute("""CREATE TEMP TABLE IF NOT EXISTS stg_text (
                 case_id bigint, language text, fulltext text,
@@ -77,8 +107,7 @@ def main() -> int:
             for r in out:
                 w.writerow(["" if v is None else v for v in r])
             buf.seek(0)
-            cur.copy_expert(
-                "COPY stg_text FROM STDIN WITH (FORMAT csv)", buf)
+            cur.copy_expert("COPY stg_text FROM STDIN WITH (FORMAT csv)", buf)
             cur.execute("""
                 INSERT INTO case_text (case_id, language, fulltext, source,
                                        text_format, missing_reasons)
@@ -87,11 +116,15 @@ def main() -> int:
                 FROM stg_text
                 ON CONFLICT (case_id, language, source) DO NOTHING""")
             inserted += cur.rowcount
+        if out or upgraded:
             pg.commit()
-            print(f"  scanned {scanned:,} — inserted {inserted:,}", flush=True)
+        if scanned % 100_000 < 2000:
+            print(f"  scanned {scanned:,} — inserted {inserted:,}, upgraded {upgraded:,}",
+                  flush=True)
 
     pg.commit()
-    print(f"done: scanned {scanned:,} parquet rows, inserted {inserted:,} new case_text rows")
+    print(f"done: scanned {scanned:,} parquet rows, "
+          f"inserted {inserted:,}, upgraded {upgraded:,} case_text rows")
     pg.close()
     return 0
 

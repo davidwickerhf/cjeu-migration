@@ -577,3 +577,95 @@ def test_run_checkpoint_uploads_incrementally(tmp_path):
     # final output keeps the documented name and contains everything
     df = pd.read_parquet(tmp_path / "work" / "fulltexts.topped.parquet")
     assert len(df) == 8 + 10
+
+
+# ---------------------------------------------------------------------------
+# upgrade mode (stub-text replacement)
+# ---------------------------------------------------------------------------
+
+
+def _write_stub_inputs(tmp_path: Path):
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:STUB", "celex": "62023CJ0001", "sector": "6",
+         "date_publication": "2023-05-01"},
+        {"ecli": "ECLI:SHORT", "celex": "62023CJ0002", "sector": "6",
+         "date_publication": "2023-06-01"},
+    ])
+    fulltexts = pd.DataFrame([
+        # ECLI:STUB — six full renditions plus one stub (CS)
+        *[{"ecli": "ECLI:STUB", "celex": "62023CJ0001", "text": "x" * 20_000,
+           "text_source": "CELLAR_ITEM", "text_language": l,
+           "text_format": "xhtml", "missing_reasons": ""}
+          for l in ["EN", "FR", "DE", "IT", "NL", "ES"]],
+        {"ecli": "ECLI:STUB", "celex": "62023CJ0001", "text": "s" * 300,
+         "text_source": "INFOCURIA_BLOB_HTML", "text_language": "CS",
+         "text_format": "html", "missing_reasons": ""},
+        # ECLI:SHORT — a genuinely short case (median < 10k) — NOT stubs
+        *[{"ecli": "ECLI:SHORT", "celex": "62023CJ0002", "text": "y" * 900,
+           "text_source": "CELLAR_ITEM", "text_language": l,
+           "text_format": "xhtml", "missing_reasons": ""}
+          for l in ["EN", "FR"]],
+    ])
+    cpath = tmp_path / "cases.parquet"
+    fpath = tmp_path / "fulltexts.parquet"
+    cases.to_parquet(cpath, index=False)
+    fulltexts.to_parquet(fpath, index=False)
+    return cpath, fpath
+
+
+def test_stream_stub_index_flags_only_true_stubs(tmp_path):
+    _, fpath = _write_stub_inputs(tmp_path)
+    stubs = mod.stream_stub_index(fpath)
+    assert stubs == {"ECLI:STUB": {"CS": 300}}
+
+
+def test_replace_rows_streaming_supersedes_key(tmp_path):
+    _, fpath = _write_stub_inputs(tmp_path)
+    out = tmp_path / "out.parquet"
+    n = mod.replace_rows_streaming(fpath, [
+        {"ecli": "ECLI:STUB", "text": "z" * 15_000, "text_source": "CELLAR_ITEM",
+         "text_language": "CS", "text_format": "xhtml", "missing_reasons": ""},
+    ], out)
+    assert n == 1
+    df = pd.read_parquet(out)
+    assert len(df) == 9                                   # row count unchanged
+    cs = df[(df["ecli"] == "ECLI:STUB") & (df["text_language"] == "CS")]
+    assert len(cs) == 1 and len(cs.iloc[0]["text"]) == 15_000
+    assert cs.iloc[0]["text_source"] == "CELLAR_ITEM"
+
+
+def test_run_upgrade_end_to_end(tmp_path):
+    cpath, fpath = _write_stub_inputs(tmp_path)
+
+    def work_uri_fn(celex, sector="6"):
+        return "http://cellar/u"
+    def items_fn(uri):
+        return [{"item_url": "http://x/CS", "format": "xhtml", "language": "CS"},
+                {"item_url": "http://x/EN", "format": "xhtml", "language": "EN"}]
+    def fanout_fn(candidates, source_label):
+        # only the stub language is requested
+        assert [c["language"] for c in candidates] == ["CS"]
+        return [{"text": "w" * 18_000, "text_source": source_label,
+                 "text_language": "CS", "text_format": "xhtml"}]
+
+    uploads = []
+    stats = mod.run_upgrade(
+        repo_id="example/x",
+        workdir=tmp_path / "work",
+        dry_run=False, token="t",
+        local_cases=cpath, local_fulltexts=fpath,
+        max_workers=1, checkpoint_every=1,
+        downloader=lambda *a, **kw: pytest.fail("downloader called with local files"),
+        uploader=lambda repo, path, fname, token: uploads.append(fname),
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+    assert stats == {"stub_eclis": 1, "stub_rows": 1,
+                     "rows_upgraded": 1, "failures": 0}
+    assert uploads == ["fulltexts.parquet"]
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
+    assert len(df) == 9
+    cs = df[(df["ecli"] == "ECLI:STUB") & (df["text_language"] == "CS")].iloc[0]
+    assert len(cs["text"]) == 18_000
+    assert cs["__source_window"] == "upgrade_stub_texts"
+    # idempotence: the upgraded file has no stubs left
+    assert mod.stream_stub_index(tmp_path / "work" / "fulltexts.upgraded.parquet") == {}
