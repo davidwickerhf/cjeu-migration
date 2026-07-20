@@ -545,3 +545,35 @@ def test_run_skips_upload_when_no_new_rows_to_add(tmp_path):
     )
     assert stats["new_rows_added"] == 0
     assert upload_called == []
+
+
+def test_run_checkpoint_uploads_incrementally(tmp_path):
+    # With checkpoint_every=1 and two sparse ECLIs, each processed ECLI
+    # triggers an upload — a killed run loses at most one interval of work.
+    cpath, fpath = _write_inputs(tmp_path)
+    work_uri_fn, items_fn, fanout_fn = _make_stubs(
+        langs=("EN", "FR", "DE", "IT", "NL", "ES", "PT", "PL", "SV")
+    )
+    uploads = []
+
+    def uploader(repo_id, local_path, repo_filename, token):
+        uploads.append((repo_filename, Path(local_path).exists()))
+
+    stats = mod.run(
+        repo_id="example/x",
+        workdir=tmp_path / "work",
+        dry_run=False, token="t",
+        local_cases=cpath, local_fulltexts=fpath,
+        min_langs=24, year_threshold=0, max_workers=1,
+        checkpoint_every=1,
+        downloader=lambda *a, **kw: pytest.fail("downloader called with local files"),
+        uploader=uploader,
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+    assert stats["sparse_eclis"] == 2
+    # OLD gains PL+SV (has the other 7), NEW gains all but EN
+    assert stats["new_rows_added"] == 10
+    assert uploads == [("fulltexts.parquet", True), ("fulltexts.parquet", True)]
+    # final output keeps the documented name and contains everything
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.topped.parquet")
+    assert len(df) == 8 + 10

@@ -27,6 +27,11 @@ Usage::
     MIN_LANGS=24 YEAR_THRESHOLD=0 WORKERS=6 \
     python scripts/topup_multilang_fulltexts.py
 
+Progress is uploaded to HF every ``CHECKPOINT_EVERY`` processed ECLIs
+(default 2000; 0 disables checkpointing). A killed box therefore loses at
+most one checkpoint interval — the July 2026 run uploaded only at the very
+end and lost everything when its box was destroyed.
+
 Default thresholds are deliberately aggressive: ``MIN_LANGS=24`` (the
 current number of official EU languages — anything below that gets
 re-checked) and ``YEAR_THRESHOLD=0`` (every decade). Cases that are
@@ -555,6 +560,7 @@ def run(
     min_langs: int = 24,
     year_threshold: int = 0,
     max_workers: int = 6,
+    checkpoint_every: int = 0,
     local_cases: Path | None = None,
     local_fulltexts: Path | None = None,
     downloader=_download,
@@ -613,10 +619,36 @@ def run(
         len(sparse), year_threshold, min_langs,
     )
 
-    all_new_rows: list = []
+    pending_rows: list = []
+    total_generated = 0
+    total_added = 0
     failures = 0
     start = time.monotonic()
     processed = 0
+    ckpt_n = 0
+    current_base = fulltexts_path
+
+    def _flush(rows: list) -> int:
+        # Append *rows* onto the current base parquet and (unless DRY_RUN)
+        # upload the result to HF. Each flush becomes the base for the next
+        # one, so a killed box loses at most one checkpoint interval of work
+        # — the run that died before ever uploading is what motivated this.
+        nonlocal ckpt_n, current_base
+        if not rows:
+            return 0
+        ckpt_n += 1
+        out = workdir / f"fulltexts.ckpt{ckpt_n % 2}.parquet"
+        added = append_new_rows_streaming(current_base, rows, out)
+        if added == 0:
+            log.info("checkpoint %d: all %d rows were duplicates", ckpt_n, len(rows))
+            return 0
+        current_base = out
+        if dry_run:
+            log.info("checkpoint %d: +%d rows (DRY_RUN — not uploaded)", ckpt_n, added)
+        else:
+            uploader(repo_id, out, "fulltexts.parquet", token)
+            log.info("checkpoint %d: +%d rows uploaded", ckpt_n, added)
+        return added
 
     def _task(ecli_celex):
         ecli, celex = ecli_celex
@@ -632,7 +664,8 @@ def run(
             processed += 1
             try:
                 rows = fut.result()
-                all_new_rows.extend(rows)
+                pending_rows.extend(rows)
+                total_generated += len(rows)
             except Exception as exc:
                 failures += 1
                 log.warning("topup failed for %s: %s", futures[fut], exc)
@@ -643,46 +676,45 @@ def run(
                 log.info(
                     "topup progress: %d/%d  (+%d rows so far, "
                     "%.1f ECLIs/s, ETA %.1f min)",
-                    processed, len(sparse), len(all_new_rows),
+                    processed, len(sparse), total_generated,
                     rate, eta_min,
                 )
+            if checkpoint_every and processed % checkpoint_every == 0:
+                total_added += _flush(pending_rows)
+                pending_rows = []
 
     log.info(
         "topup network phase complete: %d rows generated, %d failures",
-        len(all_new_rows), failures,
+        total_generated, failures,
     )
+
+    total_added += _flush(pending_rows)
+
+    if total_added:
+        # current_base is the last checkpoint; keep the documented output name
+        final_path = workdir / "fulltexts.topped.parquet"
+        os.replace(current_base, final_path)
+        current_base = final_path
 
     stats = {
         "sparse_eclis": len(sparse),
-        "new_rows_attempted": len(all_new_rows),
-        "new_rows_added": 0,
+        "new_rows_attempted": total_generated,
+        "new_rows_added": total_added,
         "failures": failures,
     }
 
-    if not all_new_rows:
+    if total_generated == 0:
         log.info("no new rows to add — dataset already topped up. Skipping upload.")
-        return stats
-
-    out_path = workdir / "fulltexts.topped.parquet"
-    added = append_new_rows_streaming(fulltexts_path, all_new_rows, out_path)
-    stats["new_rows_added"] = added
-    if added == 0:
+    elif total_added == 0:
         log.info(
             "after dedup all %d generated rows were duplicates; nothing to upload.",
-            len(all_new_rows),
+            total_generated,
         )
-        return stats
-
-    log.info(
-        "wrote %s (%.1f MB, %d new rows appended)",
-        out_path, out_path.stat().st_size / 1e6, added,
-    )
-
-    if dry_run:
-        log.info("DRY_RUN — skipping upload.")
+    elif dry_run:
+        log.info("DRY_RUN — %d rows written locally, nothing uploaded.", total_added)
     else:
-        uploader(repo_id, out_path, "fulltexts.parquet", token)
-        log.info("upload complete. Viewer typically refreshes within ~60s.")
+        log.info("upload complete (%d rows across %d checkpoint(s)). "
+                 "Viewer typically refreshes within ~60s.", total_added, ckpt_n)
 
     return stats
 
@@ -694,6 +726,7 @@ def main() -> int:
     min_langs = int(os.environ.get("MIN_LANGS", "24"))
     year_threshold = int(os.environ.get("YEAR_THRESHOLD", "0"))
     max_workers = int(os.environ.get("WORKERS", "6"))
+    checkpoint_every = int(os.environ.get("CHECKPOINT_EVERY", "2000"))
     local_cases = os.environ.get("LOCAL_CASES_PARQUET")
     local_fulltexts = os.environ.get("LOCAL_FULLTEXTS_PARQUET")
 
@@ -703,6 +736,7 @@ def main() -> int:
             dry_run=dry_run, token=token,
             min_langs=min_langs, year_threshold=year_threshold,
             max_workers=max_workers,
+            checkpoint_every=checkpoint_every,
             local_cases=Path(local_cases) if local_cases else None,
             local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
         )
