@@ -271,8 +271,8 @@ when present).
 
 Source: [davidwickerhf/cjeu-opendata](https://huggingface.co/datasets/davidwickerhf/cjeu-opendata)
 (`cases.parquet` 107 cols; `fulltexts.parquet` 591k rows, up to 24
-languages/case). Field-level detail in [CJEU_TABLES.md](CJEU_TABLES.md);
-this is the operative summary.
+languages/case). Field-level detail is generated into
+[COVERAGE_PROOF.md](COVERAGE_PROOF.md); this is the operative summary.
 
 ### 3.1 → `cases`
 
@@ -309,7 +309,7 @@ CELEX resolved to case).
 
 ### 3.4 → `cjeu_national_document` (sector-8 rows only, ~1,800)
 
-The 12 `case_law_national_*` fields, 1:1 (see CJEU_TABLES.md).
+The 12 `case_law_national_*` fields, 1:1 (see COVERAGE_PROOF.md).
 
 ### 3.5 → `case_text` (from `fulltexts.parquet`)
 
