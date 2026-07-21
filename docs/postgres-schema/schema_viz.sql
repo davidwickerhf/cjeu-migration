@@ -301,6 +301,12 @@ CREATE TABLE "public"."case_text" (
     "source" text NOT NULL,                                -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
     "text_format" text,                                    -- xhtml | html | pdf | fmx4
     "missing_reasons" text,                                -- 'FULLTEXT_UNAVAILABLE_UPSTREAM' | ...
+    "is_stub" boolean DEFAULT false NOT NULL,              -- CJEU quality flag: fulltext is a headnote/OJ-notice
+                                                           -- stub, not the judgment (length < 40% of the case's
+                                                           -- median CJEU rendition, median >= 10k chars; only
+                                                           -- set on CJEU-source rows, recomputed by the corpus
+                                                           -- sync — migration/sql/57). Kept when CELLAR has no
+                                                           -- fuller text: a flagged NULL beats a fake full text.
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id"),

@@ -53,6 +53,7 @@ CREATE INDEX IF NOT EXISTS "case_idx_case_number" ON "cle_v2"."cases" ("case_num
 CREATE INDEX IF NOT EXISTS "case_text_idx_case_id"          ON "cle_v2"."case_text" ("case_id");
 CREATE INDEX IF NOT EXISTS "case_text_idx_fulltext_tsv"     ON "cle_v2"."case_text" USING gin ("fulltext_tsv");
 CREATE INDEX IF NOT EXISTS "case_text_idx_summary_tsv"      ON "cle_v2"."case_text" USING gin ("summary_tsv");
+CREATE INDEX IF NOT EXISTS "case_text_idx_stub"             ON "cle_v2"."case_text" ("case_id") WHERE "is_stub";
 CREATE INDEX IF NOT EXISTS "case_judge_idx_case_id"  ON "cle_v2"."case_judge" ("case_id");
 CREATE INDEX IF NOT EXISTS "case_judge_idx_judge_id" ON "cle_v2"."case_judge" ("judge_id");
 CREATE INDEX IF NOT EXISTS "case_party_idx_party" ON "cle_v2"."case_party" ("party_id");

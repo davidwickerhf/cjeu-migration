@@ -123,6 +123,32 @@ def main() -> int:
                   flush=True)
 
     pg.commit()
+
+    # Recompute the stub flag for CJEU-source rows: a fulltext far below the
+    # case's median CJEU rendition length is a headnote/OJ-notice stub, not
+    # the judgment (same rule as the corpus upgrade pass, at its widened
+    # 0.40 threshold). RS-origin rows are neither judged nor flagged, and
+    # never enter the median. Lengths are materialized once — evaluating
+    # length() inline detoasts the ~25 GB of text twice and blows any
+    # statement timeout. Idempotent — only changed rows are touched.
+    cur.execute("""
+        CREATE TEMP TABLE _text_len ON COMMIT DROP AS
+        SELECT ct.id, ct.case_id, length(ct.fulltext) AS len
+        FROM case_text ct
+        JOIN cjeu_document d ON d.case_id = ct.case_id
+        WHERE ct.fulltext IS NOT NULL AND ct.source <> 'RECHTSPRAAK'""")
+    cur.execute("""
+        UPDATE case_text ct
+           SET is_stub = f.flag
+          FROM (SELECT t.id, (t.len < 0.40 * m.med AND m.med > 10000) AS flag
+                FROM _text_len t
+                JOIN (SELECT case_id,
+                             percentile_cont(0.5) WITHIN GROUP (ORDER BY len) AS med
+                      FROM _text_len GROUP BY case_id) m USING (case_id)) f
+         WHERE ct.id = f.id AND ct.is_stub IS DISTINCT FROM f.flag""")
+    print(f"stub flags updated: {cur.rowcount:,}")
+    pg.commit()
+
     print(f"done: scanned {scanned:,} parquet rows, "
           f"inserted {inserted:,}, upgraded {upgraded:,} case_text rows")
     pg.close()

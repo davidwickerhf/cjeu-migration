@@ -422,6 +422,12 @@ CREATE TABLE "public"."case_text" (
     "source" text NOT NULL,                                -- 'INFOCURIA_BLOB_HTML' | 'CELLAR_ITEM' | 'EXTRACTOR_FALLBACK_TEXT' | 'HUDOC' | 'RECHTSPRAAK' | ...
     "text_format" text,                                    -- xhtml | html | pdf | fmx4
     "missing_reasons" text,                                -- 'FULLTEXT_UNAVAILABLE_UPSTREAM' | ...
+    "is_stub" boolean DEFAULT false NOT NULL,              -- CJEU quality flag: fulltext is a headnote/OJ-notice
+                                                           -- stub, not the judgment (length < 40% of the case's
+                                                           -- median CJEU rendition, median >= 10k chars; only
+                                                           -- set on CJEU-source rows, recomputed by the corpus
+                                                           -- sync — migration/sql/57). Kept when CELLAR has no
+                                                           -- fuller text: a flagged NULL beats a fake full text.
     "created_at" timestamptz DEFAULT now() NOT NULL,
     "updated_at" timestamptz DEFAULT now() NOT NULL,
     PRIMARY KEY ("id"),
@@ -433,6 +439,7 @@ CREATE TABLE "public"."case_text" (
 CREATE INDEX "case_text_idx_case_id"          ON "public"."case_text" ("case_id");
 CREATE INDEX "case_text_idx_fulltext_tsv"     ON "public"."case_text" USING gin ("fulltext_tsv");
 CREATE INDEX "case_text_idx_summary_tsv"      ON "public"."case_text" USING gin ("summary_tsv");
+CREATE INDEX "case_text_idx_stub"             ON "public"."case_text" ("case_id") WHERE "is_stub";
 CREATE INDEX "case_text_idx_summary_embedding" ON "public"."case_text" USING hnsw ("summary_embedding" vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
 CREATE TRIGGER trg_case_text_updated_at
