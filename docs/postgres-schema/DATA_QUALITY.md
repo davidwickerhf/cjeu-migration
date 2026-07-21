@@ -66,6 +66,19 @@ publishes as a separate ECLI, which we already carry.
 | CELLAR text is the only text for 55 of the cases | source | Rechtspraak has no text for them; canonical resolves to the CELLAR pdf rendition there. (These 55, and the other 119 renditions, were originally dropped by a loader ECLI-map filter on the old single-valued source column; fixed in 50_load_cjeu.py, staging backfilled 2026-07-07.) |
 | CELLAR pdf renditions are lower typographic quality | source | pdf-extracted: hard line wraps, missing headers. Stored verbatim; the clean RS text stays canonical where it exists. |
 
+## case_text — stub texts and the `is_stub` flag (CJEU)
+
+Some CJEU rows were captured as headnotes / OJ notices (mostly from
+InfoCuria) before the full CELLAR manifestation existed. The 2026-07-20/21
+upgrade passes refetched every row below 40% of its case's median rendition
+length and replaced 20,521 of them (19,585 + 936) with the full CELLAR
+judgment, in the HF corpus and in `case_text` alike.
+
+| Fact | Whose | Detail |
+|---|---|---|
+| 9,124 stub rows remain (1.6% of CJEU texts) | source | CELLAR has nothing longer for these language/case pairs: genuine OJ notices (removed or withdrawn cases) or languages where InfoCuria is the only source. A flagged short text beats a missing row. |
+| `case_text.is_stub` marks them | schema (deliberate) | boolean, default false; rule: length < 40% of the case's median CJEU rendition, median >= 10k chars. RS-origin rows are never judged and never enter the median. Recomputed by migration/sql/57 after every corpus sync. Quality-sensitive consumers filter `NOT is_stub`. |
+
 ## legislation (catalog breadth)
 
 | Limitation | Whose | Detail |
