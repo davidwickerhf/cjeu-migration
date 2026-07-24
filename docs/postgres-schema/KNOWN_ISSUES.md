@@ -7,7 +7,10 @@ owed. Last updated 2026-07-23.
 
 ## 1. Missing citation edges for recent CJEU judgments
 
-**Status: open — source-side lag, top-up pass planned.**
+**Status: mitigated 2026-07-23 — `59_supplement_cjeu_citations.py` built and
+run against the Coolify DB (2,109 recent CELEXes probed, 3,637 new rows;
+2026 coverage went from 274 to 314 of 601 cases). The lag itself is
+upstream and permanent: re-run the script monthly.**
 
 Reported 2026-07-23 against the deployed Coolify stack:
 `ECLI:EU:C:2026:297` (CELEX `62024CJ0519`, decided 2026-04-16) has full
@@ -33,7 +36,7 @@ The 2026 cases that "have edges" mostly have procedural relations only
 (for example `ECLI:EU:C:2026:431`: 7 edges, all `joins`); their
 `work_cites_work` count in CELLAR is zero, the same as the reported case.
 
-Planned fix: `migration/sql/58_supplement_cjeu_citations` — re-probe
+Fix: `migration/sql/59_supplement_cjeu_citations.py` — re-probe
 CELLAR (`work_cites_work`, both directions) for CJEU cases lacking `cites`
 edges, or simply everything decided in the last 18 months, and append new
 `case_citation` rows; update the HF corpus columns alongside. Run monthly:
@@ -43,7 +46,16 @@ usually means "not yet curated upstream", not "cites nothing".
 
 ## 2. Full-word language codes from `language_procedure`
 
-**Status: open — normalization pass planned, loader fix required.**
+**Status: fixed 2026-07-23 — `58_normalize_language_codes.sql` applied to
+the Coolify DB (37,952 cases re-coded, 19,803 duplicate rows merged, 11,682
+re-keyed, 24 lookup rows pruned; verified zero full-word codes remain).
+The loader now maps names to ISO (`norm_lang` in 50_load_cjeu.py) and no
+longer truncates summaries at semicolons (`whole`). Incident note: the
+first application ran the delete before the summary carry-over (a timeout
+mid-sequence was not treated as fatal), losing 19,803 stranded summaries;
+they were rebuilt from cases.parquet the same day — final state 35,520
+CJEU cases with a summary, more than before the incident because the
+rebuild also undid the historic semicolon truncation.**
 
 Surfaced by the same report (a case listing both `hu` and `hungarian`).
 The CJEU loader lowercased `language_procedure` verbatim — but that field

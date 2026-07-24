@@ -95,6 +95,37 @@ def first(v):
     return t[0] if t else None
 
 
+LANG_NAME_TO_ISO = {
+    "english": "en", "french": "fr", "german": "de", "italian": "it",
+    "spanish": "es", "dutch": "nl", "polish": "pl", "greek": "el",
+    "portuguese": "pt", "romanian": "ro", "bulgarian": "bg", "swedish": "sv",
+    "danish": "da", "finnish": "fi", "slovak": "sk", "slovenian": "sl",
+    "croatian": "hr", "estonian": "et", "latvian": "lv", "lithuanian": "lt",
+    "maltese": "mt", "irish": "ga", "hungarian": "hu", "czech": "cs",
+}
+
+
+def norm_lang(v):
+    # language_procedure holds words ("English"), not ISO codes — mapping
+    # them here keeps 'english'-style codes out of the DB (KNOWN_ISSUES #2)
+    w = (first(v) or "").lower()
+    return LANG_NAME_TO_ISO.get(w, w if len(w) == 2 else None)
+
+
+def whole(v):
+    # full cell value, NOT ';'-tokenized — summaries legitimately contain
+    # semicolons; first() would silently truncate them
+    if v is None:
+        return None
+    try:
+        if pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    s = str(v).strip()
+    return s or None
+
+
 def celex_kind(celex):
     m = re.match(r"^[68]\d{4}([A-Z])([A-Z])", celex or "")
     if not m:
@@ -199,7 +230,7 @@ def main() -> int:
             cn = case_number(celex)
             case_rows.append((
                 ecli, celex, title or (f"Case {cn}" if cn else None), d["x_date"],
-                court or "CJEU", (first(d.get("language_procedure")) or "").lower() or None,
+                court or "CJEU", norm_lang(d.get("language_procedure")),
                 dtcode, first(d.get("judicial_procedure_type")), cn,
                 importance(form_raw), first(d.get("sector")), formation_code(form_raw),
                 form_raw, first(d.get("type_procedure")),
@@ -453,9 +484,9 @@ def main() -> int:
         # summaries onto the procedure-language row
         cur.execute("SET search_path TO cle_v2, public")
         cur.execute("""CREATE TEMP TABLE stg_sum (ecli text, lang text, summary text, ssrc text)""")
-        sums = [(r.x_ecli, (first(getattr(r, "language_procedure", None)) or "").lower() or "en",
-                 first(getattr(r, "summary", None)), first(getattr(r, "summary_source", None)))
-                for r in df.itertuples(index=False) if first(getattr(r, "summary", None))]
+        sums = [(r.x_ecli, norm_lang(getattr(r, "language_procedure", None)) or "en",
+                 whole(getattr(r, "summary", None)), first(getattr(r, "summary_source", None)))
+                for r in df.itertuples(index=False) if whole(getattr(r, "summary", None))]
         copy_rows(cur, "stg_sum", ("ecli","lang","summary","ssrc"), sums)
         cur.execute("""
         UPDATE case_text ct SET summary = s.summary, summary_source = s.ssrc
