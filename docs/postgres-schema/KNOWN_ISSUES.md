@@ -3,7 +3,7 @@
 Open issues with confirmed root causes and planned fixes. Accepted
 limitations (things we chose not to change) live in
 [DATA_QUALITY.md](DATA_QUALITY.md); this file tracks work that is still
-owed. Last updated 2026-07-23.
+owed. Last updated 2026-07-30.
 
 ## 1. Missing citation edges for recent CJEU judgments
 
@@ -82,6 +82,39 @@ Fix, in order:
 4. Fix `50_load_cjeu.py` to translate `language_procedure` through the
    mapping at load time so the pattern cannot recur.
 5. Replay the same statements on the Coolify database (see issue 3).
+
+## 4. Missing language versions from multi-work CELEXes
+
+**Status: extractor fixed 2026-07-30 (maastrichtlawtech/cellar-extractor
+PR #10, merged to dev); corpus-wide re-run pending — needs a worker box.**
+
+Reported 2026-07-30: in a random sample of 100 preliminary-ruling
+judgments, nine lacked their English text in the database while EUR-Lex
+has it (e.g. ECLI:EU:C:2012:265 with 4 of 24 languages,
+ECLI:EU:C:1997:369 with 1 of 11).
+
+Root cause (verified live): a CELEX can map to several CELLAR work
+records — partial editions and re-publications share the identifier — and
+language coverage differs per work. Verified for three of the nine: each
+has exactly two works, one sparse and one full (2 vs 22 languages for
+62006CJ0005). The extractor's work-URI lookup used
+`order by asc(str(?doc)) limit 1`, an arbitrary alphabetical pick over
+UUIDs, so whenever the sparse work sorted first, every downstream fetch
+(v2 extraction, the July top-up passes) honestly reported "at CELLAR max"
+for the wrong work. Fetch errors were also logged at debug level, so the
+top-up's "0 failures" was not evidence of completeness.
+
+Fix shipped: `_fetch_sector8_items_for_celex` unions manifestation
+candidates across all works per CELEX (extractor PR #10, verified live:
+2→22, 1→11, 1→22 languages on reported cases, the 11-language set matching
+EUR-Lex exactly); the top-up script now uses it and logs per-ECLI fetch
+failures as warnings.
+
+Remaining: a corpus-wide `MIN_LANGS=24 YEAR_THRESHOLD=0` re-run with the
+fixed extractor (per-case cost roughly doubles — expect ~12-15 h on a
+6-worker box), then propagating the new rows into the Coolify database
+(the sql-runner transport or a one-shot ETL container in the compose
+network — 57's direct-psycopg path only worked while Neon was reachable).
 
 ## 3. Fix propagation: Coolify runs a restored copy
 
