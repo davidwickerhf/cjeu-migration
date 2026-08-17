@@ -488,7 +488,7 @@ def _topup_one_ecli(
     try:
         work_uri = work_uri_fn(celex, sector="6")
     except Exception as exc:
-        log.debug("work_uri lookup failed for %s: %s", celex, exc)
+        log.warning("work_uri lookup failed for %s: %s", celex, exc)
         return []
     if not work_uri:
         return []
@@ -496,13 +496,13 @@ def _topup_one_ecli(
     try:
         candidates = items_fn(work_uri)
     except Exception as exc:
-        log.debug("items fetch failed for %s: %s", celex, exc)
+        log.warning("items fetch failed for %s: %s", celex, exc)
         return []
 
     try:
         cellar_fulltexts = fanout_fn(candidates, source_label="CELLAR_ITEM")
     except Exception as exc:
-        log.debug("fanout failed for %s: %s", celex, exc)
+        log.warning("fanout failed for %s: %s", celex, exc)
         return []
 
     new_rows = []
@@ -540,7 +540,7 @@ def _upgrade_one_ecli(
     try:
         work_uri = work_uri_fn(celex, sector="6")
     except Exception as exc:
-        log.debug("work_uri lookup failed for %s: %s", celex, exc)
+        log.warning("work_uri lookup failed for %s: %s", celex, exc)
         return []
     if not work_uri:
         return []
@@ -548,7 +548,7 @@ def _upgrade_one_ecli(
     try:
         candidates = items_fn(work_uri)
     except Exception as exc:
-        log.debug("items fetch failed for %s: %s", celex, exc)
+        log.warning("items fetch failed for %s: %s", celex, exc)
         return []
     wanted = [c for c in candidates
               if (c.get("language") or "").upper() in stub_langs]
@@ -558,7 +558,7 @@ def _upgrade_one_ecli(
     try:
         cellar_fulltexts = fanout_fn(wanted, source_label="CELLAR_ITEM")
     except Exception as exc:
-        log.debug("fanout failed for %s: %s", celex, exc)
+        log.warning("fanout failed for %s: %s", celex, exc)
         return []
 
     rows = []
@@ -598,12 +598,17 @@ def topup_dataset(
     """
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
         from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_work_uri as _default_work_uri,
-            _fetch_sector8_items_for_work as _default_items,
+            _fetch_sector8_items_for_celex as _default_items_for_celex,
             _fanout_fulltexts_from_candidates as _default_fanout,
         )
-        work_uri_fn = work_uri_fn or _default_work_uri
-        items_fn = items_fn or _default_items
+        # The production path unions manifestations across every CELLAR
+        # work sharing the CELEX (a single arbitrary work missed languages
+        # — nine sampled judgments lost their English text that way). The
+        # two-step seam is kept for the tests: the default work_uri_fn
+        # passes the celex through as the token items_fn consumes.
+        if work_uri_fn is None and items_fn is None:
+            work_uri_fn = lambda celex, sector="6": celex
+            items_fn = lambda celex: _default_items_for_celex(celex, sector="6")[1]
         fanout_fn = fanout_fn or _default_fanout
 
     sparse = find_sparse_eclis(
@@ -759,12 +764,17 @@ def run(
 
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
         from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_work_uri as _default_work_uri,
-            _fetch_sector8_items_for_work as _default_items,
+            _fetch_sector8_items_for_celex as _default_items_for_celex,
             _fanout_fulltexts_from_candidates as _default_fanout,
         )
-        work_uri_fn = work_uri_fn or _default_work_uri
-        items_fn = items_fn or _default_items
+        # The production path unions manifestations across every CELLAR
+        # work sharing the CELEX (a single arbitrary work missed languages
+        # — nine sampled judgments lost their English text that way). The
+        # two-step seam is kept for the tests: the default work_uri_fn
+        # passes the celex through as the token items_fn consumes.
+        if work_uri_fn is None and items_fn is None:
+            work_uri_fn = lambda celex, sector="6": celex
+            items_fn = lambda celex: _default_items_for_celex(celex, sector="6")[1]
         fanout_fn = fanout_fn or _default_fanout
 
     sparse = find_sparse_eclis_from_index(
@@ -939,12 +949,17 @@ def run_upgrade(
 
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
         from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_work_uri as _default_work_uri,
-            _fetch_sector8_items_for_work as _default_items,
+            _fetch_sector8_items_for_celex as _default_items_for_celex,
             _fanout_fulltexts_from_candidates as _default_fanout,
         )
-        work_uri_fn = work_uri_fn or _default_work_uri
-        items_fn = items_fn or _default_items
+        # The production path unions manifestations across every CELLAR
+        # work sharing the CELEX (a single arbitrary work missed languages
+        # — nine sampled judgments lost their English text that way). The
+        # two-step seam is kept for the tests: the default work_uri_fn
+        # passes the celex through as the token items_fn consumes.
+        if work_uri_fn is None and items_fn is None:
+            work_uri_fn = lambda celex, sector="6": celex
+            items_fn = lambda celex: _default_items_for_celex(celex, sector="6")[1]
         fanout_fn = fanout_fn or _default_fanout
 
     pending: list = []
