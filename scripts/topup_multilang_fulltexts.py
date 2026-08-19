@@ -126,10 +126,17 @@ def find_sparse_eclis(
 
     # First non-null CELEX token
     def _first_celex(v):
+        # Prefer a token without INF and strip _SUM/_INF-style suffixes —
+        # the raw first token can be the summary document's CELEX (e.g.
+        # "62020CJ0414_SUM;62020CJ0414"), whose work family carries only a
+        # partial language set. 3,642 corpus cases have suffixed tokens.
         if pd.isna(v):
             return None
         parts = [p.strip() for p in str(v).split(";") if p.strip()]
-        return parts[0] if parts else None
+        if not parts:
+            return None
+        non_inf = [p for p in parts if "INF" not in p]
+        return (non_inf[0] if non_inf else parts[0]).split("_")[0]
 
     celexes = cases_df["celex"].map(_first_celex)
 
@@ -256,10 +263,17 @@ def find_sparse_eclis_from_index(
     years = dt.dt.year
 
     def _first_celex(v):
+        # Prefer a token without INF and strip _SUM/_INF-style suffixes —
+        # the raw first token can be the summary document's CELEX (e.g.
+        # "62020CJ0414_SUM;62020CJ0414"), whose work family carries only a
+        # partial language set. 3,642 corpus cases have suffixed tokens.
         if pd.isna(v):
             return None
         parts = [p.strip() for p in str(v).split(";") if p.strip()]
-        return parts[0] if parts else None
+        if not parts:
+            return None
+        non_inf = [p for p in parts if "INF" not in p]
+        return (non_inf[0] if non_inf else parts[0]).split("_")[0]
 
     celexes = cases_df["celex"].map(_first_celex)
 
@@ -927,10 +941,17 @@ def run_upgrade(
     cases_df = pd.read_parquet(cases_path)
 
     def _first_celex(v):
+        # Prefer a token without INF and strip _SUM/_INF-style suffixes —
+        # the raw first token can be the summary document's CELEX (e.g.
+        # "62020CJ0414_SUM;62020CJ0414"), whose work family carries only a
+        # partial language set. 3,642 corpus cases have suffixed tokens.
         if pd.isna(v):
             return None
         parts = [p.strip() for p in str(v).split(";") if p.strip()]
-        return parts[0] if parts else None
+        if not parts:
+            return None
+        non_inf = [p for p in parts if "INF" not in p]
+        return (non_inf[0] if non_inf else parts[0]).split("_")[0]
 
     celex_by_ecli = {
         str(e): str(c)

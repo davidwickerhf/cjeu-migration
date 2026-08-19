@@ -669,3 +669,19 @@ def test_run_upgrade_end_to_end(tmp_path):
     assert cs["__source_window"] == "upgrade_stub_texts"
     # idempotence: the upgraded file has no stubs left
     assert mod.stream_stub_index(tmp_path / "work" / "fulltexts.upgraded.parquet") == {}
+
+
+def test_sparse_celex_token_normalized(tmp_path):
+    # "62020CJ0414_SUM;62020CJ0414" must resolve to the judgment CELEX, not
+    # the summary document's — the suffixed token probes the wrong work
+    # family (6-language summary edition vs the 23-language judgment).
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:SUF", "celex": "62020CJ0414_SUM;62020CJ0414",
+         "sector": "6", "date_publication": "2021-01-13"},
+        {"ecli": "ECLI:INF", "celex": "62021CO0021_INF",
+         "sector": "6", "date_publication": "2021-02-01"},
+    ])
+    sparse = mod.find_sparse_eclis_from_index(
+        cases, {}, min_langs=24, year_threshold=0)
+    assert dict(sparse) == {"ECLI:SUF": "62020CJ0414",
+                            "ECLI:INF": "62021CO0021"}
