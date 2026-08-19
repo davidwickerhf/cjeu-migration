@@ -64,6 +64,11 @@ def runner(sql, params=None, execute=False):
             if not out.get("ok"):
                 raise RuntimeError(str(out)[:300])
             return out
+        except urllib.error.HTTPError as exc:
+            # surface the body — the runner's 4xx JSON (e.g.
+            # write_row_limit_exceeded) is what callers dispatch on
+            last = RuntimeError(f"HTTP {exc.code}: {exc.read().decode()[:300]}")
+            time.sleep(3 * (attempt + 1))
         except Exception as exc:
             last = exc
             time.sleep(3 * (attempt + 1))
@@ -184,10 +189,18 @@ def main() -> int:
             else:
                 raise
 
+    failed_chunks = 0
     for i in range(0, len(case_ids), 2000):
-        recompute(case_ids[i:i + 2000])
-    print(f"done: {inserted:,} rows inserted, {flags_updated:,} stub flags updated")
-    return 0
+        try:
+            recompute(case_ids[i:i + 2000])
+        except Exception as exc:
+            # a transient outage must not kill the whole pass — skip the
+            # chunk, keep going, and fail the exit code at the end
+            failed_chunks += 1
+            print(f"  recompute chunk at {i} FAILED: {str(exc)[:200]}", flush=True)
+    print(f"done: {inserted:,} rows inserted, {flags_updated:,} stub flags updated, "
+          f"{failed_chunks} recompute chunks failed")
+    return 1 if failed_chunks else 0
 
 
 if __name__ == "__main__":
