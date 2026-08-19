@@ -3,7 +3,7 @@
 Open issues with confirmed root causes and planned fixes. Accepted
 limitations (things we chose not to change) live in
 [DATA_QUALITY.md](DATA_QUALITY.md); this file tracks work that is still
-owed. Last updated 2026-07-30.
+owed. Last updated 2026-08-19.
 
 ## 1. Missing citation edges for recent CJEU judgments
 
@@ -85,8 +85,17 @@ Fix, in order:
 
 ## 4. Missing language versions from multi-work CELEXes
 
-**Status: extractor fixed 2026-07-30 (maastrichtlawtech/cellar-extractor
-PR #10, merged to dev); corpus-wide re-run pending — needs a worker box.**
+**Status: largely resolved 2026-08-19. The corpus-wide re-run with the
+multi-work union fix added 55,302 language rows to the HF corpus and
+55,064 to the database (controls verified unchanged; cases at 20+
+fulltext languages: 17,326 → 20,339). Eight of the nine reported cases
+verified fixed. The ninth exposed a second, related bug: the top-up
+probed the raw first CELEX token, which for 3,642 corpus cases is a
+suffixed variant (`_SUM`/`_INF`) whose work family carries a partial
+language set — ECLI:EU:C:2021:4 was looked up as `62020CJ0414_SUM`.
+Token normalization fixed (matches the extractor's `_normalize_celex`);
+a follow-up sweep over those cases is running, with the DB sync and
+before/after sanity report chained behind it.**
 
 Reported 2026-07-30: in a random sample of 100 preliminary-ruling
 judgments, nine lacked their English text in the database while EUR-Lex
