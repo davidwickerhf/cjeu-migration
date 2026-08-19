@@ -88,8 +88,9 @@ def paginated(sql_tmpl, key="id"):
 
 
 def main() -> int:
+    recompute_only = os.environ.get("RECOMPUTE_ONLY") == "1"
     path = os.environ.get("FULLTEXTS_PARQUET")
-    if not path:
+    if not path and not recompute_only:
         from huggingface_hub import hf_hub_download
         path = hf_hub_download("davidwickerhf/cjeu-opendata",
                                "fulltexts.parquet", repo_type="dataset")
@@ -115,6 +116,8 @@ def main() -> int:
     inserted = 0
     scanned = 0
     batch, batch_bytes = [], 0
+    if recompute_only:
+        print("RECOMPUTE_ONLY=1 — skipping parquet scan/insert phase")
 
     def flush():
         nonlocal inserted, batch, batch_bytes
@@ -134,8 +137,9 @@ def main() -> int:
         inserted += out.get("row_count") or 0
         batch, batch_bytes = [], 0
 
-    pf = pq.ParquetFile(path)
-    for pbatch in pf.iter_batches(batch_size=2000, columns=list(COLS)):
+    pf = pq.ParquetFile(path) if not recompute_only else None
+    for pbatch in (pf.iter_batches(batch_size=2000, columns=list(COLS))
+                   if pf else []):
         cols = {c: pbatch.column(c).to_pylist() for c in COLS}
         for e, t, s2, l, f2, m2 in zip(cols["ecli"], cols["text"],
                                        cols["text_source"], cols["text_language"],
@@ -182,7 +186,11 @@ def main() -> int:
                 params=[ids], execute=True)
             flags_updated += out.get("row_count") or 0
         except RuntimeError as exc:
-            if "write_row_limit_exceeded" in str(exc) and len(ids) > 100:
+            # split on the 10k-row cap AND on statement timeouts — chunks of
+            # text-heavy cases detoast a lot computing lengths for medians
+            splittable = ("write_row_limit_exceeded" in str(exc)
+                          or "QueryCanceled" in str(exc))
+            if splittable and len(ids) > 50:
                 half = len(ids) // 2
                 recompute(ids[:half])
                 recompute(ids[half:])
@@ -190,9 +198,10 @@ def main() -> int:
                 raise
 
     failed_chunks = 0
-    for i in range(0, len(case_ids), 2000):
+    CHUNK = 400
+    for i in range(0, len(case_ids), CHUNK):
         try:
-            recompute(case_ids[i:i + 2000])
+            recompute(case_ids[i:i + CHUNK])
         except Exception as exc:
             # a transient outage must not kill the whole pass — skip the
             # chunk, keep going, and fail the exit code at the end
