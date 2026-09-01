@@ -85,7 +85,15 @@ Fix, in order:
 
 ## 4. Missing language versions from multi-work CELEXes
 
-**Status: largely resolved 2026-08-19. The corpus-wide re-run with the
+**Status: resolved. Final state verified 2026-08-24: all nine reported
+cases carry their full language sets in the production DB (the ninth,
+ECLI:EU:C:2021:4, at 22 languages with English after the suffixed-CELEX
+sweep). Totals across the campaign: +60,660 language rows in the corpus
+(652,160 fulltext rows) and +60,422 in the database; cases at 20+
+fulltext languages 17,326 → 20,637; controls unchanged throughout.
+History of the two root causes below.**
+
+Original interim status 2026-08-19: The corpus-wide re-run with the
 multi-work union fix added 55,302 language rows to the HF corpus and
 55,064 to the database (controls verified unchanged; cases at 20+
 fulltext languages: 17,326 → 20,339). Eight of the nine reported cases
