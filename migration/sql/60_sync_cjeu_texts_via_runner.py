@@ -106,16 +106,21 @@ def main() -> int:
 
     print("fetching loaded text triples ...", flush=True)
     seen = set()
+    db_pair_rows = {}   # (case_id, language) -> [(row_id, source), ...]
     for r in paginated("""
             SELECT ct.id, ct.case_id, ct.language, ct.source FROM case_text ct
             JOIN cjeu_document d ON d.case_id = ct.case_id
             WHERE ct.id > %s ORDER BY ct.id LIMIT 900"""):
         seen.add((r["case_id"], r["language"], r["source"]))
+        db_pair_rows.setdefault((r["case_id"], r["language"]), []).append(
+            (r["id"], r["source"]))
     print(f"  {len(seen)} triples already loaded")
 
     inserted = 0
+    upgraded = 0
     scanned = 0
     batch, batch_bytes = [], 0
+    upd_batch, upd_bytes = [], 0
     if recompute_only:
         print("RECOMPUTE_ONLY=1 — skipping parquet scan/insert phase")
 
@@ -137,6 +142,29 @@ def main() -> int:
         inserted += out.get("row_count") or 0
         batch, batch_bytes = [], 0
 
+    def flush_upgrades():
+        # in-place source replacement: the parquet's row for this (case,
+        # language) pair supersedes a stale CJEU-source DB row (e.g. an
+        # InfoCuria wrong-document replaced by the CELLAR judgment).
+        # Updating the existing row keeps its id and summary, and keeps the
+        # canonical view from serving the stale text (D12 order prefers
+        # INFOCURIA over CELLAR_ITEM).
+        nonlocal upgraded, upd_batch, upd_bytes
+        if not upd_batch:
+            return
+        out = runner("""
+            UPDATE case_text ct
+               SET source = v.source, fulltext = nullif(v.fulltext, ''),
+                   text_format = nullif(v.text_format, ''),
+                   missing_reasons = nullif(v.missing_reasons, '')
+              FROM unnest(%s::bigint[], %s::text[], %s::text[],
+                          %s::text[], %s::text[])
+                   AS v(id, fulltext, source, text_format, missing_reasons)
+             WHERE ct.id = v.id""",
+            params=[[b[i] for b in upd_batch] for i in range(5)], execute=True)
+        upgraded += out.get("row_count") or 0
+        upd_batch, upd_bytes = [], 0
+
     pf = pq.ParquetFile(path) if not recompute_only else None
     for pbatch in (pf.iter_batches(batch_size=2000, columns=list(COLS))
                    if pf else []):
@@ -151,6 +179,20 @@ def main() -> int:
             if not cid or not lang or (cid, lang, src) in seen:
                 continue
             seen.add((cid, lang, src))
+            stale = [(rid, sr) for rid, sr in db_pair_rows.get((cid, lang), [])
+                     if sr not in ("RECHTSPRAAK", src)]
+            if stale:
+                rid, old_src = stale[0]
+                seen.discard((cid, lang, old_src))
+                db_pair_rows[(cid, lang)] = [
+                    (r, src if r == rid else sr)
+                    for r, sr in db_pair_rows[(cid, lang)]]
+                upd_batch.append((rid, t or "", src, f2 or "", m2 or ""))
+                upd_bytes += len(t or "")
+                if len(upd_batch) >= BATCH_ROWS or upd_bytes >= BATCH_BYTES:
+                    flush_upgrades()
+                continue
+            db_pair_rows.setdefault((cid, lang), []).append((None, src))
             batch.append((cid, lang, t or "", src, f2 or "", m2 or ""))
             batch_bytes += len(t or "")
             if len(batch) >= BATCH_ROWS or batch_bytes >= BATCH_BYTES:
@@ -158,7 +200,9 @@ def main() -> int:
         if scanned % 100_000 < 2000:
             print(f"  scanned {scanned:,} — inserted {inserted:,}", flush=True)
     flush()
-    print(f"insert phase done: scanned {scanned:,}, inserted {inserted:,}")
+    flush_upgrades()
+    print(f"insert phase done: scanned {scanned:,}, inserted {inserted:,}, "
+          f"upgraded in place {upgraded:,}")
 
     # Stub-flag recompute, chunked by case id list (respects the 10k-row
     # UPDATE cap and the 30s statement timeout; splits a chunk on 403).

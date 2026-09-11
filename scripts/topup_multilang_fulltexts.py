@@ -427,6 +427,40 @@ def stream_stub_index(
     return stubs
 
 
+def stream_infocuria_index(
+    fulltexts_path: Path,
+    *,
+    batch_size: int = 2_000,
+) -> dict:
+    """Index rows whose text came from InfoCuria: dict[ecli] -> {LANG: len}.
+
+    InfoCuria's per-procedure lookup sometimes returns the WRONG document —
+    an AG opinion, a procedural order, a referred-questions notice, or a
+    headnote summary — under the judgment's slot. Those rows block the
+    CELLAR supplementation ("language already covered") and can be long
+    enough to defeat the stub detector (a 55k-char opinion, for example).
+    The source-upgrade mode replaces every such row for which CELLAR holds
+    a manifestation under the document's own CELEX, which is by
+    construction the correct document.
+    """
+    out: dict = {}
+    pf = pq.ParquetFile(fulltexts_path)
+    for batch in pf.iter_batches(
+        batch_size=batch_size,
+        columns=["ecli", "text_language", "text", "text_source"],
+    ):
+        eclis = batch.column("ecli").to_pylist()
+        langs = batch.column("text_language").to_pylist()
+        lens = [len(t) if t else 0 for t in batch.column("text").to_pylist()]
+        sources = batch.column("text_source").to_pylist()
+        for e, l, n, src in zip(eclis, langs, lens, sources):
+            lang = (l or "").upper()
+            if not e or not lang or (src or "") != "INFOCURIA_BLOB_HTML":
+                continue
+            out.setdefault(e, {})[lang] = n
+    return out
+
+
 def replace_rows_streaming(
     original_path: Path,
     replacement_rows: list,
@@ -545,11 +579,17 @@ def _upgrade_one_ecli(
     work_uri_fn,
     items_fn,
     fanout_fn,
+    min_ratio: float = 2.0,
 ) -> list:
-    """For one ECLI, fetch CELLAR manifestations for its stub languages and
-    return replacement rows — only where the fetched text is materially
-    longer (> 2x) than the stored stub, so a genuine short rendition is
-    never clobbered by an equally short refetch.
+    """For one ECLI, fetch CELLAR manifestations for the flagged languages
+    and return replacement rows.
+
+    ``min_ratio`` guards the stub mode: the fetched text must be > 2x the
+    stored one, so a genuine short rendition is never clobbered by an
+    equally short refetch. The source-upgrade mode passes 0: a CELLAR text
+    under the document's own CELEX replaces an InfoCuria row regardless of
+    length — the stored row may be a LONGER wrong document (an AG opinion
+    over the judgment).
     """
     try:
         work_uri = work_uri_fn(celex, sector="6")
@@ -579,7 +619,9 @@ def _upgrade_one_ecli(
     for ft in cellar_fulltexts:
         lang = (ft.get("text_language") or "").upper()
         text = ft.get("text") or ""
-        if lang not in stub_langs or len(text) <= 2 * stub_langs[lang]:
+        if lang not in stub_langs or len(text) == 0:
+            continue
+        if min_ratio and len(text) <= min_ratio * stub_langs[lang]:
             continue
         rows.append({
             "celex": celex,
@@ -589,7 +631,8 @@ def _upgrade_one_ecli(
             "text_language": lang,
             "text_format": ft.get("text_format", ""),
             "missing_reasons": "",
-            "__source_window": "upgrade_stub_texts",
+            "__source_window": ("upgrade_infocuria_sources" if min_ratio == 0
+                                else "upgrade_stub_texts"),
         })
     return rows
 
@@ -904,6 +947,7 @@ def run_upgrade(
     repo_id: str,
     workdir: Path,
     *,
+    mode: str = "stub",
     dry_run: bool = False,
     token: str | None = None,
     stub_ratio: float = 0.25,
@@ -959,14 +1003,20 @@ def run_upgrade(
         if not pd.isna(e) and c
     }
 
-    log.info("indexing stub texts (streaming) ← %s", fulltexts_path)
-    stubs = stream_stub_index(
-        fulltexts_path, ratio=stub_ratio, min_median=stub_min_median)
+    if mode == "source":
+        log.info("indexing InfoCuria-sourced rows (streaming) ← %s", fulltexts_path)
+        flagged = stream_infocuria_index(fulltexts_path)
+        min_ratio = 0.0
+    else:
+        log.info("indexing stub texts (streaming) ← %s", fulltexts_path)
+        flagged = stream_stub_index(
+            fulltexts_path, ratio=stub_ratio, min_median=stub_min_median)
+        min_ratio = 2.0
     work = [(e, celex_by_ecli[e], langs)
-            for e, langs in stubs.items() if e in celex_by_ecli]
+            for e, langs in flagged.items() if e in celex_by_ecli]
     n_stub_rows = sum(len(l) for _, _, l in work)
-    log.info("found %d stub rows across %d ECLIs (ratio<%.2f, median>=%d)",
-             n_stub_rows, len(work), stub_ratio, stub_min_median)
+    log.info("mode=%s: %d flagged rows across %d ECLIs",
+             mode, n_stub_rows, len(work))
 
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
         from cellar_extractor.eurlex_scraping import (
@@ -1015,6 +1065,7 @@ def run_upgrade(
         return _upgrade_one_ecli(
             ecli, celex, langs,
             work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+            min_ratio=min_ratio,
         )
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -1075,9 +1126,10 @@ def main() -> int:
 
     mode = os.environ.get("MODE", "topup")
     with tempfile.TemporaryDirectory(prefix="hf-topup-") as tmp:
-        if mode == "upgrade":
+        if mode in ("upgrade", "source_upgrade"):
             stats = run_upgrade(
                 repo_id, Path(tmp),
+                mode="source" if mode == "source_upgrade" else "stub",
                 dry_run=dry_run, token=token,
                 stub_ratio=float(os.environ.get("STUB_RATIO", "0.25")),
                 stub_min_median=int(os.environ.get("STUB_MIN_MEDIAN", "10000")),

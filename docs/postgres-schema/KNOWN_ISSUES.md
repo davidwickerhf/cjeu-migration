@@ -3,7 +3,7 @@
 Open issues with confirmed root causes and planned fixes. Accepted
 limitations (things we chose not to change) live in
 [DATA_QUALITY.md](DATA_QUALITY.md); this file tracks work that is still
-owed. Last updated 2026-08-19.
+owed. Last updated 2026-09-11.
 
 ## 1. Missing citation edges for recent CJEU judgments
 
@@ -132,6 +132,39 @@ fixed extractor (per-case cost roughly doubles — expect ~12-15 h on a
 6-worker box), then propagating the new rows into the Coolify database
 (the sql-runner transport or a one-shot ETL container in the compose
 network — 57's direct-psycopg path only worked while Neon was reachable).
+
+## 5. Wrong document stored in the English slot (InfoCuria path)
+
+**Status: open — sweep mode built (`MODE=source_upgrade`), corpus-wide run
+pending on a worker box.**
+
+Reported 2026-09-09 (third external data-quality report): of ~9k
+preliminary-ruling judgments on the merits, 657 lack a usable English
+judgment; 604 of those have the full English judgment on EUR-Lex. The gap
+concentrates in 2012+ cases. Full list preserved in
+`migration/verify/kamil_2026-09_en_gaps.tsv`.
+
+Root cause (verified on samples): InfoCuria's per-procedure lookup
+sometimes returns the WRONG document for a language slot — the Advocate
+General's opinion, a procedural order, a referred-questions notice, or a
+headnote summary — and the extractor stored it (`INFOCURIA_BLOB_HTML`).
+That row then blocks the CELLAR supplementation ("language already
+covered"), and a long wrong document (a 55k-char opinion) defeats the
+stub-length detector by design. CELLAR verifiably holds the real English
+judgments under the judgment CELEX (e.g. 62010CJ0307: 35k-char
+Parties/Grounds/Operative text). The 2012+ concentration matches the end
+of the printed ECR era, after which InfoCuria's English blobs became
+unreliable.
+
+Fix built: `MODE=source_upgrade` in the top-up script replaces ANY
+InfoCuria-sourced row with the CELLAR manifestation under the document's
+own CELEX when one exists (no length ratio — the correct document is by
+construction whatever the celex-keyed work carries, and the stale text may
+be longer than the replacement). The runner sync (60) now upgrades
+superseded-source rows in place, keeping row ids/summaries and preventing
+the canonical view from serving the stale text. Scope: 69,073 InfoCuria
+rows across 30,083 cases; rows CELLAR cannot replace keep the InfoCuria
+text.
 
 ## 3. Fix propagation: Coolify runs a restored copy
 

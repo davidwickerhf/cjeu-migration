@@ -685,3 +685,77 @@ def test_sparse_celex_token_normalized(tmp_path):
         cases, {}, min_langs=24, year_threshold=0)
     assert dict(sparse) == {"ECLI:SUF": "62020CJ0414",
                             "ECLI:INF": "62021CO0021"}
+
+
+# ---------------------------------------------------------------------------
+# source-upgrade mode (wrong-document InfoCuria rows)
+# ---------------------------------------------------------------------------
+
+
+def _write_source_inputs(tmp_path: Path):
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:WRONGDOC", "celex": "62010CJ0307", "sector": "6",
+         "date_publication": "2012-06-19"},
+    ])
+    fulltexts = pd.DataFrame([
+        # EN slot holds an AG opinion from InfoCuria — LONGER than the real
+        # judgment, so no length heuristic can catch it
+        {"ecli": "ECLI:WRONGDOC", "celex": "62010CJ0307",
+         "text": "OPINION OF ADVOCATE GENERAL " + "o" * 55_000,
+         "text_source": "INFOCURIA_BLOB_HTML", "text_language": "EN",
+         "text_format": "html", "missing_reasons": ""},
+        # FR came from CELLAR — must not be touched
+        {"ecli": "ECLI:WRONGDOC", "celex": "62010CJ0307",
+         "text": "ARRET DE LA COUR " + "f" * 30_000,
+         "text_source": "CELLAR_ITEM", "text_language": "FR",
+         "text_format": "xhtml", "missing_reasons": ""},
+    ])
+    cpath = tmp_path / "cases.parquet"
+    fpath = tmp_path / "fulltexts.parquet"
+    cases.to_parquet(cpath, index=False)
+    fulltexts.to_parquet(fpath, index=False)
+    return cpath, fpath
+
+
+def test_stream_infocuria_index_flags_only_infocuria_rows(tmp_path):
+    _, fpath = _write_source_inputs(tmp_path)
+    idx = mod.stream_infocuria_index(fpath)
+    assert idx == {"ECLI:WRONGDOC": {"EN": 55_028}}
+
+
+def test_source_upgrade_replaces_longer_wrong_document(tmp_path):
+    cpath, fpath = _write_source_inputs(tmp_path)
+
+    def work_uri_fn(celex, sector="6"):
+        return "http://cellar/w"
+    def items_fn(uri):
+        return [{"item_url": "http://x/EN", "format": "xhtml", "language": "EN"}]
+    def fanout_fn(candidates, source_label):
+        assert [c["language"] for c in candidates] == ["EN"]
+        # the real judgment is SHORTER than the stored opinion
+        return [{"text": "JUDGMENT OF THE COURT " + "j" * 35_000,
+                 "text_source": source_label,
+                 "text_language": "EN", "text_format": "xhtml"}]
+
+    uploads = []
+    stats = mod.run_upgrade(
+        repo_id="example/x",
+        workdir=tmp_path / "work",
+        mode="source",
+        dry_run=False, token="t",
+        local_cases=cpath, local_fulltexts=fpath,
+        max_workers=1, checkpoint_every=1,
+        downloader=lambda *a, **kw: pytest.fail("downloader called with local files"),
+        uploader=lambda repo, path, fname, token: uploads.append(fname),
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+    assert stats["rows_upgraded"] == 1
+    assert uploads == ["fulltexts.parquet"]
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
+    assert len(df) == 2
+    en = df[df["text_language"] == "EN"].iloc[0]
+    assert en["text"].startswith("JUDGMENT OF THE COURT")
+    assert en["text_source"] == "CELLAR_ITEM"
+    assert en["__source_window"] == "upgrade_infocuria_sources"
+    fr = df[df["text_language"] == "FR"].iloc[0]
+    assert fr["text_source"] == "CELLAR_ITEM" and fr["text"].startswith("ARRET")
