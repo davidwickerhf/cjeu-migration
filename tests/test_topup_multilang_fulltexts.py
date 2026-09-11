@@ -659,9 +659,13 @@ def test_run_upgrade_end_to_end(tmp_path):
         uploader=lambda repo, path, fname, token: uploads.append(fname),
         work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
     )
-    assert stats == {"stub_eclis": 1, "stub_rows": 1,
-                     "rows_upgraded": 1, "failures": 0}
-    assert uploads == ["fulltexts.parquet"]
+    assert stats == {"stub_eclis": 1, "stub_rows": 1, "rows_upgraded": 1,
+                     "superseded_archived": 1, "failures": 0}
+    # the replaced original is archived, not lost
+    sup = pd.read_parquet(tmp_path / "work" / "superseded_stub_texts.parquet")
+    assert len(sup) == 1 and sup.iloc[0]["text_language"] == "CS"
+    assert uploads[0] == "fulltexts.parquet"
+    assert uploads[-1].startswith("superseded/")
     df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
     assert len(df) == 9
     cs = df[(df["ecli"] == "ECLI:STUB") & (df["text_language"] == "CS")].iloc[0]
@@ -750,7 +754,14 @@ def test_source_upgrade_replaces_longer_wrong_document(tmp_path):
         work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
     )
     assert stats["rows_upgraded"] == 1
-    assert uploads == ["fulltexts.parquet"]
+    assert stats["superseded_archived"] == 1
+    # dry_run=False: the sidecar upload lands under superseded/ after the
+    # checkpointed fulltexts uploads
+    assert uploads[0] == "fulltexts.parquet"
+    assert uploads[-1].startswith("superseded/") and uploads[-1].endswith(
+        "_source_texts.parquet")
+    sup = pd.read_parquet(tmp_path / "work" / "superseded_source_texts.parquet")
+    assert sup.iloc[0]["text"].startswith("OPINION OF ADVOCATE GENERAL")
     df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
     assert len(df) == 2
     en = df[df["text_language"] == "EN"].iloc[0]

@@ -465,6 +465,7 @@ def replace_rows_streaming(
     original_path: Path,
     replacement_rows: list,
     output_path: Path,
+    collect_dropped: list | None = None,
 ) -> int:
     """Stream-copy *original_path* to *output_path*, DROPPING rows whose
     (ecli, language) matches a replacement, then append the replacements.
@@ -503,6 +504,9 @@ def replace_rows_streaming(
                 for e, l in zip(eclis, langs)
             ]
             if not all(mask):
+                if collect_dropped is not None:
+                    dropped = batch.filter(pa.array([not m for m in mask]))
+                    collect_dropped.extend(dropped.to_pylist())
                 batch = batch.filter(pa.array(mask))
             if batch.num_rows:
                 writer.write_batch(_conform_batch(batch, target_schema))
@@ -1042,13 +1046,16 @@ def run_upgrade(
     start = time.monotonic()
     current_base = fulltexts_path
 
+    superseded: list = []   # every replaced original, archived as a sidecar
+
     def _flush(rows: list) -> int:
         nonlocal ckpt_n, current_base
         if not rows:
             return 0
         ckpt_n += 1
         out = workdir / f"fulltexts.upgrade{ckpt_n % 2}.parquet"
-        replaced = replace_rows_streaming(current_base, rows, out)
+        replaced = replace_rows_streaming(
+            current_base, rows, out, collect_dropped=superseded)
         if replaced == 0:
             return 0
         current_base = out
@@ -1097,10 +1104,23 @@ def run_upgrade(
         os.replace(current_base, final_path)
         current_base = final_path
 
+    # Belt and braces on top of the dataset repo's git history: archive
+    # every replaced original as a sidecar so nothing is lost even at the
+    # file level. Uploaded under superseded/ in the dataset repo.
+    if superseded:
+        side = workdir / f"superseded_{mode}_texts.parquet"
+        pd.DataFrame(superseded).to_parquet(side, index=False)
+        log.info("archived %d superseded rows -> %s", len(superseded), side)
+        if not dry_run:
+            uploader(repo_id, side,
+                     f"superseded/{time.strftime('%Y%m%d')}_{mode}_texts.parquet",
+                     token)
+
     stats = {
         "stub_eclis": len(work),
         "stub_rows": n_stub_rows,
         "rows_upgraded": total_replaced,
+        "superseded_archived": len(superseded),
         "failures": failures,
     }
     if total_replaced == 0:
