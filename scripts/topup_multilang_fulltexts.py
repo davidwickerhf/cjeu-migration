@@ -1064,7 +1064,16 @@ def run_upgrade(
                      ckpt_n, replaced)
         else:
             uploader(repo_id, out, "fulltexts.parquet", token)
-            log.info("checkpoint %d: %d rows upgraded + uploaded", ckpt_n, replaced)
+            # the superseded archive must be as crash-proof as the data:
+            # re-upload the accumulated sidecar with every checkpoint (a
+            # mid-run box death once lost a run's local archive)
+            side = workdir / f"superseded_{mode}_texts.parquet"
+            pd.DataFrame(superseded).to_parquet(side, index=False)
+            uploader(repo_id, side,
+                     f"superseded/{time.strftime('%Y%m%d')}_{mode}_texts.parquet",
+                     token)
+            log.info("checkpoint %d: %d rows upgraded + uploaded (+sidecar)",
+                     ckpt_n, replaced)
         return replaced
 
     def _task(item):
