@@ -1012,6 +1012,7 @@ def run_upgrade(
     items_fn=None,
     fanout_fn=None,
     target_eclis: set[str] | None = None,
+    target_languages: set[str] | None = None,
 ) -> dict:
     """Upgrade mode: replace stub texts (headnotes captured before the full
     CELLAR manifestation existed) with the full judgment text. Same
@@ -1078,6 +1079,18 @@ def run_upgrade(
             ecli: langs for ecli, langs in flagged.items()
             if ecli.strip().upper() in wanted_eclis
         }
+    if target_languages is not None:
+        wanted_languages = {
+            str(language).strip().upper() for language in target_languages
+        }
+        flagged = {
+            ecli: {
+                language: length for language, length in langs.items()
+                if language.upper() in wanted_languages
+            }
+            for ecli, langs in flagged.items()
+        }
+        flagged = {ecli: langs for ecli, langs in flagged.items() if langs}
     work = [(e, celex_by_ecli[e], langs)
             for e, langs in flagged.items() if e in celex_by_ecli]
     n_stub_rows = sum(len(l) for _, _, l in work)
@@ -1220,12 +1233,16 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="hf-topup-") as tmp:
         if mode in ("upgrade", "source_upgrade", "manifestation_upgrade"):
             target_eclis = None
+            target_languages = None
             target_tsv = os.environ.get("TARGET_ECLIS_TSV")
             if target_tsv:
                 target_frame = pd.read_csv(target_tsv, sep="\t", dtype=str)
                 if "ecli" not in target_frame:
                     raise SystemExit(f"{target_tsv} must contain an ecli column")
                 target_eclis = set(target_frame["ecli"].dropna())
+            target_languages_env = os.environ.get("TARGET_LANGUAGES")
+            if target_languages_env:
+                target_languages = set(target_languages_env.split(","))
             stats = run_upgrade(
                 repo_id, Path(tmp),
                 mode={
@@ -1240,6 +1257,7 @@ def main() -> int:
                 local_cases=Path(local_cases) if local_cases else None,
                 local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
                 target_eclis=target_eclis,
+                target_languages=target_languages,
             )
         else:
             stats = run(

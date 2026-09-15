@@ -834,6 +834,7 @@ def test_manifestation_upgrade_targets_and_replaces_summary(tmp_path):
         local_cases=cpath, local_fulltexts=fpath,
         max_workers=1, checkpoint_every=1,
         target_eclis={"ECLI:SUMMARY"},
+        target_languages={"EN"},
         work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
     )
 
