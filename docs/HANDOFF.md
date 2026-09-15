@@ -242,7 +242,12 @@ Verification targets for this campaign:
   (case number, ECLI, CELEX). Every one should now have an English
   fulltext row whose text looks like a judgment (starts with
   JUDGMENT/Judgment, not "OPINION OF ADVOCATE GENERAL"). Check corpus and
-  DB.
+  DB. For final acceptance, run `verify_kamil_en_gaps.py` with
+  `--live-cellar --workers 2`: this refetches the English manifestation
+  under each base `CJ` CELEX and compares the complete whitespace-normalized
+  body by SHA-256. Required result: 604 structural passes, 604
+  `exact_match`, and 0 residuals. Do not run this live comparison alongside
+  the scrape because both jobs contend for the same CELLAR service.
 - Residual list: InfoCuria rows the sweep could not replace (CELLAR has
   no manifestation in that language). These keep their InfoCuria text by
   design. Count them, sample a few, and report — this is Kamil's "~33
@@ -287,7 +292,8 @@ The replacement must therefore be corpus-wide, not a Kamil-only patch:
    the canonical base work for every affected language.
 3. Archive replaced rows and checkpoint to HF as usual.
 4. Verify the full corpus contains no derived-work fulltext rows, then run
-   the exact Kamil 604-case verifier. Required result: 604 pass, 0 residual.
+   the exact Kamil 604-case verifier with `--live-cellar`. Required result:
+   604 structural passes, 604 fresh full-body matches, and 0 residuals.
 5. Run a content-aware production sync so corrected same-source
    `CELLAR_ITEM` bodies are updated, recompute all CJEU `is_stub` flags, and
    bracket with control snapshots.

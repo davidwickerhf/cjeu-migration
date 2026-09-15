@@ -1,4 +1,5 @@
 """Tests for Kamil's targeted English-gap verifier."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -6,7 +7,6 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -71,3 +71,48 @@ def test_scan_and_classify_targeted_english_rows(tmp_path):
         "missing_english",
     ]
     assert "ECLI:EU:C:2024:999" not in found
+
+
+def test_live_cellar_comparison_requires_full_body_match(tmp_path):
+    parquet_path = tmp_path / "fulltexts.parquet"
+    stored_exact = "Judgment of the Court\nThe Court hereby rules: appeal dismissed."
+    stored_mismatch = "Judgment of the Court The Court hereby rules: short text."
+    pq.write_table(
+        pa.table(
+            {
+                "ecli": ["ECLI:EU:C:2024:1", "ECLI:EU:C:2024:2"],
+                "celex": ["62024CJ0001", "62024CJ0002"],
+                "text": [stored_exact, stored_mismatch],
+                "text_source": ["CELLAR_ITEM", "CELLAR_ITEM"],
+                "text_language": ["EN", "EN"],
+            }
+        ),
+        parquet_path,
+    )
+    expected = [
+        {"case": "C-1/24", "ecli": "ECLI:EU:C:2024:1", "celex": "62024CJ0001"},
+        {"case": "C-2/24", "ecli": "ECLI:EU:C:2024:2", "celex": "62024CJ0002"},
+    ]
+    live = {
+        "62024CJ0001": " Judgment   of the Court The Court hereby rules: appeal dismissed. ",
+        "62024CJ0002": (
+            "Judgment of the Court The Court hereby rules: complete judgment body."
+        ),
+    }
+
+    found = mod.scan_english_rows(parquet_path, {row["ecli"] for row in expected})
+    results = mod.classify(expected, found)
+    mod.compare_live_cellar(
+        expected,
+        found,
+        results,
+        max_workers=2,
+        fetch_fn=lambda celex: live[celex],
+    )
+
+    assert [row["live_status"] for row in results] == [
+        "exact_match",
+        "content_mismatch",
+    ]
+    assert results[0]["stored_sha256"] == results[0]["live_sha256"]
+    assert results[1]["stored_sha256"] != results[1]["live_sha256"]
