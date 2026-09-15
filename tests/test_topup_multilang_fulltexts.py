@@ -767,7 +767,7 @@ def test_source_upgrade_replaces_longer_wrong_document(tmp_path):
     en = df[df["text_language"] == "EN"].iloc[0]
     assert en["text"].startswith("JUDGMENT OF THE COURT")
     assert en["text_source"] == "CELLAR_ITEM"
-    assert en["__source_window"] == "upgrade_infocuria_sources"
+    assert en["__source_window"] == "upgrade_canonical_cellar_sources"
     fr = df[df["text_language"] == "FR"].iloc[0]
     assert fr["text_source"] == "CELLAR_ITEM" and fr["text"].startswith("ARRET")
 
@@ -813,7 +813,7 @@ def test_stream_nonjudgment_cellar_index_flags_suffixed_cellar_rows(tmp_path):
     }
 
 
-def test_manifestation_upgrade_targets_and_replaces_summary(tmp_path):
+def test_source_upgrade_also_targets_and_replaces_summary(tmp_path):
     cpath, fpath = _write_manifestation_inputs(tmp_path)
 
     def work_uri_fn(celex, sector="6"):
@@ -830,7 +830,7 @@ def test_manifestation_upgrade_targets_and_replaces_summary(tmp_path):
 
     stats = mod.run_upgrade(
         repo_id="example/x", workdir=tmp_path / "work",
-        mode="manifestation", dry_run=True,
+        mode="source", dry_run=True,
         local_cases=cpath, local_fulltexts=fpath,
         max_workers=1, checkpoint_every=1,
         target_eclis={"ECLI:SUMMARY"},
@@ -844,6 +844,6 @@ def test_manifestation_upgrade_targets_and_replaces_summary(tmp_path):
     en = df[(df["ecli"] == "ECLI:SUMMARY") & (df["text_language"] == "EN")].iloc[0]
     assert en["celex"] == "62020CJ0414"
     assert en["text"].startswith("JUDGMENT OF THE COURT")
-    assert en["__source_window"] == "upgrade_nonjudgment_manifestations"
+    assert en["__source_window"] == "upgrade_canonical_cellar_sources"
     unrelated = df[df["ecli"] == "ECLI:UNRELATED"].iloc[0]
     assert unrelated["celex"] == "62020CJ0999_RES"

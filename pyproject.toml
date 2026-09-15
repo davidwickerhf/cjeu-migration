@@ -14,9 +14,9 @@ authors = [
 ]
 
 dependencies = [
-    # Immutable revision based on upstream v2.0.2 plus the public CELLAR
-    # manifestation API used by the repair/backfill scripts.
-    "cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@38073d1237201e2c7366521bb8991c548471b713",
+    # Immutable revision based on upstream v2.0.2 plus canonical CELEX and
+    # CELLAR-over-InfoCuria judgment selection used by every pipeline path.
+    "cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@2898f3123305d29069654a418f6b6691a4bfbf97",
     "pandas>=2.0",
     "pyarrow>=14.0",                # parquet writer / reader
     "huggingface_hub>=0.24",

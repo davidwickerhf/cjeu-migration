@@ -122,14 +122,16 @@ The pattern every supplement pass follows, end to end:
 
 1. **Extraction / top-up runs on a rented worker box** (Vast.ai — any
    cheap 6+ core machine; the GPU is irrelevant). It fetches from
-   CELLAR/InfoCuria with `cellar-extractor@dev` and appends rows to the
+   CELLAR/InfoCuria with the immutable `cellar-extractor` revision pinned in
+   `pyproject.toml` and appends or canonically replaces rows in the
    HF corpus (`davidwickerhf/cjeu-opendata`), uploading a checkpoint every
    2,000 processed cases so a dead box loses minutes, not hours
    (`scripts/topup_multilang_fulltexts.py`).
 2. **The sync diffs the corpus against the DB and uploads the delta**
    (`migration/sql/60_sync_cjeu_texts_via_runner.py`): it reads the
-   current `(case_id, language, source)` triples through paginated
-   `/query` calls, streams the parquet, and pushes only missing rows via
+   current `(case_id, language, source, fulltext_md5)` state through paginated
+   `/query` calls, streams the parquet, updates rows whose content changed
+   even when the source label stayed `CELLAR_ITEM`, and pushes missing rows via
    `INSERT … SELECT FROM unnest(%s::bigint[], %s::text[], …) ON CONFLICT
    DO NOTHING` — batches of ~250 rows / 6 MB, sized so server-side
    `fulltext_tsv` generation fits the 30s cap. Everything is idempotent:

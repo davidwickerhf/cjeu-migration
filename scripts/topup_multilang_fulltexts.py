@@ -1057,9 +1057,16 @@ def run_upgrade(
 
     source_window = None
     if mode == "source":
-        log.info("indexing InfoCuria-sourced rows (streaming) ← %s", fulltexts_path)
+        log.info(
+            "indexing non-canonical source/manifestation rows (streaming) ← %s",
+            fulltexts_path,
+        )
         flagged = stream_infocuria_index(fulltexts_path)
+        derived = stream_nonjudgment_cellar_index(fulltexts_path)
+        for ecli, languages in derived.items():
+            flagged.setdefault(ecli, {}).update(languages)
         min_ratio = 0.0
+        source_window = "upgrade_canonical_cellar_sources"
     elif mode == "manifestation":
         log.info(
             "indexing CELLAR summary/non-judgment rows (streaming) ← %s",

@@ -45,8 +45,9 @@ cp .env.example .env
 ```
 
 `cellar-extractor` is pinned to immutable commit
-`38073d1237201e2c7366521bb8991c548471b713` (upstream v2.0.2 plus the public
-CELLAR manifestation API); pip installs straight from git.
+`2898f3123305d29069654a418f6b6691a4bfbf97` (upstream v2.0.2 plus canonical
+CELEX normalization, public manifestation APIs, and CELLAR-over-InfoCuria
+precedence for judgment full text); pip installs straight from git.
 
 ## Run
 
