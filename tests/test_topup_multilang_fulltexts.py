@@ -755,6 +755,7 @@ def test_source_upgrade_replaces_longer_wrong_document(tmp_path):
     )
     assert stats["rows_upgraded"] == 1
     assert stats["superseded_archived"] == 1
+    assert stats["derived_manifestation_rows_remaining"] == 0
     # dry_run=False: the sidecar upload lands under superseded/ after the
     # checkpointed fulltexts uploads
     assert uploads[0] == "fulltexts.parquet"
@@ -840,6 +841,7 @@ def test_source_upgrade_also_targets_and_replaces_summary(tmp_path):
 
     assert stats["stub_eclis"] == 1
     assert stats["rows_upgraded"] == 1
+    assert stats["derived_manifestation_rows_remaining"] == 0
     df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
     en = df[(df["ecli"] == "ECLI:SUMMARY") & (df["text_language"] == "EN")].iloc[0]
     assert en["celex"] == "62020CJ0414"

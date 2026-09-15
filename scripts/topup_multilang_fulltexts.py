@@ -1215,6 +1215,45 @@ def run_upgrade(
         "superseded_archived": len(superseded),
         "failures": failures,
     }
+    if mode in ("source", "manifestation"):
+        remaining_derived = stream_nonjudgment_cellar_index(current_base)
+        # A targeted diagnostic/repair should validate only the slice it was
+        # asked to change.  The production rerun supplies neither filter, so
+        # it still enforces the invariant across the entire corpus.
+        if target_eclis is not None:
+            validation_eclis = {
+                str(ecli).strip().upper() for ecli in target_eclis
+            }
+            remaining_derived = {
+                ecli: languages
+                for ecli, languages in remaining_derived.items()
+                if ecli.strip().upper() in validation_eclis
+            }
+        if target_languages is not None:
+            validation_languages = {
+                str(language).strip().upper() for language in target_languages
+            }
+            remaining_derived = {
+                ecli: {
+                    language: length
+                    for language, length in languages.items()
+                    if language.upper() in validation_languages
+                }
+                for ecli, languages in remaining_derived.items()
+            }
+            remaining_derived = {
+                ecli: languages
+                for ecli, languages in remaining_derived.items()
+                if languages
+            }
+        stats["derived_manifestation_rows_remaining"] = sum(
+            len(languages) for languages in remaining_derived.values()
+        )
+        if stats["derived_manifestation_rows_remaining"]:
+            log.error(
+                "%d derived CELLAR fulltext rows remain after canonical upgrade",
+                stats["derived_manifestation_rows_remaining"],
+            )
     if total_replaced == 0:
         log.info("no stub rows could be upgraded — nothing uploaded.")
     elif dry_run:
@@ -1277,7 +1316,9 @@ def main() -> int:
                 local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
             )
     log.info("done. stats: %s", stats)
-    return 0
+    failed = stats.get("failures", 0) > 0
+    invalid = stats.get("derived_manifestation_rows_remaining", 0) > 0
+    return 1 if failed or invalid else 0
 
 
 if __name__ == "__main__":
