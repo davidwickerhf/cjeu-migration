@@ -461,6 +461,49 @@ def stream_infocuria_index(
     return out
 
 
+def stream_nonjudgment_cellar_index(
+    fulltexts_path: Path,
+    *,
+    batch_size: int = 2_000,
+) -> dict:
+    """Index CELLAR rows sourced from summary/non-judgment CELEX works.
+
+    Earlier multilingual top-ups could use a suffixed case CELEX such as
+    ``62020CJ0414_SUM`` as their lookup key.  That put a summary, résumé, or
+    information notice into the judgment's language slot and then blocked a
+    later top-up because the language appeared to be covered.  These rows
+    must be force-refetched under the base ``CJ`` CELEX.
+    """
+    out: dict = {}
+    pf = pq.ParquetFile(fulltexts_path)
+    for batch in pf.iter_batches(
+        batch_size=batch_size,
+        columns=["ecli", "celex", "text_language", "text", "text_source"],
+    ):
+        eclis = batch.column("ecli").to_pylist()
+        celexes = batch.column("celex").to_pylist()
+        langs = batch.column("text_language").to_pylist()
+        lens = [len(t) if t else 0 for t in batch.column("text").to_pylist()]
+        sources = batch.column("text_source").to_pylist()
+        for ecli, celex, lang, length, source in zip(
+            eclis, celexes, langs, lens, sources
+        ):
+            tokens = [p.strip().upper() for p in str(celex or "").split(";")]
+            nonjudgment = any(
+                token.endswith(("_SUM", "_RES", "_INF")) for token in tokens
+            )
+            language = (lang or "").upper()
+            if (
+                not ecli
+                or not language
+                or source != "CELLAR_ITEM"
+                or not nonjudgment
+            ):
+                continue
+            out.setdefault(str(ecli), {})[language] = length
+    return out
+
+
 def replace_rows_streaming(
     original_path: Path,
     replacement_rows: list,
@@ -584,6 +627,7 @@ def _upgrade_one_ecli(
     items_fn,
     fanout_fn,
     min_ratio: float = 2.0,
+    source_window: str | None = None,
 ) -> list:
     """For one ECLI, fetch CELLAR manifestations for the flagged languages
     and return replacement rows.
@@ -635,8 +679,10 @@ def _upgrade_one_ecli(
             "text_language": lang,
             "text_format": ft.get("text_format", ""),
             "missing_reasons": "",
-            "__source_window": ("upgrade_infocuria_sources" if min_ratio == 0
-                                else "upgrade_stub_texts"),
+            "__source_window": source_window or (
+                "upgrade_infocuria_sources" if min_ratio == 0
+                else "upgrade_stub_texts"
+            ),
         })
     return rows
 
@@ -965,6 +1011,7 @@ def run_upgrade(
     work_uri_fn=None,
     items_fn=None,
     fanout_fn=None,
+    target_eclis: set[str] | None = None,
 ) -> dict:
     """Upgrade mode: replace stub texts (headnotes captured before the full
     CELLAR manifestation existed) with the full judgment text. Same
@@ -1007,15 +1054,30 @@ def run_upgrade(
         if not pd.isna(e) and c
     }
 
+    source_window = None
     if mode == "source":
         log.info("indexing InfoCuria-sourced rows (streaming) ← %s", fulltexts_path)
         flagged = stream_infocuria_index(fulltexts_path)
         min_ratio = 0.0
+    elif mode == "manifestation":
+        log.info(
+            "indexing CELLAR summary/non-judgment rows (streaming) ← %s",
+            fulltexts_path,
+        )
+        flagged = stream_nonjudgment_cellar_index(fulltexts_path)
+        min_ratio = 0.0
+        source_window = "upgrade_nonjudgment_manifestations"
     else:
         log.info("indexing stub texts (streaming) ← %s", fulltexts_path)
         flagged = stream_stub_index(
             fulltexts_path, ratio=stub_ratio, min_median=stub_min_median)
         min_ratio = 2.0
+    if target_eclis is not None:
+        wanted_eclis = {str(ecli).strip().upper() for ecli in target_eclis}
+        flagged = {
+            ecli: langs for ecli, langs in flagged.items()
+            if ecli.strip().upper() in wanted_eclis
+        }
     work = [(e, celex_by_ecli[e], langs)
             for e, langs in flagged.items() if e in celex_by_ecli]
     n_stub_rows = sum(len(l) for _, _, l in work)
@@ -1082,6 +1144,7 @@ def run_upgrade(
             ecli, celex, langs,
             work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
             min_ratio=min_ratio,
+            source_window=source_window,
         )
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -1155,10 +1218,20 @@ def main() -> int:
 
     mode = os.environ.get("MODE", "topup")
     with tempfile.TemporaryDirectory(prefix="hf-topup-") as tmp:
-        if mode in ("upgrade", "source_upgrade"):
+        if mode in ("upgrade", "source_upgrade", "manifestation_upgrade"):
+            target_eclis = None
+            target_tsv = os.environ.get("TARGET_ECLIS_TSV")
+            if target_tsv:
+                target_frame = pd.read_csv(target_tsv, sep="\t", dtype=str)
+                if "ecli" not in target_frame:
+                    raise SystemExit(f"{target_tsv} must contain an ecli column")
+                target_eclis = set(target_frame["ecli"].dropna())
             stats = run_upgrade(
                 repo_id, Path(tmp),
-                mode="source" if mode == "source_upgrade" else "stub",
+                mode={
+                    "source_upgrade": "source",
+                    "manifestation_upgrade": "manifestation",
+                }.get(mode, "stub"),
                 dry_run=dry_run, token=token,
                 stub_ratio=float(os.environ.get("STUB_RATIO", "0.25")),
                 stub_min_median=int(os.environ.get("STUB_MIN_MEDIAN", "10000")),
@@ -1166,6 +1239,7 @@ def main() -> int:
                 checkpoint_every=checkpoint_every,
                 local_cases=Path(local_cases) if local_cases else None,
                 local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
+                target_eclis=target_eclis,
             )
         else:
             stats = run(

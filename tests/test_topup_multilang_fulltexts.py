@@ -770,3 +770,79 @@ def test_source_upgrade_replaces_longer_wrong_document(tmp_path):
     assert en["__source_window"] == "upgrade_infocuria_sources"
     fr = df[df["text_language"] == "FR"].iloc[0]
     assert fr["text_source"] == "CELLAR_ITEM" and fr["text"].startswith("ARRET")
+
+
+# ---------------------------------------------------------------------------
+# manifestation-upgrade mode (summaries occupying judgment language slots)
+# ---------------------------------------------------------------------------
+
+
+def _write_manifestation_inputs(tmp_path: Path):
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:SUMMARY", "celex": "62020CJ0414_SUM;62020CJ0414",
+         "sector": "6", "date_publication": "2021-01-13"},
+        {"ecli": "ECLI:UNRELATED", "celex": "62020CJ0999",
+         "sector": "6", "date_publication": "2021-02-01"},
+    ])
+    fulltexts = pd.DataFrame([
+        {"ecli": "ECLI:SUMMARY", "celex": "62020CJ0414_SUM",
+         "text": "Judgment summary", "text_source": "CELLAR_ITEM",
+         "text_language": "EN", "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+        {"ecli": "ECLI:SUMMARY", "celex": "62020CJ0414",
+         "text": "Arrêt intégral", "text_source": "CELLAR_ITEM",
+         "text_language": "FR", "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+        {"ecli": "ECLI:UNRELATED", "celex": "62020CJ0999_RES",
+         "text": "Unrelated résumé", "text_source": "CELLAR_ITEM",
+         "text_language": "EN", "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+    ])
+    cpath = tmp_path / "cases.parquet"
+    fpath = tmp_path / "fulltexts.parquet"
+    cases.to_parquet(cpath, index=False)
+    fulltexts.to_parquet(fpath, index=False)
+    return cpath, fpath
+
+
+def test_stream_nonjudgment_cellar_index_flags_suffixed_cellar_rows(tmp_path):
+    _, fpath = _write_manifestation_inputs(tmp_path)
+    assert mod.stream_nonjudgment_cellar_index(fpath) == {
+        "ECLI:SUMMARY": {"EN": len("Judgment summary")},
+        "ECLI:UNRELATED": {"EN": len("Unrelated résumé")},
+    }
+
+
+def test_manifestation_upgrade_targets_and_replaces_summary(tmp_path):
+    cpath, fpath = _write_manifestation_inputs(tmp_path)
+
+    def work_uri_fn(celex, sector="6"):
+        assert celex == "62020CJ0414"
+        return celex
+
+    def items_fn(celex):
+        return [{"item_url": "http://x/EN", "format": "xhtml", "language": "EN"}]
+
+    def fanout_fn(candidates, source_label):
+        return [{"text": "JUDGMENT OF THE COURT " + "j" * 20_000,
+                 "text_source": source_label, "text_language": "EN",
+                 "text_format": "xhtml"}]
+
+    stats = mod.run_upgrade(
+        repo_id="example/x", workdir=tmp_path / "work",
+        mode="manifestation", dry_run=True,
+        local_cases=cpath, local_fulltexts=fpath,
+        max_workers=1, checkpoint_every=1,
+        target_eclis={"ECLI:SUMMARY"},
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+
+    assert stats["stub_eclis"] == 1
+    assert stats["rows_upgraded"] == 1
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
+    en = df[(df["ecli"] == "ECLI:SUMMARY") & (df["text_language"] == "EN")].iloc[0]
+    assert en["celex"] == "62020CJ0414"
+    assert en["text"].startswith("JUDGMENT OF THE COURT")
+    assert en["__source_window"] == "upgrade_nonjudgment_manifestations"
+    unrelated = df[df["ecli"] == "ECLI:UNRELATED"].iloc[0]
+    assert unrelated["celex"] == "62020CJ0999_RES"
