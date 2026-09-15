@@ -1,0 +1,1 @@
+*/30 * * * * root /usr/bin/flock -n /run/cjeu-health.lock /workspace/cjeu-migration/scripts/vastai/health_check.sh
