@@ -658,9 +658,9 @@ def topup_dataset(
     can be stubbed for tests.
     """
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
-        from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_items_for_celex as _default_items_for_celex,
-            _fanout_fulltexts_from_candidates as _default_fanout,
+        from cellar_extractor import (
+            extract_cellar_fulltexts as _default_fanout,
+            get_cellar_manifestations_by_celex as _default_items_for_celex,
         )
         # The production path unions manifestations across every CELLAR
         # work sharing the CELEX (a single arbitrary work missed languages
@@ -824,9 +824,9 @@ def run(
     )
 
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
-        from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_items_for_celex as _default_items_for_celex,
-            _fanout_fulltexts_from_candidates as _default_fanout,
+        from cellar_extractor import (
+            extract_cellar_fulltexts as _default_fanout,
+            get_cellar_manifestations_by_celex as _default_items_for_celex,
         )
         # The production path unions manifestations across every CELLAR
         # work sharing the CELEX (a single arbitrary work missed languages
@@ -1023,9 +1023,9 @@ def run_upgrade(
              mode, n_stub_rows, len(work))
 
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
-        from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_items_for_celex as _default_items_for_celex,
-            _fanout_fulltexts_from_candidates as _default_fanout,
+        from cellar_extractor import (
+            extract_cellar_fulltexts as _default_fanout,
+            get_cellar_manifestations_by_celex as _default_items_for_celex,
         )
         # The production path unions manifestations across every CELLAR
         # work sharing the CELEX (a single arbitrary work missed languages

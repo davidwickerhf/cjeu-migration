@@ -14,9 +14,9 @@ authors = [
 ]
 
 dependencies = [
-    # Live wire to the upstream extractor's dev branch. Once a release tag
-    # lands on PyPI we'll pin to that instead.
-    "cellar-extractor @ git+https://github.com/maastrichtlawtech/cellar-extractor.git@dev",
+    # Immutable revision based on upstream v2.0.2 plus the public CELLAR
+    # manifestation API used by the repair/backfill scripts.
+    "cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@38073d1237201e2c7366521bb8991c548471b713",
     "pandas>=2.0",
     "pyarrow>=14.0",                # parquet writer / reader
     "huggingface_hub>=0.24",
