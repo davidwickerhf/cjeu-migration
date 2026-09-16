@@ -19,6 +19,12 @@ mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(mod)  # type: ignore[union-attr]
 
 
+def test_looks_like_judgment_accepts_joined_english_badge():
+    assert mod.looks_like_judgment(
+        "Provisional text ENJUDGMENT OF THE COURT (First Chamber)"
+    )
+
+
 def test_scan_and_classify_targeted_english_rows(tmp_path):
     parquet_path = tmp_path / "fulltexts.parquet"
     pq.write_table(

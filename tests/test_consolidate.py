@@ -82,6 +82,25 @@ def test_consolidate_cases_handles_schema_drift(tmp_path):
     assert pd.isna(late_row["early_only_column"])
 
 
+def test_consolidate_cases_deduplicates_ecli_and_merges_windows(tmp_path):
+    win_dir = tmp_path / "windows"
+    _write_window_csv(
+        win_dir / "2020-01.csv",
+        ["celex", "ecli"],
+        [("62020CJ0001", "ECLI:EU:C:2020:1")],
+    )
+    _write_window_csv(
+        win_dir / "2020-02.csv",
+        ["celex", "ecli"],
+        [("62020CJ0001", "ECLI:EU:C:2020:1")],
+    )
+
+    df = consolidate_cases(win_dir, tmp_path / "cases.parquet")
+
+    assert len(df) == 1
+    assert df.iloc[0]["__source_window"] == "2020-01;2020-02"
+
+
 def test_consolidate_cases_empty_dir_writes_empty_parquet(tmp_path):
     out = tmp_path / "out" / "cases.parquet"
     df = consolidate_cases(tmp_path / "no-windows", out)
@@ -144,6 +163,27 @@ def test_consolidate_fulltexts_skips_malformed_files(tmp_path):
     assert result.row_count == 1
     assert len(df) == 1
     assert df.iloc[0]["celex"] == "A"
+
+
+def test_consolidate_fulltexts_deduplicates_ecli_language_and_merges_windows(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    row = {
+        "celex": "62020CJ0001",
+        "ecli": "ECLI:EU:C:2020:1",
+        "text_language": "EN",
+        "text": "judgment body",
+    }
+    (win_dir / "2020-01.json").write_text(json.dumps([row]), encoding="utf-8")
+    (win_dir / "2020-02.json").write_text(json.dumps([row]), encoding="utf-8")
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+
+    assert result.row_count == 1
+    assert len(df) == 1
+    assert df.iloc[0]["__source_window"] == "2020-01;2020-02"
 
 
 def test_consolidate_fulltexts_empty_dir(tmp_path):

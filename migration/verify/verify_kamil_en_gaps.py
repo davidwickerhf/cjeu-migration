@@ -36,6 +36,9 @@ def normalized_excerpt(text: str, limit: int = 240) -> str:
 def looks_like_judgment(text: str) -> bool:
     normalized = " ".join((text or "").split())
     opening = normalized[:5_000]
+    # Some EUR-Lex HTML joins its language badge to the heading, producing
+    # "ENJUDGMENT OF THE COURT" after text extraction.
+    opening = re.sub(r"\bENJUDGMENT\b", "JUDGMENT", opening, flags=re.IGNORECASE)
     return any(pattern.search(opening) for pattern in GOOD_MARKERS)
 
 

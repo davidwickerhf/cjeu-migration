@@ -119,6 +119,31 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     else:
         df = pd.concat(frames, ignore_index=True, sort=False)
 
+    # A CELLAR work can be rediscovered in more than one date window (for
+    # example when publication metadata changes). The dataset contract is one
+    # row per ECLI, so collapse repeats and retain their provenance windows.
+    # Rows without an ECLI are retained because they cannot be grouped safely.
+    if not df.empty and "ecli" in df.columns:
+        valid = df[df["ecli"].notna()].copy()
+        missing = df[df["ecli"].isna()].copy()
+        if "__source_window" in valid.columns:
+            windows = valid.groupby("ecli", sort=False)["__source_window"].agg(
+                lambda values: ";".join(
+                    sorted(
+                        {
+                            str(value)
+                            for value in values
+                            if pd.notna(value) and str(value).strip()
+                        }
+                    )
+                )
+            )
+            valid = valid.drop_duplicates(subset=["ecli"], keep="first")
+            valid["__source_window"] = valid["ecli"].map(windows)
+        else:
+            valid = valid.drop_duplicates(subset=["ecli"], keep="first")
+        df = pd.concat([valid, missing], ignore_index=True)
+
     _write_parquet(df, output_path, CASES_ROW_GROUP_SIZE)
     log.info("wrote %d cases rows -> %s", len(df), output_path)
     return df
@@ -151,6 +176,8 @@ def consolidate_fulltexts(
     # Files are parsed one at a time; importantly, text bodies are never kept.
     columns: set[str] = set()
     valid_files: list[Path] = []
+    first_window_by_key: dict[tuple[str, str], str] = {}
+    duplicate_windows: dict[tuple[str, str], set[str]] = {}
     row_count = 0
     text_row_count = 0
     eclis_with_text: set[str] = set()
@@ -173,6 +200,17 @@ def consolidate_fulltexts(
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
+            ecli_key = str(entry.get("ecli") or "").strip().upper()
+            language_key = str(entry.get("text_language") or "").strip().upper()
+            dedup_key = (ecli_key, language_key) if ecli_key else None
+            if dedup_key is not None and dedup_key in first_window_by_key:
+                duplicate_windows.setdefault(
+                    dedup_key, {first_window_by_key[dedup_key]}
+                ).add(path.stem)
+                continue
+            if dedup_key is not None:
+                first_window_by_key[dedup_key] = path.stem
+
             row_count += 1
             columns.update(str(key) for key in entry)
 
@@ -213,6 +251,7 @@ def consolidate_fulltexts(
         write_page_index=True,
     )
     written = 0
+    emitted_keys: set[tuple[str, str]] = set()
     try:
         for file_number, path in enumerate(valid_files, start=1):
             with path.open("r", encoding="utf-8") as f:
@@ -221,12 +260,23 @@ def consolidate_fulltexts(
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
+                ecli_key = str(entry.get("ecli") or "").strip().upper()
+                language_key = str(entry.get("text_language") or "").strip().upper()
+                dedup_key = (ecli_key, language_key) if ecli_key else None
+                if dedup_key is not None and dedup_key in emitted_keys:
+                    continue
+                if dedup_key is not None:
+                    emitted_keys.add(dedup_key)
                 row = {
                     column: _fulltext_scalar(entry.get(column))
                     for column in ordered_columns
                     if column != "__source_window"
                 }
-                row["__source_window"] = path.stem
+                row["__source_window"] = (
+                    ";".join(sorted(duplicate_windows[dedup_key]))
+                    if dedup_key in duplicate_windows
+                    else path.stem
+                )
                 rows.append(row)
                 if len(rows) == FULLTEXTS_ROW_GROUP_SIZE:
                     writer.write_table(pa.Table.from_pylist(rows, schema=schema))
