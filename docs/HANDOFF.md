@@ -1,6 +1,6 @@
 # CJEU pipeline handoff
 
-State of the CJEU data-quality campaign as of 2026-09-15: what the pipeline
+State of the CJEU data-quality campaign as of 2026-09-16: what the pipeline
 is, what broke and why, what has been fixed, and exactly where work stopped.
 Written so someone (or a future session) can pick this up cold. Companion
 docs: [DB_ACCESS.md](DB_ACCESS.md) for the database transport,
@@ -10,31 +10,33 @@ for schema decisions.
 
 ## TL;DR — where things stand right now
 
-A corpus-wide "source upgrade" sweep (replacing wrong documents that
-InfoCuria served into judgment slots with the correct CELLAR texts) ran on
-a rented Vast.ai box on 2026-09-11 and got through **~15,000 of 30,083
-cases** before the box died at 11:22 UTC. Everything completed is safely
-on HuggingFace (15 checkpoint commits). The remaining ~15k cases need a
-new worker box and roughly 3–3.5 hours; the sweep is idempotent, so
-relaunching is safe and skips finished work automatically. The database
-sync never ran (it was chained behind the sweep on the dead box). The
-user-facing promise: Kamil Szostak (external data-quality reporter) was
-told the rebuild takes 12–15h and updates HF automatically.
+A clean, full-corpus rebuild finished scraping on Vast.ai on 2026-09-16:
+**873/873 monthly windows**, **46,652 cases**, and **608,891 fulltext
+rows**, with no failed or exhausted windows. The run is deliberately
+validation-first (`SKIP_UPLOAD=1`), so neither HuggingFace nor production
+has been updated from this rebuild yet.
+
+The first consolidation attempt exposed a separate memory bug: the old
+implementation appended all 608,891 text-bearing JSON objects to one Python
+list before creating a DataFrame. The kernel repeatedly killed it while it
+was building `fulltexts.parquet`; the scrape artifacts and manifest on the
+persistent Vast volume are intact. `cases.parquet` was written successfully.
+The consolidator is now being changed to a bounded-memory, window-by-window
+Parquet writer. Resume with `cjeu-migrate run --consolidate-only`; do not
+rescrape the completed windows.
 
 **Immediate next steps, in order:**
 
-1. Get a new Vast.ai box (any cheap 6+ core machine; GPU irrelevant).
-2. Commit the pending sidecar-checkpoint patch in
-   `scripts/topup_multilang_fulltexts.py` (uncommitted in the working
-   tree; 32 tests pass), copy the script to the box, relaunch with
-   `MODE=source_upgrade` (see runbook below).
-3. When the sweep finishes: run the DB sync bracketed by snapshots
+1. Deploy the streamed fulltext-consolidation fix to the existing Vast
+   volume and run consolidation only. Confirm the output parquet has exactly
+   608,891 rows and viewer-safe row groups.
+2. Run the full-corpus derived-work scan and the exact Kamil 604-case verifier
+   (`--live-cellar`). Upload to HF only if both pass.
+3. After the HF upload, run the DB sync bracketed by snapshots
    (60 → 61 before/after → diff). Can run from the Mac; does not need the
    box.
-4. Verify all 604 cases in `migration/verify/kamil_2026-09_en_gaps.tsv`
-   now carry an English judgment (corpus and DB); produce a residual
-   report for rows CELLAR could not replace (expected: a small tail,
-   Kamil estimated ~33 genuinely unavailable).
+4. Verify the same 604 cases in production after sync and retain the
+   before/after evidence.
 5. Update KNOWN_ISSUES #5 to resolved with final numbers; email Kamil the
    confirmation.
 6. Turn the sql-runner off (`SQL_RUNNER_ENABLED=false` in Coolify env,

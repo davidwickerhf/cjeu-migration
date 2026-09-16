@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -41,6 +44,18 @@ log = logging.getLogger(__name__)
 # Both stay comfortably under the 300 MB viewer cap with headroom.
 CASES_ROW_GROUP_SIZE = 2_000
 FULLTEXTS_ROW_GROUP_SIZE = 500
+
+
+@dataclass(frozen=True)
+class FulltextConsolidation:
+    """Small, memory-bounded summary of a streamed fulltext consolidation."""
+
+    row_count: int
+    columns: tuple[str, ...]
+    eclis_with_text: frozenset[str]
+    text_row_count: int
+    language_counts: dict[str, int]
+    missing_reason_counts: dict[str, int]
 
 
 def _write_parquet(df: pd.DataFrame, output_path: Path, row_group_size: int) -> None:
@@ -109,21 +124,38 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     return df
 
 
-def consolidate_fulltexts(window_json_dir: Path, output_path: Path) -> pd.DataFrame:
-    """Concatenate every window fulltext JSON into a single parquet table.
+def consolidate_fulltexts(
+    window_json_dir: Path,
+    output_path: Path,
+) -> FulltextConsolidation:
+    """Stream every window fulltext JSON into a single parquet table.
 
     Each input file is a list of ``{celex, ecli, text, text_source, ...}``
     dicts (the shape cellar-extractor writes). The output is one row per
     document, with ``__source_window`` added so users can join back to a window.
+
+    Only one monthly JSON file and one 500-row Arrow batch are held at a time.
+    This is important for the full corpus: materialising its multi-gigabyte
+    ``text`` column as Python strings can use tens of gigabytes and trigger the
+    OOM killer.  The returned object contains only the small aggregates needed
+    by the dataset card.
     """
     json_files = sorted(window_json_dir.glob("*.json"))
     if not json_files:
         log.warning("no fulltext JSON files found in %s", window_json_dir)
         df = pd.DataFrame()
         _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
-        return df
+        return FulltextConsolidation(0, (), frozenset(), 0, {}, {})
 
-    rows: List[dict] = []
+    # Pass 1 discovers the union schema and computes dataset-card aggregates.
+    # Files are parsed one at a time; importantly, text bodies are never kept.
+    columns: set[str] = set()
+    valid_files: list[Path] = []
+    row_count = 0
+    text_row_count = 0
+    eclis_with_text: set[str] = set()
+    language_counts: Counter[str] = Counter()
+    missing_reason_counts: Counter[str] = Counter()
     for path in json_files:
         try:
             with path.open("r", encoding="utf-8") as f:
@@ -137,22 +169,129 @@ def consolidate_fulltexts(window_json_dir: Path, output_path: Path) -> pd.DataFr
                 path.name, type(entries).__name__,
             )
             continue
+        valid_files.append(path)
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            entry = dict(entry)
-            entry["__source_window"] = path.stem
-            rows.append(entry)
+            row_count += 1
+            columns.update(str(key) for key in entry)
 
-    df = pd.DataFrame(rows) if rows else pd.DataFrame()
-    _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
-    log.info("wrote %d fulltext rows -> %s", len(df), output_path)
-    return df
+            text = entry.get("text")
+            if isinstance(text, str) and len(text) >= 200:
+                text_row_count += 1
+                ecli = entry.get("ecli")
+                if ecli:
+                    eclis_with_text.add(str(ecli))
+
+            language = entry.get("text_language")
+            if language:
+                language_counts[str(language)] += 1
+
+            reasons = entry.get("missing_reasons")
+            if reasons:
+                for reason in str(reasons).split(";"):
+                    reason = reason.strip()
+                    if reason:
+                        missing_reason_counts[reason] += 1
+
+    ordered_columns = _ordered_fulltext_columns(columns)
+    if row_count == 0:
+        df = pd.DataFrame(columns=ordered_columns)
+        _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
+        return FulltextConsolidation(
+            0, tuple(ordered_columns), frozenset(), 0, {}, {},
+        )
+
+    schema = pa.schema([pa.field(column, pa.string()) for column in ordered_columns])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = output_path.with_name(f".{output_path.name}.tmp")
+    temp_path.unlink(missing_ok=True)
+    writer = pq.ParquetWriter(
+        temp_path,
+        schema=schema,
+        compression="zstd",
+        write_page_index=True,
+    )
+    written = 0
+    try:
+        for file_number, path in enumerate(valid_files, start=1):
+            with path.open("r", encoding="utf-8") as f:
+                entries = json.load(f)
+            rows: list[dict[str, Optional[str]]] = []
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                row = {
+                    column: _fulltext_scalar(entry.get(column))
+                    for column in ordered_columns
+                    if column != "__source_window"
+                }
+                row["__source_window"] = path.stem
+                rows.append(row)
+                if len(rows) == FULLTEXTS_ROW_GROUP_SIZE:
+                    writer.write_table(pa.Table.from_pylist(rows, schema=schema))
+                    written += len(rows)
+                    rows.clear()
+            if rows:
+                writer.write_table(pa.Table.from_pylist(rows, schema=schema))
+                written += len(rows)
+            if file_number % 100 == 0:
+                log.info(
+                    "streamed %d/%d fulltext windows (%d rows)",
+                    file_number, len(valid_files), written,
+                )
+    except BaseException:
+        writer.close()
+        temp_path.unlink(missing_ok=True)
+        raise
+    else:
+        writer.close()
+
+    if written != row_count:
+        temp_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"fulltext row-count changed during consolidation: "
+            f"expected {row_count}, wrote {written}"
+        )
+    os.replace(temp_path, output_path)
+    log.info("wrote %d fulltext rows -> %s", written, output_path)
+    return FulltextConsolidation(
+        row_count=written,
+        columns=tuple(ordered_columns),
+        eclis_with_text=frozenset(eclis_with_text),
+        text_row_count=text_row_count,
+        language_counts=dict(language_counts),
+        missing_reason_counts=dict(missing_reason_counts),
+    )
+
+
+def _ordered_fulltext_columns(columns: set[str]) -> list[str]:
+    """Return a deterministic schema with familiar fields first."""
+    preferred = [
+        "celex", "ecli", "text", "text_source", "text_language",
+        "text_format", "missing_reasons",
+    ]
+    return [c for c in preferred if c in columns] + sorted(columns - set(preferred)) + [
+        "__source_window"
+    ]
+
+
+def _fulltext_scalar(value) -> Optional[str]:
+    """Normalise JSON values to the string schema used by the HF dataset."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
 
 
 def compute_coverage_stats(
     cases_df: pd.DataFrame,
-    fulltexts_df: pd.DataFrame,
+    fulltexts_df: Optional[pd.DataFrame] = None,
+    *,
+    fulltext_summary: Optional[FulltextConsolidation] = None,
 ) -> dict:
     """Return summary statistics for the dataset card's Coverage section.
 
@@ -183,7 +322,11 @@ def compute_coverage_stats(
     out: dict = {
         "decade_table": [],
         "sector_table": [],
-        "fulltext_total": int(len(fulltexts_df)),
+        "fulltext_total": int(
+            fulltext_summary.row_count
+            if fulltext_summary is not None
+            else len(fulltexts_df) if fulltexts_df is not None else 0
+        ),
         "fulltext_with_text": 0,
         "fulltext_languages": [],
         "missing_reason_top": [],
@@ -217,7 +360,9 @@ def compute_coverage_stats(
         decade = (dt.dt.year // 10 * 10).astype("Int64")
 
         # text presence — derived from the case's matching fulltext row.
-        if not fulltexts_df.empty and "text" in fulltexts_df.columns:
+        if fulltext_summary is not None:
+            has_text_ecli = set(fulltext_summary.eclis_with_text)
+        elif fulltexts_df is not None and not fulltexts_df.empty and "text" in fulltexts_df.columns:
             has_text_ecli = set(
                 fulltexts_df.loc[
                     fulltexts_df["text"].astype("string").str.len().fillna(0) >= 200,
@@ -256,7 +401,17 @@ def compute_coverage_stats(
             out["sector_table"].append((str(sec), int(n), round(100 * n / total, 1)))
 
     # ---- fulltext-side stats ----
-    if not fulltexts_df.empty:
+    if fulltext_summary is not None:
+        out["fulltext_with_text"] = fulltext_summary.text_row_count
+        out["fulltext_languages"] = sorted(
+            fulltext_summary.language_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:10]
+        out["missing_reason_top"] = sorted(
+            fulltext_summary.missing_reason_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:5]
+    elif fulltexts_df is not None and not fulltexts_df.empty:
         if "text" in fulltexts_df.columns:
             txt_len = fulltexts_df["text"].astype("string").str.len().fillna(0)
             out["fulltext_with_text"] = int((txt_len >= 200).sum())

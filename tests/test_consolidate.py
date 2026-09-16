@@ -122,9 +122,11 @@ def test_consolidate_fulltexts_concatenates_all_windows(tmp_path):
         encoding="utf-8",
     )
     out = tmp_path / "out" / "fulltexts.parquet"
-    df = consolidate_fulltexts(win_dir, out)
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
 
     assert out.exists()
+    assert result.row_count == 3
     assert len(df) == 3
     assert set(df["celex"]) == {"62020CJ0001", "62020CJ0002", "62020CJ0003"}
     assert set(df["__source_window"]) == {"2020-01", "2020-02"}
@@ -137,15 +139,19 @@ def test_consolidate_fulltexts_skips_malformed_files(tmp_path):
     (win_dir / "bad.json").write_text("not json at all")
     (win_dir / "wrong-shape.json").write_text(json.dumps({"not": "a list"}))
     out = tmp_path / "out" / "fulltexts.parquet"
-    df = consolidate_fulltexts(win_dir, out)
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+    assert result.row_count == 1
     assert len(df) == 1
     assert df.iloc[0]["celex"] == "A"
 
 
 def test_consolidate_fulltexts_empty_dir(tmp_path):
     out = tmp_path / "out" / "fulltexts.parquet"
-    df = consolidate_fulltexts(tmp_path / "no-fulltexts", out)
+    result = consolidate_fulltexts(tmp_path / "no-fulltexts", out)
+    df = pd.read_parquet(out)
     assert out.exists()
+    assert result.row_count == 0
     assert df.empty
 
 
