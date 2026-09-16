@@ -7,7 +7,7 @@ venv_dir="${CJEU_VENV_DIR:-/workspace/cjeu-venv}"
 
 {
   echo "=== $(date -Is) ==="
-  supervisorctl status cjeu_full_rebuild || true
+  /usr/local/bin/supervisorctl status cjeu_full_rebuild || true
   WORKSPACE_DIR="${workspace_dir}" "${venv_dir}/bin/cjeu-migrate" status || true
   echo "recent_errors:"
   tail -n 400 /workspace/cjeu-full-rebuild.log 2>/dev/null \
