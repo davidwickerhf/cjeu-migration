@@ -77,14 +77,24 @@ def scan_english_rows(parquet_path: Path, eclis: set[str]) -> dict[str, list[dic
         if optional_column in parquet.schema_arrow.names:
             columns.append(optional_column)
 
-    for batch in parquet.iter_batches(batch_size=2_000, columns=columns):
-        ecli_column = pc.utf8_upper(batch.column("ecli"))
-        language_column = pc.utf8_upper(batch.column("text_language"))
+    # Two-stage row-group scan: project only the two small filter columns for
+    # every group, then read the large text column only when that group contains
+    # a target English row. Reading text for the entire 8+ GB corpus makes
+    # Arrow's allocator retain several gigabytes even though almost every row
+    # is filtered out afterwards.
+    for row_group in range(parquet.num_row_groups):
+        index = parquet.read_row_group(
+            row_group, columns=["ecli", "text_language"]
+        )
+        ecli_column = pc.utf8_upper(index.column("ecli"))
+        language_column = pc.utf8_upper(index.column("text_language"))
         mask = pc.and_(
             pc.is_in(ecli_column, value_set=target_values),
             pc.is_in(language_column, value_set=english_values),
         )
-        selected = batch.filter(mask)
+        if not pc.any(mask).as_py():
+            continue
+        selected = parquet.read_row_group(row_group, columns=columns).filter(mask)
         if not selected.num_rows:
             continue
         for row in selected.to_pylist():
