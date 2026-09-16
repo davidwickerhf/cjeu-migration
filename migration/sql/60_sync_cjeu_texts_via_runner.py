@@ -64,6 +64,7 @@ def load_targets(path):
 
 def looks_like_judgment(text):
     opening = " ".join((text or "").split())[:5_000]
+    opening = re.sub(r"\bENJUDGMENT\b", "JUDGMENT", opening, flags=re.IGNORECASE)
     return any(
         re.search(marker, opening, re.IGNORECASE)
         for marker in (
@@ -130,7 +131,10 @@ def select_target_rows(rows, targets, language="en"):
 
 
 def iter_parquet_rows(parquet):
-    for pbatch in parquet.iter_batches(batch_size=2000, columns=list(COLS)):
+    # Match the published parquet's 500-row groups. Larger batches cause
+    # Arrow's allocator to retain multiple text-heavy groups and can grow to
+    # several gigabytes over a full-corpus scan on a 32 GB worker.
+    for pbatch in parquet.iter_batches(batch_size=500, columns=list(COLS)):
         columns = {column: pbatch.column(column).to_pylist() for column in COLS}
         for values in zip(*(columns[column] for column in COLS)):
             yield dict(zip(COLS, values))

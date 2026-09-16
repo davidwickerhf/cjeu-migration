@@ -38,6 +38,12 @@ def test_select_target_rows_accepts_base_judgment_manifestation():
     assert mod.select_target_rows([_row()], targets) == [_row()]
 
 
+def test_select_target_rows_accepts_joined_english_badge():
+    targets = {"ECLI:EU:C:2021:1": "62020CJ0414"}
+    row = _row(text="Provisional text ENJUDGMENT OF THE COURT Full text")
+    assert mod.select_target_rows([row], targets) == [row]
+
+
 @pytest.mark.parametrize("suffix", ["SUM", "RES", "INF"])
 def test_select_target_rows_rejects_nonjudgment_manifestation(suffix):
     targets = {"ECLI:EU:C:2021:1": "62020CJ0414"}
