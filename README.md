@@ -44,7 +44,10 @@ cp .env.example .env
 # Fill in HUGGINGFACE_TOKEN and HF_DATASET_REPO.
 ```
 
-`cellar-extractor` is pinned to `maastrichtlawtech/cellar-extractor@dev`; pip installs straight from git.
+`cellar-extractor` is pinned to immutable commit
+`2898f3123305d29069654a418f6b6691a4bfbf97` (upstream v2.0.2 plus canonical
+CELEX normalization, public manifestation APIs, and CELLAR-over-InfoCuria
+precedence for judgment full text); pip installs straight from git.
 
 ## Run
 

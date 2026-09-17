@@ -84,11 +84,11 @@ def run(
         if not consolidate_only:
             _scrape_pending(config, manifest, windows, scrape_fn=scrape_fn)
 
-        cases_df, fulltexts_df = _consolidate(config)
+        cases_df, fulltexts = _consolidate(config)
 
         uploaded: List[str] = []
         if not config.skip_upload:
-            uploaded = _push(config, cases_df, fulltexts_df, push_fn=push_fn)
+            uploaded = _push(config, cases_df, fulltexts, push_fn=push_fn)
         else:
             log.info("SKIP_UPLOAD set — leaving dataset at %s", config.consolidated_dir)
     except Exception as exc:
@@ -102,7 +102,7 @@ def run(
         notifier.notify_run_finished(
             summary=summary_counts,
             cases_rows=len(cases_df),
-            fulltexts_rows=len(fulltexts_df),
+            fulltexts_rows=fulltexts.row_count,
         )
         notifier.stop()
 
@@ -112,7 +112,7 @@ def run(
         windows_failed=summary_counts.get(WindowStatus.FAILED.value, 0),
         windows_exhausted=summary_counts.get(WindowStatus.EXHAUSTED.value, 0),
         cases_rows=len(cases_df),
-        fulltexts_rows=len(fulltexts_df),
+        fulltexts_rows=fulltexts.row_count,
         uploaded=uploaded,
     )
 
@@ -190,7 +190,7 @@ def _consolidate(config: Config):
     cases_df = consolidate_cases(
         config.cases_dir, config.consolidated_dir / "cases.parquet"
     )
-    fulltexts_df = consolidate_fulltexts(
+    fulltexts = consolidate_fulltexts(
         config.fulltexts_dir, config.consolidated_dir / "fulltexts.parquet"
     )
 
@@ -200,11 +200,13 @@ def _consolidate(config: Config):
         c for c in cases_df.columns
         if c not in canonical_columns and not c.startswith("__")
     )
-    coverage_stats = compute_coverage_stats(cases_df, fulltexts_df)
+    coverage_stats = compute_coverage_stats(
+        cases_df, fulltext_summary=fulltexts,
+    )
     write_dataset_card(
         config.consolidated_dir / "README.md",
         cases_rows=len(cases_df),
-        fulltexts_rows=len(fulltexts_df),
+        fulltexts_rows=fulltexts.row_count,
         start_date=config.start_date.isoformat(),
         end_date=config.end_date.isoformat(),
         canonical_columns=canonical_columns,
@@ -213,7 +215,7 @@ def _consolidate(config: Config):
         coverage_stats=coverage_stats,
     )
     copy_fields_md(config.consolidated_dir / "FIELDS.md")
-    return cases_df, fulltexts_df
+    return cases_df, fulltexts
 
 
 def _canonical_columns() -> List[str]:
@@ -229,7 +231,7 @@ def _canonical_columns() -> List[str]:
 def _push(
     config: Config,
     cases_df,
-    fulltexts_df,
+    fulltexts,
     *,
     push_fn: Optional[Callable] = None,
 ) -> List[str]:
@@ -243,7 +245,7 @@ def _push(
     commit = (
         f"Refresh CJEU corpus covering "
         f"{config.start_date.isoformat()}..{config.end_date.isoformat()}: "
-        f"{len(cases_df)} cases, {len(fulltexts_df)} fulltexts"
+        f"{len(cases_df)} cases, {fulltexts.row_count} fulltexts"
     )
     return push(
         config.consolidated_dir,
