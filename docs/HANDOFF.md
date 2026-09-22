@@ -35,6 +35,15 @@ workspace while preserving the September artifacts as a rollback copy. Keep
 `SKIP_UPLOAD=1` until the new catalogue identity gate, parquet integrity scan,
 and 604-case live verification all pass.
 
+The forced rebuild was launched at 2026-09-22 09:29 UTC on Vast instance
+`51127671`, using migration commit `057935e` and extractor commit `d6024cf`.
+The September workspace is preserved at
+`/workspace/cjeu-data-pre-catalogue-20260916` (45 GB); the active clean
+workspace is `/workspace/cjeu-data`. Supervisor program `cjeu_full_rebuild`
+is running with `SKIP_UPLOAD=1`, and `cjeu-health.cron` records health every
+30 minutes. Do not delete the rollback workspace until the new HF revision and
+production reconciliation have both passed acceptance.
+
 ## TL;DR — where things stand right now
 
 The September 16 run completed all 873 windows, consolidated with bounded
