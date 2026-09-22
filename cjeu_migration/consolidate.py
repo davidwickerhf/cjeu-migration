@@ -27,7 +27,6 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-
 log = logging.getLogger(__name__)
 
 # Row-group sizing for the published parquet files.
@@ -138,7 +137,24 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
                     )
                 )
             )
+            # The same ECLI can land in different monthly windows when CELLAR
+            # and InfoCuria disagree on document dates. Prefer the row whose
+            # identity was reconciled against InfoCuria, then retain all
+            # source windows for auditability.
+            if "metadata_catalog_source" in valid.columns:
+                valid["__catalog_priority"] = (
+                    valid["metadata_catalog_source"]
+                    .fillna("")
+                    .astype(str)
+                    .str.lower()
+                    .eq("infocuria")
+                    .astype(int)
+                )
+                valid = valid.sort_values(
+                    "__catalog_priority", ascending=False, kind="stable"
+                )
             valid = valid.drop_duplicates(subset=["ecli"], keep="first")
+            valid = valid.drop(columns=["__catalog_priority"], errors="ignore")
             valid["__source_window"] = valid["ecli"].map(windows)
         else:
             valid = valid.drop_duplicates(subset=["ecli"], keep="first")
@@ -193,7 +209,8 @@ def consolidate_fulltexts(
         if not isinstance(entries, list):
             log.warning(
                 "fulltext JSON %s wasn't a list (got %s) — skipping",
-                path.name, type(entries).__name__,
+                path.name,
+                type(entries).__name__,
             )
             continue
         valid_files.append(path)
@@ -237,7 +254,12 @@ def consolidate_fulltexts(
         df = pd.DataFrame(columns=ordered_columns)
         _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
         return FulltextConsolidation(
-            0, tuple(ordered_columns), frozenset(), 0, {}, {},
+            0,
+            tuple(ordered_columns),
+            frozenset(),
+            0,
+            {},
+            {},
         )
 
     schema = pa.schema([pa.field(column, pa.string()) for column in ordered_columns])
@@ -288,7 +310,9 @@ def consolidate_fulltexts(
             if file_number % 100 == 0:
                 log.info(
                     "streamed %d/%d fulltext windows (%d rows)",
-                    file_number, len(valid_files), written,
+                    file_number,
+                    len(valid_files),
+                    written,
                 )
     except BaseException:
         writer.close()
@@ -318,12 +342,19 @@ def consolidate_fulltexts(
 def _ordered_fulltext_columns(columns: set[str]) -> list[str]:
     """Return a deterministic schema with familiar fields first."""
     preferred = [
-        "celex", "ecli", "text", "text_source", "text_language",
-        "text_format", "missing_reasons",
+        "celex",
+        "ecli",
+        "text",
+        "text_source",
+        "text_language",
+        "text_format",
+        "missing_reasons",
     ]
-    return [c for c in preferred if c in columns] + sorted(columns - set(preferred)) + [
-        "__source_window"
-    ]
+    return (
+        [c for c in preferred if c in columns]
+        + sorted(columns - set(preferred))
+        + ["__source_window"]
+    )
 
 
 def _fulltext_scalar(value) -> Optional[str]:
@@ -412,7 +443,11 @@ def compute_coverage_stats(
         # text presence — derived from the case's matching fulltext row.
         if fulltext_summary is not None:
             has_text_ecli = set(fulltext_summary.eclis_with_text)
-        elif fulltexts_df is not None and not fulltexts_df.empty and "text" in fulltexts_df.columns:
+        elif (
+            fulltexts_df is not None
+            and not fulltexts_df.empty
+            and "text" in fulltexts_df.columns
+        ):
             has_text_ecli = set(
                 fulltexts_df.loc[
                     fulltexts_df["text"].astype("string").str.len().fillna(0) >= 200,
@@ -488,9 +523,7 @@ def compute_coverage_stats(
     # ---- ECLI-duplicate count (post-consolidation) ----
     if "ecli" in cases_df.columns:
         dup_eclis = cases_df["ecli"].dropna()
-        out["dup_ecli_count"] = int(
-            len(dup_eclis) - dup_eclis.nunique()
-        )
+        out["dup_ecli_count"] = int(len(dup_eclis) - dup_eclis.nunique())
 
     # ---- Top atom distributions (subject / procedure / country) ----
     def _atoms(col: str):
@@ -558,11 +591,13 @@ def compute_coverage_stats(
         # Pull the date-publication year for context, fall back to "".
         year_col = pd.Series([""] * len(cases_df), index=cases_df.index)
         if "date_publication" in cases_df.columns:
+
             def _first(v):
                 if pd.isna(v):
                     return None
                 parts = [p.strip() for p in str(v).split(";") if p.strip()]
                 return min(parts) if parts else None
+
             dt = pd.to_datetime(
                 cases_df["date_publication"].map(_first), errors="coerce", utc=True
             )
@@ -573,8 +608,11 @@ def compute_coverage_stats(
             (
                 str(cases_df.loc[i, "ecli"]) if "ecli" in cases_df.columns else "",
                 int(in_deg.loc[i]),
-                str(cases_df.loc[i, "subject_matter"])
-                    if "subject_matter" in cases_df.columns else "",
+                (
+                    str(cases_df.loc[i, "subject_matter"])
+                    if "subject_matter" in cases_df.columns
+                    else ""
+                ),
                 str(year_col.loc[i]),
             )
             for i in top_idx
@@ -670,7 +708,9 @@ def write_dataset_card(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     canonical_md = "\n".join(f"- `{c}`" for c in canonical_columns) or "_(none)_"
-    discovered_md = "\n".join(f"- `{c}`" for c in discovered_columns) or "_(none populated)_"
+    discovered_md = (
+        "\n".join(f"- `{c}`" for c in discovered_columns) or "_(none populated)_"
+    )
 
     # --- Rich content blocks ---
     # Each block is only emitted when the relevant stats are available, so
@@ -679,7 +719,7 @@ def write_dataset_card(
     if coverage_stats:
         ft_total = coverage_stats.get("fulltext_total", 0)
         ft_with = coverage_stats.get("fulltext_with_text", 0)
-        ft_pct = (round(100 * ft_with / ft_total, 1) if ft_total else 0.0)
+        ft_pct = round(100 * ft_with / ft_total, 1) if ft_total else 0.0
 
         # --- Coverage section ---
         coverage_section = f"""## Coverage
@@ -722,7 +762,7 @@ CELLAR provides them, in additional EU-official-language translations. Top
         cg_total = coverage_stats.get("citation_edges_total", 0)
         cg_internal = coverage_stats.get("citation_edges_internal", 0)
         cg_external = coverage_stats.get("citation_edges_external", 0)
-        cg_pct = (round(100 * cg_internal / cg_total, 1) if cg_total else 0.0)
+        cg_pct = round(100 * cg_internal / cg_total, 1) if cg_total else 0.0
         citation_graph_section = f"""## Citation graph
 
 Each case row carries two citation columns, both as `;`-separated lists
@@ -1122,7 +1162,9 @@ def copy_fields_md(output_path: Path) -> bool:
     # 1. Local install candidates (will work once upstream MANIFEST.in is fixed).
     for candidate in _locate_fields_md():
         try:
-            output_path.write_text(candidate.read_text(encoding="utf-8"), encoding="utf-8")
+            output_path.write_text(
+                candidate.read_text(encoding="utf-8"), encoding="utf-8"
+            )
             log.info("copied FIELDS.md from %s -> %s", candidate, output_path)
             return True
         except OSError as exc:
@@ -1141,7 +1183,8 @@ def copy_fields_md(output_path: Path) -> bool:
         log.warning(
             "FIELDS.md not in install and could not be fetched from %s: %s — "
             "skipping copy. The dataset card still lists canonical columns.",
-            FIELDS_MD_RAW_URL, exc,
+            FIELDS_MD_RAW_URL,
+            exc,
         )
         return False
 

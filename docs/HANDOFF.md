@@ -8,39 +8,53 @@ docs: [DB_ACCESS.md](DB_ACCESS.md) for the database transport,
 issue ledger, [postgres-schema/DECISIONS.md](postgres-schema/DECISIONS.md)
 for schema decisions.
 
+## 2026-09-22 catalogue reconciliation
+
+The September 16 rebuild fixed Kamil's 604 English judgment bodies and was
+published to Hugging Face at revision
+`a20299fed970e3372d6bf17cefe1b280ba006897`. A later production/corpus identity
+comparison exposed a separate source-catalogue defect: CELLAR SPARQL was the
+only source used to enumerate rows, even though current InfoCuria contains
+official procedural documents absent from that graph. Twelve production ECLIs
+were absent from the corpus; seven are current InfoCuria documents, two are
+stale aliases whose CELEX resolves to another ECLI, and the oldest tail is not
+present in InfoCuria's current catalogue.
+
+The complete fix is `cellar-extractor` PR #15, immutable revision
+`d6024cf6f2773a885906f71116b5431eadefd8dc`. It adds date-windowed InfoCuria
+catalogue enumeration, reconciles identity fields, requires exact CELEX
+document selection, and confines multilingual fanout to the chosen logical
+document. Package verification: 144 tests passed, 53 opt-in integration tests
+skipped. Live acceptance recovered `ECLI:EU:C:2013:656` as `62011CO0444` and
+returned the order body rather than the sibling judgment.
+
+Airflow PR #46 (`42-migrate-data-towards-psql`) pins that revision, rejects
+within-window ECLI/CELEX conflicts, and documents the mandatory
+`force_refresh: true` historical rerun. The Vast rebuild must start from a new
+workspace while preserving the September artifacts as a rollback copy. Keep
+`SKIP_UPLOAD=1` until the new catalogue identity gate, parquet integrity scan,
+and 604-case live verification all pass.
+
 ## TL;DR — where things stand right now
 
-A clean, full-corpus rebuild finished scraping on Vast.ai on 2026-09-16:
-**873/873 monthly windows**, **46,652 cases**, and **608,891 fulltext
-rows**, with no failed or exhausted windows. The run is deliberately
-validation-first (`SKIP_UPLOAD=1`), so neither HuggingFace nor production
-has been updated from this rebuild yet.
+The September 16 run completed all 873 windows, consolidated with bounded
+memory, passed the exact 604-case verifier, and published 46,637 unique ECLIs
+and 608,668 fulltexts to Hugging Face. Its production text sync did not reach a
+completion marker and must not be treated as final acceptance.
 
-The first consolidation attempt exposed a separate memory bug: the old
-implementation appended all 608,891 text-bearing JSON objects to one Python
-list before creating a DataFrame. The kernel repeatedly killed it while it
-was building `fulltexts.parquet`; the scrape artifacts and manifest on the
-persistent Vast volume are intact. `cases.parquet` was written successfully.
-The consolidator is now being changed to a bounded-memory, window-by-window
-Parquet writer. Resume with `cjeu-migrate run --consolidate-only`; do not
-rescrape the completed windows.
+The September 22 catalogue fix now requires another full, forced rebuild. Do
+not resume the old manifest: preserve the old workspace as rollback evidence
+and create a fresh `/workspace/cjeu-data`. The new run must remain
+validation-first (`SKIP_UPLOAD=1`). After all windows and streamed
+consolidation complete:
 
-**Immediate next steps, in order:**
-
-1. Deploy the streamed fulltext-consolidation fix to the existing Vast
-   volume and run consolidation only. Confirm the output parquet has exactly
-   608,891 rows and viewer-safe row groups.
-2. Run the full-corpus derived-work scan and the exact Kamil 604-case verifier
-   (`--live-cellar`). Upload to HF only if both pass.
-3. After the HF upload, run the DB sync bracketed by snapshots
-   (60 → 61 before/after → diff). Can run from the Mac; does not need the
-   box.
-4. Verify the same 604 cases in production after sync and retain the
-   before/after evidence.
-5. Update KNOWN_ISSUES #5 to resolved with final numbers; email Kamil the
-   confirmation.
-6. Turn the sql-runner off (`SQL_RUNNER_ENABLED=false` in Coolify env,
-   redeploy) — the maintenance window has been open the whole time.
+1. Run parquet integrity and catalogue identity validation.
+2. Run the exact Kamil 604-case verifier with `--live-cellar`.
+3. Publish to Hugging Face only if all gates pass.
+4. Reconcile production metadata and texts from the new corpus, bracketed by
+   before/after snapshots; do not copy stale production aliases into HF.
+5. Verify the catalogue identities and Kamil cases in production, then disable
+   and rotate the SQL runner.
 
 ## What this project is
 
@@ -257,16 +271,16 @@ Verification targets for this campaign:
 
 ## cellar-extractor repo state
 
-- Upstream PR #14 is open:
-  <https://github.com/maastrichtlawtech/cellar-extractor/pull/14>.
+- Upstream PR #14 was merged and released as v2.0.3. The catalogue follow-up
+  is PR #15: <https://github.com/maastrichtlawtech/cellar-extractor/pull/15>.
 - The immutable fixed revision is
-  `2898f3123305d29069654a418f6b6691a4bfbf97` on the fork. It adds the
-  public manifestation API, canonicalizes CELEX at that boundary, and
-  makes canonical CELLAR text replace overlapping InfoCuria text.
+  `d6024cf6f2773a885906f71116b5431eadefd8dc` on the fork. It includes the
+  manifestation fixes plus InfoCuria catalogue reconciliation and exact
+  logical-document selection.
 - `cjeu-migration` and the Airflow handoff pin this exact revision until
-  an upstream release containing PR #14 is available. Do not use PyPI
-  `2.0.2` or the old moving `dev` branch for a rerun.
-- Package verification: 140 tests passed, 53 opt-in integration tests
+  an upstream release containing PR #15 is available. Do not use PyPI
+  `2.0.3` or the old moving `dev` branch for a rerun.
+- Package verification: 144 tests passed, 53 opt-in integration tests
   skipped.
 
 ## 2026-09-15 correction: the first sweep was not sufficient
