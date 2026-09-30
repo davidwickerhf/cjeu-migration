@@ -188,17 +188,14 @@ def consolidate_fulltexts(
         _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
         return FulltextConsolidation(0, (), frozenset(), 0, {}, {})
 
-    # Pass 1 discovers the union schema and computes dataset-card aggregates.
-    # Files are parsed one at a time; importantly, text bodies are never kept.
+    # Pass 1 discovers the union schema and, for every (ECLI, language) key,
+    # which window holds the best row. Files are parsed one at a time;
+    # importantly, text bodies are never kept.
     columns: set[str] = set()
     valid_files: list[Path] = []
-    first_window_by_key: dict[tuple[str, str], str] = {}
-    duplicate_windows: dict[tuple[str, str], set[str]] = {}
-    row_count = 0
-    text_row_count = 0
-    eclis_with_text: set[str] = set()
-    language_counts: Counter[str] = Counter()
-    missing_reason_counts: Counter[str] = Counter()
+    candidates: dict[tuple[str, str], list[tuple[str, str, int]]] = {}
+    longest_body: Counter[str] = Counter()
+    keyless_rows = 0
     for path in json_files:
         try:
             with path.open("r", encoding="utf-8") as f:
@@ -217,37 +214,33 @@ def consolidate_fulltexts(
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            ecli_key = str(entry.get("ecli") or "").strip().upper()
-            language_key = str(entry.get("text_language") or "").strip().upper()
-            dedup_key = (ecli_key, language_key) if ecli_key else None
-            if dedup_key is not None and dedup_key in first_window_by_key:
-                duplicate_windows.setdefault(
-                    dedup_key, {first_window_by_key[dedup_key]}
-                ).add(path.stem)
-                continue
-            if dedup_key is not None:
-                first_window_by_key[dedup_key] = path.stem
-
-            row_count += 1
             columns.update(str(key) for key in entry)
-
+            ecli_key = str(entry.get("ecli") or "").strip().upper()
+            if not ecli_key:
+                keyless_rows += 1
+                continue
+            language_key = str(entry.get("text_language") or "").strip().upper()
             text = entry.get("text")
-            if isinstance(text, str) and len(text) >= 200:
-                text_row_count += 1
-                ecli = entry.get("ecli")
-                if ecli:
-                    eclis_with_text.add(str(ecli))
+            length = len(text.strip()) if isinstance(text, str) else 0
+            longest_body[ecli_key] = max(longest_body[ecli_key], length)
+            windows = candidates.setdefault((ecli_key, language_key), [])
+            if all(window != path.stem for window, _, _ in windows):
+                windows.append((path.stem, str(entry.get("text_source") or ""), length))
 
-            language = entry.get("text_language")
-            if language:
-                language_counts[str(language)] += 1
-
-            reasons = entry.get("missing_reasons")
-            if reasons:
-                for reason in str(reasons).split(";"):
-                    reason = reason.strip()
-                    if reason:
-                        missing_reason_counts[reason] += 1
+    chosen_window: dict[tuple[str, str], str] = {}
+    duplicate_windows: dict[tuple[str, str], set[str]] = {}
+    for key, windows in candidates.items():
+        chosen_window[key] = min(
+            windows,
+            key=lambda item: _source_rank(
+                effective_text_source(item[1], item[2], longest_body[key[0]]),
+                item[2],
+            ),
+        )[0]
+        if len(windows) > 1:
+            duplicate_windows[key] = {window for window, _, _ in windows}
+    row_count = len(candidates) + keyless_rows
+    del candidates
 
     ordered_columns = _ordered_fulltext_columns(columns)
     if row_count == 0:
@@ -274,6 +267,10 @@ def consolidate_fulltexts(
     )
     written = 0
     emitted_keys: set[tuple[str, str]] = set()
+    text_row_count = 0
+    eclis_with_text: set[str] = set()
+    language_counts: Counter[str] = Counter()
+    missing_reason_counts: Counter[str] = Counter()
     try:
         for file_number, path in enumerate(valid_files, start=1):
             with path.open("r", encoding="utf-8") as f:
@@ -285,7 +282,10 @@ def consolidate_fulltexts(
                 ecli_key = str(entry.get("ecli") or "").strip().upper()
                 language_key = str(entry.get("text_language") or "").strip().upper()
                 dedup_key = (ecli_key, language_key) if ecli_key else None
-                if dedup_key is not None and dedup_key in emitted_keys:
+                if dedup_key is not None and (
+                    dedup_key in emitted_keys
+                    or chosen_window[dedup_key] != path.stem
+                ):
                     continue
                 if dedup_key is not None:
                     emitted_keys.add(dedup_key)
@@ -294,6 +294,27 @@ def consolidate_fulltexts(
                     for column in ordered_columns
                     if column != "__source_window"
                 }
+                text = entry.get("text")
+                length = len(text.strip()) if isinstance(text, str) else 0
+                if "text_source" in row:
+                    row["text_source"] = effective_text_source(
+                        row["text_source"] or "",
+                        length,
+                        longest_body[ecli_key] if ecli_key else 0,
+                    ) or row["text_source"]
+                if isinstance(text, str) and len(text) >= 200:
+                    text_row_count += 1
+                    if entry.get("ecli"):
+                        eclis_with_text.add(str(entry.get("ecli")))
+                language = entry.get("text_language")
+                if language:
+                    language_counts[str(language)] += 1
+                reasons = entry.get("missing_reasons")
+                if reasons:
+                    for reason in str(reasons).split(";"):
+                        reason = reason.strip()
+                        if reason:
+                            missing_reason_counts[reason] += 1
                 row["__source_window"] = (
                     ";".join(sorted(duplicate_windows[dedup_key]))
                     if dedup_key in duplicate_windows
@@ -337,6 +358,40 @@ def consolidate_fulltexts(
         language_counts=dict(language_counts),
         missing_reason_counts=dict(missing_reason_counts),
     )
+
+
+# InfoCuria returns the Official Journal notice ("Judgment of the General
+# Court of 17 May 2018 – X v Parliament (Case T-566/16)") for languages the
+# judgment was never translated into. Such rows are a small fraction of the
+# document's real body; label them so they are not mistaken for judgments.
+OJ_NOTICE_SOURCE = "INFOCURIA_OJ_NOTICE"
+OJ_NOTICE_MAX_RATIO = 0.25
+OJ_NOTICE_MIN_REFERENCE_CHARS = 10_000
+
+
+def effective_text_source(source: str, length: int, longest_body: int) -> str:
+    """Return *source*, relabelled as an OJ notice when the row is one."""
+    if (
+        source == "INFOCURIA_BLOB_HTML"
+        and length > 0
+        and longest_body >= OJ_NOTICE_MIN_REFERENCE_CHARS
+        and length < OJ_NOTICE_MAX_RATIO * longest_body
+    ):
+        return OJ_NOTICE_SOURCE
+    return source
+
+
+def _source_rank(source: str, length: int) -> int:
+    """Lower is better when one (ECLI, language) appears in several windows."""
+    if length == 0:
+        return 4
+    if source == "CELLAR_ITEM":
+        return 0
+    if source == OJ_NOTICE_SOURCE:
+        return 3
+    if source == "INFOCURIA_BLOB_HTML":
+        return 2
+    return 1
 
 
 def _ordered_fulltext_columns(columns: set[str]) -> list[str]:
@@ -981,7 +1036,7 @@ print(joined.shape)  # ~46 k rows (one per ECLI; no fan-out post-dedup)
 | `ecli` | string | Join key against `cases.parquet`. |
 | `celex` | string | Sometimes multi-valued (`62019CJ0793;62019CJ0793_RES`) when an ECLI bundles multiple work items. |
 | `text` | string | Plain text. Empty when CELLAR has no body for this work. |
-| `text_source` | string | `CELLAR_ITEM` / `CELLAR_REST_XHTML` / `INFOCURIA_BLOB_HTML` / `EXTRACTOR_FALLBACK_TEXT`. |
+| `text_source` | string | `CELLAR_ITEM` / `CELLAR_REST_XHTML` / `INFOCURIA_BLOB_HTML` / `EXTRACTOR_FALLBACK_TEXT` / `INFOCURIA_OJ_NOTICE` (the Official Journal notice of a judgment, stored for languages the judgment itself was never published in). |
 | `text_format` | string | `html` / `xhtml` / `pdf` / `xml`. Original markup format before plain-text extraction. |
 | `text_language` | string | ISO 639-1 code (`FR`, `EN`, `DE`, …). The procedural language at the CJEU is historically French, hence FR dominance. |
 | `missing_reasons` | string | `;`-separated tags explaining empty fields, e.g. `FULLTEXT_UNAVAILABLE_UPSTREAM`. |

@@ -823,3 +823,65 @@ def test_write_dataset_card_recipe_code_blocks_are_valid_python(tmp_path):
             raise AssertionError(
                 f"code block #{i+1} doesn't parse: {e}\n--- block ---\n{block}"
             )
+
+
+def _fulltext(ecli, lang, text, source, celex="62016TJ0566"):
+    return {
+        "celex": celex,
+        "ecli": ecli,
+        "text_language": lang,
+        "text": text,
+        "text_source": source,
+    }
+
+
+def test_consolidate_fulltexts_prefers_cellar_row_over_earlier_window(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    ecli = "ECLI:EU:T:2018:278"
+    (win_dir / "2018-04.json").write_text(
+        json.dumps([_fulltext(ecli, "EN", "x" * 900, "INFOCURIA_BLOB_HTML")]),
+        encoding="utf-8",
+    )
+    (win_dir / "2018-05.json").write_text(
+        json.dumps([_fulltext(ecli, "EN", "y" * 1000, "CELLAR_ITEM")]),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+
+    assert result.row_count == 1
+    assert df.iloc[0]["text_source"] == "CELLAR_ITEM"
+    assert df.iloc[0]["__source_window"] == "2018-04;2018-05"
+
+
+def test_consolidate_fulltexts_labels_short_infocuria_rows_as_oj_notices(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    ecli = "ECLI:EU:T:2018:278"
+    (win_dir / "2018-05.json").write_text(
+        json.dumps(
+            [
+                _fulltext(ecli, "FR", "j" * 28_000, "CELLAR_ITEM"),
+                _fulltext(ecli, "ET", "n" * 1_300, "INFOCURIA_BLOB_HTML"),
+                _fulltext(ecli, "DE", "d" * 27_000, "INFOCURIA_BLOB_HTML"),
+                # A short order with no long body elsewhere stays untouched.
+                _fulltext("ECLI:EU:T:2018:1", "ET", "o" * 1_300, "INFOCURIA_BLOB_HTML"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    consolidate_fulltexts(win_dir, out)
+    sources = {
+        (row.ecli, row.text_language): row.text_source
+        for row in pd.read_parquet(out).itertuples()
+    }
+
+    assert sources[(ecli, "ET")] == "INFOCURIA_OJ_NOTICE"
+    assert sources[(ecli, "DE")] == "INFOCURIA_BLOB_HTML"
+    assert sources[(ecli, "FR")] == "CELLAR_ITEM"
+    assert sources[("ECLI:EU:T:2018:1", "ET")] == "INFOCURIA_BLOB_HTML"
