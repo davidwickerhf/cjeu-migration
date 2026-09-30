@@ -26,7 +26,9 @@ REQUIRED_CATALOG_IDENTITIES = {
     "ECLI:EU:C:2021:965": "62021CO0201(01)",
     "ECLI:EU:F:2011:62": "62011FO0005",
     "ECLI:EU:T:2003:190": "62002TJ0065",
-    "ECLI:EU:T:2014:1": "62013TO0505(02)",
+    # CELLAR (EUR-Lex's store) binds this ECLI to (01); InfoCuria numbers
+    # the procedure's orders differently and says (02).
+    "ECLI:EU:T:2014:1": "62013TO0505(01)",
     "ECLI:EU:T:2014:166": "62013TO0505(03)",
 }
 FORBIDDEN_STALE_ECLIS = {
@@ -129,6 +131,8 @@ def validate_gates(live: dict, integrity: dict, identity: dict) -> None:
 
     zero_gates = (
         "duplicate_case_eclis",
+        "duplicate_celex_groups",
+        "malformed_celex",
         "duplicate_ecli_language_pairs",
         "derived_fulltext_bodies",
     )
@@ -136,6 +140,13 @@ def validate_gates(live: dict, integrity: dict, identity: dict) -> None:
         actual = integrity.get(key)
         if actual != 0:
             raise RuntimeError(f"integrity gate {key}: expected 0, got {actual}")
+    baseline = integrity.get("baseline")
+    if not isinstance(baseline, dict):
+        raise RuntimeError("integrity gate baseline: compare against the published build")
+    for key in ("lost_eclis", "lost_cellar_eclis"):
+        actual = baseline.get(key)
+        if actual != 0:
+            raise RuntimeError(f"baseline gate {key}: expected 0, got {actual}")
     if int(integrity.get("cases_rows") or 0) < MIN_CASE_ROWS:
         raise RuntimeError(f"integrity gate cases_rows below {MIN_CASE_ROWS}")
     if int(integrity.get("fulltexts_rows") or 0) < MIN_FULLTEXT_ROWS:
