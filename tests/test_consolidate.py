@@ -885,3 +885,42 @@ def test_consolidate_fulltexts_labels_short_infocuria_rows_as_oj_notices(tmp_pat
     assert sources[(ecli, "DE")] == "INFOCURIA_BLOB_HTML"
     assert sources[(ecli, "FR")] == "CELLAR_ITEM"
     assert sources[("ECLI:EU:T:2018:1", "ET")] == "INFOCURIA_BLOB_HTML"
+
+
+def test_consolidate_cases_blanks_ambiguous_infocuria_celex(tmp_path):
+    csv_dir = tmp_path / "cases"
+    header = ["celex", "ecli", "identity_source", "infocuria_celex"]
+    _write_window_csv(
+        csv_dir / "2007-04.csv", header,
+        [["62007CO0193", "ECLI:EU:C:2007:218", "infocuria", "62007CO0193"],
+         ["62013CO0072", "ECLI:EU:C:2014:10", "cellar", ""]],
+    )
+    _write_window_csv(
+        csv_dir / "2007-07.csv", header,
+        [["62007CO0193", "ECLI:EU:C:2007:465", "infocuria", "62007CO0193"],
+         ["62013CO0072", "ECLI:EU:C:2015:1", "infocuria", "62013CO0072"],
+         ["62011CO0444", "ECLI:EU:C:2013:656", "infocuria", "62011CO0444"]],
+    )
+
+    df = consolidate_cases(csv_dir, tmp_path / "cases.parquet")
+    celex = dict(zip(df["ecli"], df["celex"]))
+
+    assert pd.isna(celex["ECLI:EU:C:2007:218"])
+    assert pd.isna(celex["ECLI:EU:C:2007:465"])
+    assert pd.isna(celex["ECLI:EU:C:2015:1"])
+    assert celex["ECLI:EU:C:2014:10"] == "62013CO0072"
+    assert celex["ECLI:EU:C:2013:656"] == "62011CO0444"
+
+
+def test_consolidate_fulltexts_blanks_celex_for_listed_eclis(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    (win_dir / "2007-04.json").write_text(
+        json.dumps([_fulltext("ECLI:EU:C:2007:218", "FR", "ordonnance", "INFOCURIA_BLOB_HTML", celex="62007CO0193")]),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    consolidate_fulltexts(win_dir, out, blank_celex_eclis=frozenset({"ECLI:EU:C:2007:218"}))
+
+    assert pd.isna(pd.read_parquet(out).iloc[0]["celex"])

@@ -193,8 +193,14 @@ def _consolidate(config: Config):
     cases_df = consolidate_cases(
         config.cases_dir, config.consolidated_dir / "cases.parquet"
     )
+    blank_celex_eclis = frozenset(
+        str(ecli).strip().upper()
+        for ecli in cases_df.loc[cases_df["celex"].isna(), "ecli"].dropna()
+    ) if {"celex", "ecli"}.issubset(cases_df.columns) else frozenset()
     fulltexts = consolidate_fulltexts(
-        config.fulltexts_dir, config.consolidated_dir / "fulltexts.parquet"
+        config.fulltexts_dir,
+        config.consolidated_dir / "fulltexts.parquet",
+        blank_celex_eclis=blank_celex_eclis,
     )
 
     # Build the schema lists for the dataset card.

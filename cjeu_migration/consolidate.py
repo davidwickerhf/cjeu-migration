@@ -88,6 +88,28 @@ def _write_parquet(df: pd.DataFrame, output_path: Path, row_group_size: int) -> 
     )
 
 
+def primary_celex(value) -> str:
+    """First CELEX of a (possibly ``;``-joined, suffixed) metadata cell."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    return str(value).split(";", 1)[0].split("_", 1)[0].strip()
+
+
+def unresolved_celex_eclis(df: pd.DataFrame) -> set[str]:
+    """ECLIs known only to InfoCuria whose CELEX another ECLI also carries.
+
+    InfoCuria labels every order in a procedure with the procedure's CELEX,
+    and the extractor can only disambiguate within one window. Across the
+    corpus such a CELEX identifies no single document, so it is dropped; the
+    text was fetched by InfoCuria document id and is unaffected.
+    """
+    celex = df["celex"].map(primary_celex)
+    shared = celex[celex != ""].duplicated(keep=False)
+    shared = shared[shared].index
+    infocuria_only = df["identity_source"].fillna("").astype(str).eq("infocuria")
+    return set(df.loc[shared][infocuria_only.loc[shared]]["ecli"].dropna())
+
+
 def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     """Concatenate every window CSV into a single parquet table.
 
@@ -160,6 +182,14 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
             valid = valid.drop_duplicates(subset=["ecli"], keep="first")
         df = pd.concat([valid, missing], ignore_index=True)
 
+    if not df.empty and {"celex", "identity_source"}.issubset(df.columns):
+        blanked = unresolved_celex_eclis(df)
+        if blanked:
+            log.warning(
+                "blanking ambiguous InfoCuria CELEX on %d ECLIs", len(blanked)
+            )
+            df.loc[df["ecli"].isin(blanked), "celex"] = None
+
     _write_parquet(df, output_path, CASES_ROW_GROUP_SIZE)
     log.info("wrote %d cases rows -> %s", len(df), output_path)
     return df
@@ -168,6 +198,7 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
 def consolidate_fulltexts(
     window_json_dir: Path,
     output_path: Path,
+    blank_celex_eclis: frozenset[str] = frozenset(),
 ) -> FulltextConsolidation:
     """Stream every window fulltext JSON into a single parquet table.
 
@@ -294,6 +325,8 @@ def consolidate_fulltexts(
                     for column in ordered_columns
                     if column != "__source_window"
                 }
+                if ecli_key in blank_celex_eclis and "celex" in row:
+                    row["celex"] = None
                 text = entry.get("text")
                 length = len(text.strip()) if isinstance(text, str) else 0
                 if "text_source" in row:
