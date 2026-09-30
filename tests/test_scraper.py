@@ -160,3 +160,103 @@ def test_scrape_window_passes_sd_ed_threads_max_ecli_to_extractor(tmp_path):
     assert seen_kwargs["max_ecli"] == 42
     assert seen_kwargs["save"] is True
     assert seen_kwargs["return_data"] is False
+
+
+def _write_fulltexts(path: Path, entries: list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(entries), encoding="utf-8")
+
+
+def _records(data, celex, ecli, missing_reasons):
+    return [
+        {"celex": celex, "ecli": ecli, "missing_reasons": missing_reasons, **entry}
+        for entry in data["fulltexts"]
+    ]
+
+
+def test_repair_missing_cellar_texts_refetches_dropped_cellar_rows(tmp_path):
+    from cjeu_migration.scraper import repair_missing_cellar_texts
+
+    path = tmp_path / "2018-09.json"
+    _write_fulltexts(
+        path,
+        [
+            {"celex": "62016CJ0685", "ecli": "ECLI:EU:C:2018:743", "text": "infocuria",
+             "text_source": "INFOCURIA_BLOB_HTML", "text_language": "HR"},
+            {"celex": "62016CJ0001", "ecli": "ECLI:EU:C:2018:1", "text": "ok",
+             "text_source": "CELLAR_ITEM", "text_language": "EN"},
+            {"celex": "62016CO0002", "ecli": "ECLI:EU:C:2018:2", "text": "",
+             "text_source": "", "text_language": ""},
+        ],
+    )
+    calls = []
+
+    def manifestations(celex):
+        calls.append(celex)
+        return [{"language": "EN"}] if celex == "62016CJ0685" else []
+
+    responses = iter([None, {"fulltexts": [
+        {"text": "judgment", "text_source": "CELLAR_ITEM", "text_language": "EN"},
+        {"text": "presuda", "text_source": "CELLAR_ITEM", "text_language": "HR"},
+    ]}])
+
+    repaired = repair_missing_cellar_texts(
+        path,
+        manifestations_fn=manifestations,
+        refetch_fn=lambda celex: next(responses),
+        build_records_fn=lambda data, *args: _records(data, *args) if data else [],
+    )
+
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    assert repaired == 1
+    assert calls == ["62016CJ0685", "62016CO0002"]
+    assert sorted(
+        (row["ecli"], row["text_language"], row["text_source"]) for row in rows
+    ) == [
+        ("ECLI:EU:C:2018:1", "EN", "CELLAR_ITEM"),
+        ("ECLI:EU:C:2018:2", "", ""),
+        ("ECLI:EU:C:2018:743", "EN", "CELLAR_ITEM"),
+        ("ECLI:EU:C:2018:743", "HR", "CELLAR_ITEM"),
+    ]
+
+
+def test_repair_missing_cellar_texts_fails_when_cellar_text_never_arrives(tmp_path):
+    from cjeu_migration.scraper import CellarCoverageError, repair_missing_cellar_texts
+
+    path = tmp_path / "2018-09.json"
+    entries = [
+        {"celex": "62016CJ0685", "ecli": "ECLI:EU:C:2018:743", "text": "",
+         "text_source": "", "text_language": ""},
+    ]
+    _write_fulltexts(path, entries)
+
+    with pytest.raises(CellarCoverageError, match="ECLI:EU:C:2018:743"):
+        repair_missing_cellar_texts(
+            path,
+            manifestations_fn=lambda celex: [{"language": "EN"}],
+            refetch_fn=lambda celex: None,
+            build_records_fn=lambda *args: [],
+        )
+    assert json.loads(path.read_text(encoding="utf-8")) == entries
+
+
+def test_scrape_window_fails_window_when_cellar_text_is_missing(tmp_path):
+    fake = _stub_writer(
+        cases_rows=[["62016CJ0685", "ECLI:EU:C:2018:743", "6"]],
+        fulltext_entries=[
+            {"celex": "62016CJ0685", "ecli": "ECLI:EU:C:2018:743", "text": "",
+             "text_source": "", "text_language": ""},
+        ],
+    )
+
+    with pytest.raises(ScrapeError, match="CELLAR has manifestations"):
+        scrape_window(
+            _window(),
+            tmp_path / "cases",
+            tmp_path / "fulltexts",
+            extra_fn=fake,
+            max_attempts=1,
+            verify_cellar=True,
+            manifestations_fn=lambda celex: [{"language": "EN"}],
+            refetch_fn=lambda celex: None,
+        )

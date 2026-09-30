@@ -13,6 +13,7 @@ Designed for long-running, possibly-interrupted execution on Vast.ai:
 
 from __future__ import annotations
 
+import functools
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,7 +141,9 @@ def _scrape_pending(
     scrape_fn: Optional[Callable] = None,
 ) -> None:
     """Process every not-yet-done window. Failures never abort the loop."""
-    scrape = scrape_fn or scrape_window
+    scrape = scrape_fn or functools.partial(
+        scrape_window, verify_cellar=config.verify_cellar
+    )
     for window in windows:
         if not manifest.should_process(window.window_id, config.max_window_retries):
             state = manifest.get(window.window_id)

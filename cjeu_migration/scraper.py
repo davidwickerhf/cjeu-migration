@@ -63,6 +63,9 @@ def scrape_window(
     max_ecli: int = 10_000,
     max_attempts: int = 3,
     extra_fn: Optional[Callable[..., Any]] = None,
+    verify_cellar: bool = False,
+    manifestations_fn: Optional[Callable[[str], list]] = None,
+    refetch_fn: Optional[Callable[[str], Any]] = None,
 ) -> ScrapeResult:
     """Scrape one window, returning where the outputs landed.
 
@@ -70,6 +73,10 @@ def scrape_window(
 
         cases_dir/<window_id>.csv
         fulltexts_dir/<window_id>.json
+
+    With ``verify_cellar``, sector-6 ECLIs that came back without any CELLAR
+    text are re-checked against CELLAR (see
+    :func:`repair_missing_cellar_texts`).
 
     Raises :class:`ScrapeError` when retries are exhausted.
     """
@@ -111,6 +118,22 @@ def scrape_window(
             f"window {window.window_id} failed after {attempts_used} attempts: {exc}"
         ) from exc
 
+    if verify_cellar:
+        try:
+            repaired = repair_missing_cellar_texts(
+                fulltexts_path,
+                manifestations_fn=manifestations_fn,
+                refetch_fn=refetch_fn,
+                max_attempts=max_attempts,
+            )
+        except CellarCoverageError as exc:
+            raise ScrapeError(f"window {window.window_id}: {exc}") from exc
+        if repaired:
+            log.info(
+                "window %s: recovered CELLAR texts for %d ECLIs",
+                window.window_id, repaired,
+            )
+
     row_count = _count_csv_rows(cases_path)
     fulltext_count = _count_json_list(fulltexts_path)
     return ScrapeResult(
@@ -143,6 +166,118 @@ def _run_extractor(
         metadata_output_path=str(cases_path),
         fulltext_output_path=str(fulltexts_path),
     )
+
+
+class CellarCoverageError(RuntimeError):
+    """CELLAR has manifestations for a document but no text could be fetched."""
+
+
+def _default_manifestations_fn(celex: str) -> list:
+    from cellar_extractor import get_cellar_manifestations_by_celex  # type: ignore
+
+    _, manifestations = get_cellar_manifestations_by_celex(celex, sector="6")
+    return manifestations
+
+
+def _default_refetch_fn(celex: str) -> Any:
+    from cellar_extractor import eurlex_scraping  # type: ignore
+
+    # ``get_case_data_by_celex_id`` is lru-cached and swallows CELLAR errors,
+    # so a transient failure would otherwise be replayed from the cache.
+    eurlex_scraping._get_case_data_cached.cache_clear()
+    return eurlex_scraping.get_case_data_by_celex_id(celex)
+
+
+def _build_records(data: Any, celex: str, ecli: str, missing_reasons: str) -> list:
+    from cellar_extractor.fulltext_saving import _build_fulltext_records  # type: ignore
+
+    return _build_fulltext_records(data, celex, ecli, missing_reasons)
+
+
+def _has_cellar_text(rows: list) -> bool:
+    return any(
+        row.get("text_source") == "CELLAR_ITEM" and str(row.get("text") or "").strip()
+        for row in rows
+    )
+
+
+def repair_missing_cellar_texts(
+    fulltexts_path: Path,
+    *,
+    manifestations_fn: Optional[Callable[[str], list]] = None,
+    refetch_fn: Optional[Callable[[str], Any]] = None,
+    build_records_fn: Optional[Callable[..., list]] = None,
+    max_attempts: int = 3,
+) -> int:
+    """Re-fetch sector-6 documents whose CELLAR texts were silently dropped.
+
+    ``cellar-extractor`` treats any CELLAR failure during the language merge
+    as "no CELLAR text" and keeps whatever InfoCuria returned (possibly
+    nothing). For every sector-6 ECLI in the window with no CELLAR text, ask
+    CELLAR whether manifestations exist; if they do, re-fetch the document
+    and replace its rows. Returns the number of ECLIs repaired and raises
+    :class:`CellarCoverageError` if CELLAR still yields no text, so the
+    window is failed and retried instead of being published incomplete.
+    """
+    if not fulltexts_path.exists():
+        return 0
+    manifestations_fn = manifestations_fn or _default_manifestations_fn
+    refetch_fn = refetch_fn or _default_refetch_fn
+    build_records_fn = build_records_fn or _build_records
+
+    import json
+
+    with fulltexts_path.open("r", encoding="utf-8") as f:
+        entries = json.load(f)
+    if not isinstance(entries, list):
+        return 0
+
+    by_ecli: dict[str, list] = {}
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("ecli"):
+            by_ecli.setdefault(str(entry["ecli"]), []).append(entry)
+
+    replacements: dict[str, list] = {}
+    unrecovered: list[str] = []
+    for ecli, rows in by_ecli.items():
+        celex = str(rows[0].get("celex") or "").strip()
+        if not celex.startswith("6") or _has_cellar_text(rows):
+            continue
+        if not manifestations_fn(celex):
+            continue
+        for _ in range(max_attempts):
+            records = build_records_fn(
+                refetch_fn(celex), celex, ecli, rows[0].get("missing_reasons") or ""
+            )
+            if _has_cellar_text(records):
+                replacements[ecli] = records
+                break
+        else:
+            unrecovered.append(f"{ecli} ({celex})")
+
+    if unrecovered:
+        raise CellarCoverageError(
+            f"CELLAR has manifestations but no text was fetched for "
+            f"{len(unrecovered)} ECLIs: {', '.join(unrecovered[:10])}"
+        )
+    if not replacements:
+        return 0
+
+    output: list = []
+    emitted: set[str] = set()
+    for entry in entries:
+        ecli = str(entry.get("ecli") or "") if isinstance(entry, dict) else ""
+        if ecli in replacements:
+            if ecli not in emitted:
+                output.extend(replacements[ecli])
+                emitted.add(ecli)
+            continue
+        output.append(entry)
+    temporary = fulltexts_path.with_suffix(fulltexts_path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False)
+    temporary.replace(fulltexts_path)
+    return len(replacements)
 
 
 def _count_csv_rows(path: Path) -> int:

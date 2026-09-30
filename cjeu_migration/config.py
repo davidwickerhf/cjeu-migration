@@ -71,6 +71,8 @@ class Config:
     ntfy_topic_url: Optional[str]
     ntfy_interval_seconds: int
     ntfy_auth_token: Optional[str]
+    # Re-check sector-6 ECLIs that came back without CELLAR text (see scraper).
+    verify_cellar: bool = True
 
     @classmethod
     def from_env(cls, env_file: Optional[Path] = None) -> "Config":
@@ -100,6 +102,7 @@ class Config:
                 "NTFY_INTERVAL_SECONDS", os.environ.get("NTFY_INTERVAL_SECONDS", "1800")
             ),
             ntfy_auth_token=(os.environ.get("NTFY_AUTH_TOKEN") or "").strip() or None,
+            verify_cellar=_str_to_bool(os.environ.get("VERIFY_CELLAR", "1")),
         )
 
     @property
