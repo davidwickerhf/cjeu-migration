@@ -8,6 +8,71 @@ docs: [DB_ACCESS.md](DB_ACCESS.md) for the database transport,
 issue ledger, [postgres-schema/DECISIONS.md](postgres-schema/DECISIONS.md)
 for schema decisions.
 
+## 2026-10-01 rebuild validation failed; targeted re-scrape running
+
+The 2026-09-22 rebuild (finished 2026-09-27 on Vast instance `52582623`)
+was never published. Validation on 2026-09-30 failed it:
+
+- **Kamil 603/604**: C-685/16 (`ECLI:EU:C:2018:743`) lost its English
+  judgment. cellar-extractor swallows CELLAR errors during the language merge
+  (`except Exception: pass`) and lru-caches the degraded result, so 290
+  ECLIs lost all CELLAR text (4,437 language versions) with no error logged.
+  InfoCuria failures are swallowed the same way.
+- **CELEX identity corruption** from extractor PR #15, which let InfoCuria's
+  procedure-level `celex` override CELLAR: 312 known ECLIs got a wrong CELEX,
+  35 were glued (`62013CC043962013CC0439(01)`), and 1,633 ECLIs shared a
+  CELEX. Texts are fetched by CELEX, so many got a sibling document's text.
+  This also explains most of the 589 ECLIs left without any text.
+- **Shared text bodies**: an identical body under two ECLIs. 3,352 in the
+  rebuild, and 774 already in the published 2026-09-16 build (orders that
+  received their sibling judgment's InfoCuria text).
+- 31k language slots hold the Official Journal notice of a judgment for
+  languages the judgment was never published in (EUR-Lex has only FR plus
+  the language of the case). These are now labelled `INFOCURIA_OJ_NOTICE`.
+
+Fixes:
+
+- cellar-extractor `e4e2ecb` (upstream PR #16): CELLAR identity wins
+  for every ECLI it knows. InfoCuria-only documents keep InfoCuria's CELEX
+  only when unambiguous, and their texts are fetched by InfoCuria document
+  id across all sub-procedures, never through CELLAR or EUR-Lex. Rows carry
+  `identity_source` and `infocuria_*` locator columns.
+  `ECLI:EU:T:2014:1` is now CELLAR's `62013TO0505(01)`.
+- cjeu-migration:
+  - a window guard re-fetches dropped CELLAR and InfoCuria texts, failing
+    the window if CELLAR has a document but its text never arrives;
+  - consolidation keeps the best source per (ECLI, language), labels OJ
+    notices, and blanks InfoCuria-only CELEXes shared across windows;
+  - `scripts/vastai/validate_rebuild.py` adds gates for CELEX uniqueness,
+    malformed CELEX, shared text bodies, and ECLIs or CELLAR texts lost
+    relative to the published build;
+  - `migration/sql/62_load_new_cjeu_cases_via_runner.py` loads cases that
+    production does not have yet (DRY_RUN by default).
+
+Box state (instance `52582623`):
+
+- `/workspace/cjeu-data`: the 303 affected monthly windows were reset to
+  `pending` and are being re-scraped by supervisor program
+  `cjeu_full_rebuild` (`SKIP_UPLOAD=1`), started 2026-10-01 00:52 UTC. The
+  runner re-consolidates all windows afterwards. The window list is in
+  `validation/rescrape_windows.json`.
+- `/workspace/cjeu-data-20260922-rollback`: the 2026-09-22 dataset,
+  manifest, validation outputs, and the pre-re-scrape copies of the 303
+  windows.
+- `/workspace/cjeu-data-pre-catalogue-20260916`: the published build
+  (HF `a20299f`), used as the validation baseline.
+
+After consolidation:
+
+1. Run `validate_rebuild.py` against the 2026-09-16 baseline.
+2. Run the Kamil verifier with `--live-cellar`.
+3. Re-run the CELLAR coverage audit for ECLIs without CELLAR text.
+4. Publish only if every gate in `publish_after_validation.py` passes.
+5. For production, take the before-snapshot, then run 62 (dry run, then
+   write), 60, the `is_stub` recompute, the after-snapshot, and the Kamil
+   check in production. Then disable and rotate the runner, which was found
+   enabled with writes on 2026-09-30.
+
 ## 2026-09-22 catalogue reconciliation
 
 The September 16 rebuild fixed Kamil's 604 English judgment bodies and was
