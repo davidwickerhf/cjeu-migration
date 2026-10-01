@@ -195,15 +195,15 @@ def test_repair_missing_cellar_texts_refetches_dropped_cellar_rows(tmp_path):
         calls.append(celex)
         return [{"language": "EN"}] if celex == "62016CJ0685" else []
 
-    responses = iter([None, {"fulltexts": [
+    responses = {"62016CJ0685": iter([None, {"fulltexts": [
         {"text": "judgment", "text_source": "CELLAR_ITEM", "text_language": "EN"},
         {"text": "presuda", "text_source": "CELLAR_ITEM", "text_language": "HR"},
-    ]}])
+    ]}])}
 
     repaired = repair_missing_cellar_texts(
         path,
         manifestations_fn=manifestations,
-        refetch_fn=lambda celex: next(responses),
+        refetch_fn=lambda celex: next(responses.get(celex, iter([])), None),
         build_records_fn=lambda data, *args: _records(data, *args) if data else [],
     )
 
@@ -260,3 +260,69 @@ def test_scrape_window_fails_window_when_cellar_text_is_missing(tmp_path):
             manifestations_fn=lambda celex: [{"language": "EN"}],
             refetch_fn=lambda celex: None,
         )
+
+
+def test_repair_missing_cellar_texts_refetches_infocuria_only_documents_by_id(tmp_path):
+    from cjeu_migration.scraper import repair_missing_cellar_texts
+
+    cases = tmp_path / "2007-04.csv"
+    cases.write_text(
+        "celex,ecli,identity_source,infocuria_document_id,infocuria_celex\n"
+        ",ECLI:EU:C:2007:218,infocuria,id_60942,62007CO0193\n"
+        ",ECLI:EU:T:2007:106,infocuria,id_61624,62004TO0393\n",
+        encoding="utf-8",
+    )
+    path = tmp_path / "2007-04.json"
+    _write_fulltexts(path, [
+        {"celex": "", "ecli": "ECLI:EU:C:2007:218", "text": "", "text_source": "", "text_language": ""},
+        {"celex": "", "ecli": "ECLI:EU:T:2007:106", "text": "", "text_source": "", "text_language": ""},
+    ])
+    calls = []
+
+    def refetch(celex, document_id=None, use_cellar=True):
+        calls.append((celex, document_id, use_cellar))
+        if document_id == "id_60942":
+            return {"fulltexts": [{"text": "ordonnance", "text_source": "INFOCURIA_BLOB_HTML", "text_language": "FR"}]}
+        return None
+
+    repaired = repair_missing_cellar_texts(
+        path,
+        cases_path=cases,
+        manifestations_fn=lambda celex: pytest.fail("CELLAR must not be consulted"),
+        refetch_fn=refetch,
+        build_records_fn=lambda data, *args: _records(data, *args) if data else [],
+        max_attempts=2,
+    )
+
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    assert repaired == 1
+    assert ("62007CO0193", "id_60942", False) in calls
+    assert all(use_cellar is False for _, _, use_cellar in calls)
+    assert [r["text"] for r in rows if r["ecli"] == "ECLI:EU:C:2007:218"] == ["ordonnance"]
+    assert [r["text"] for r in rows if r["ecli"] == "ECLI:EU:T:2007:106"] == [""]
+
+
+def test_repair_missing_cellar_texts_retries_textless_cases_without_cellar(tmp_path):
+    from cjeu_migration.scraper import repair_missing_cellar_texts
+
+    path = tmp_path / "2014-01.json"
+    _write_fulltexts(path, [
+        {"celex": "62012TJ0513", "ecli": "ECLI:EU:T:2014:24", "text": "",
+         "text_source": "", "text_language": ""},
+        {"celex": "62012TJ0514", "ecli": "ECLI:EU:T:2014:25", "text": "",
+         "text_source": "", "text_language": ""},
+    ])
+    responses = {"62012TJ0513": iter([None, {"fulltexts": [
+        {"text": "Urteil", "text_source": "INFOCURIA_BLOB_HTML", "text_language": "DE"}]}])}
+
+    repaired = repair_missing_cellar_texts(
+        path,
+        manifestations_fn=lambda celex: [],
+        refetch_fn=lambda celex: next(responses.get(celex, iter([])), None),
+        build_records_fn=lambda data, *args: _records(data, *args) if data else [],
+    )
+
+    rows = {r["ecli"]: r for r in json.loads(path.read_text(encoding="utf-8"))}
+    assert repaired == 1
+    assert rows["ECLI:EU:T:2014:24"]["text"] == "Urteil"
+    assert rows["ECLI:EU:T:2014:25"]["text"] == ""

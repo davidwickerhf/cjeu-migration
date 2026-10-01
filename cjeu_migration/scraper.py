@@ -122,6 +122,7 @@ def scrape_window(
         try:
             repaired = repair_missing_cellar_texts(
                 fulltexts_path,
+                cases_path=cases_path,
                 manifestations_fn=manifestations_fn,
                 refetch_fn=refetch_fn,
                 max_attempts=max_attempts,
@@ -130,7 +131,7 @@ def scrape_window(
             raise ScrapeError(f"window {window.window_id}: {exc}") from exc
         if repaired:
             log.info(
-                "window %s: recovered CELLAR texts for %d ECLIs",
+                "window %s: recovered dropped texts for %d ECLIs",
                 window.window_id, repaired,
             )
 
@@ -179,13 +180,46 @@ def _default_manifestations_fn(celex: str) -> list:
     return manifestations
 
 
-def _default_refetch_fn(celex: str) -> Any:
+def _default_refetch_fn(
+    celex: str, document_id: Optional[str] = None, use_cellar: bool = True
+) -> Any:
     from cellar_extractor import eurlex_scraping  # type: ignore
 
-    # ``get_case_data_by_celex_id`` is lru-cached and swallows CELLAR errors,
-    # so a transient failure would otherwise be replayed from the cache.
+    # ``get_case_data_by_celex_id`` is lru-cached and swallows CELLAR and
+    # InfoCuria errors, so a transient failure would otherwise be replayed
+    # from the cache.
     eurlex_scraping._get_case_data_cached.cache_clear()
-    return eurlex_scraping.get_case_data_by_celex_id(celex)
+    return eurlex_scraping.get_case_data_by_celex_id(
+        celex, document_id=document_id, use_cellar=use_cellar
+    )
+
+
+def _read_identities(cases_path: Optional[Path]) -> dict[str, dict]:
+    """Per-ECLI identity columns written by cellar-extractor's catalogue step."""
+    if cases_path is None or not cases_path.exists():
+        return {}
+    import csv
+    import sys
+
+    csv.field_size_limit(sys.maxsize)
+    identities = {}
+    with cases_path.open("r", encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            ecli = (row.get("ecli") or "").strip()
+            if ecli:
+                identities[ecli] = {
+                    "identity_source": (row.get("identity_source") or "").strip(),
+                    "document_id": (row.get("infocuria_document_id") or "").strip(),
+                    "lookup_celex": (
+                        (row.get("celex") or "").strip()
+                        or (row.get("infocuria_celex") or "").split(";", 1)[0].strip()
+                    ),
+                }
+    return identities
+
+
+def _has_text(rows: list) -> bool:
+    return any(str(row.get("text") or "").strip() for row in rows)
 
 
 def _build_records(data: Any, celex: str, ecli: str, missing_reasons: str) -> list:
@@ -204,6 +238,7 @@ def _has_cellar_text(rows: list) -> bool:
 def repair_missing_cellar_texts(
     fulltexts_path: Path,
     *,
+    cases_path: Optional[Path] = None,
     manifestations_fn: Optional[Callable[[str], list]] = None,
     refetch_fn: Optional[Callable[[str], Any]] = None,
     build_records_fn: Optional[Callable[..., list]] = None,
@@ -218,6 +253,12 @@ def repair_missing_cellar_texts(
     and replace its rows. Returns the number of ECLIs repaired and raises
     :class:`CellarCoverageError` if CELLAR still yields no text, so the
     window is failed and retried instead of being published incomplete.
+
+    Documents known only to InfoCuria (``identity_source == "infocuria"`` in
+    the window's cases CSV) carry at best InfoCuria's procedure-level CELEX,
+    so CELLAR is never consulted for them; if they came back without any
+    text they are re-fetched by InfoCuria document id instead. Some have no
+    HTML at all, so those never fail the window.
     """
     if not fulltexts_path.exists():
         return 0
@@ -237,23 +278,47 @@ def repair_missing_cellar_texts(
         if isinstance(entry, dict) and entry.get("ecli"):
             by_ecli.setdefault(str(entry["ecli"]), []).append(entry)
 
+    identities = _read_identities(cases_path)
     replacements: dict[str, list] = {}
     unrecovered: list[str] = []
     for ecli, rows in by_ecli.items():
+        identity = identities.get(ecli, {})
         celex = str(rows[0].get("celex") or "").strip()
+        reasons = rows[0].get("missing_reasons") or ""
+        if identity.get("identity_source") == "infocuria":
+            lookup = identity.get("lookup_celex") or ""
+            if _has_text(rows) or not identity.get("document_id") or not lookup:
+                continue
+            for _ in range(max_attempts):
+                data = refetch_fn(
+                    lookup, document_id=identity["document_id"], use_cellar=False
+                )
+                records = build_records_fn(data, celex, ecli, reasons)
+                if _has_text(records):
+                    replacements[ecli] = records
+                    break
+            continue
         if not celex.startswith("6") or _has_cellar_text(rows):
             continue
-        if not manifestations_fn(celex):
+        # CELLAR text is required when CELLAR has the document; otherwise any
+        # text (InfoCuria's) is recovered on a best-effort basis.
+        required = bool(manifestations_fn(celex))
+        if not required and _has_text(rows):
             continue
+        recovered = _has_cellar_text if required else _has_text
         for _ in range(max_attempts):
-            records = build_records_fn(
-                refetch_fn(celex), celex, ecli, rows[0].get("missing_reasons") or ""
+            data = (
+                refetch_fn(celex, document_id=identity["document_id"])
+                if identity.get("document_id")
+                else refetch_fn(celex)
             )
-            if _has_cellar_text(records):
+            records = build_records_fn(data, celex, ecli, reasons)
+            if recovered(records):
                 replacements[ecli] = records
                 break
         else:
-            unrecovered.append(f"{ecli} ({celex})")
+            if required:
+                unrecovered.append(f"{ecli} ({celex})")
 
     if unrecovered:
         raise CellarCoverageError(
