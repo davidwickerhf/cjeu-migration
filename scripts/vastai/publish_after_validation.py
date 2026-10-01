@@ -135,6 +135,7 @@ def validate_gates(live: dict, integrity: dict, identity: dict) -> None:
         "malformed_celex",
         "duplicate_ecli_language_pairs",
         "derived_fulltext_bodies",
+        "shared_text_bodies",
     )
     for key in zero_gates:
         actual = integrity.get(key)

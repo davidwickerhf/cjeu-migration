@@ -12,6 +12,7 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
@@ -50,6 +51,7 @@ def scan(dataset: Path) -> tuple[dict, set[str], set[tuple[str, str]], set[str]]
     cellar_eclis: set[str] = set()
     fulltext_eclis: set[str] = set()
     sources: Counter[str] = Counter()
+    bodies: dict[tuple[str, bytes], set[tuple[str, str]]] = {}
     empty = derived_bodies = derived_empty = 0
     columns = ["ecli", "celex", "text", "text_language", "text_source"]
     for batch in fulltexts.iter_batches(batch_size=2048, columns=columns):
@@ -66,12 +68,28 @@ def scan(dataset: Path) -> tuple[dict, set[str], set[tuple[str, str]], set[str]]
                 continue
             nonempty_pairs.add(key)
             derived_bodies += derived
+            normalized = " ".join(text.split())
+            if len(normalized) >= 500:
+                digest = hashlib.md5(normalized.encode("utf-8")).digest()
+                bodies.setdefault((key[1], digest), set()).add((ecli, source or ""))
             sources[source or ""] += 1
             if source == "CELLAR_ITEM":
                 cellar_eclis.add(ecli)
 
+    shared = [rows for rows in bodies.values() if len({e for e, _ in rows}) > 1]
+    # The same body under two ECLIs means one of them carries another
+    # document's text. CELLAR occasionally serves identical manifestations
+    # for two works, so only groups involving another source fail the gate.
+    attached = [
+        rows for rows in shared if any(source != "CELLAR_ITEM" for _, source in rows)
+    ]
     case_eclis = {ecli for ecli in eclis if ecli}
     report = {
+        "shared_text_bodies": len(attached),
+        "shared_text_bodies_sample": sorted(
+            sorted({e for e, _ in rows}) for rows in attached
+        )[:20],
+        "shared_cellar_only_bodies": len(shared) - len(attached),
         "cases_rows": cases.metadata.num_rows,
         "unique_case_eclis": len(case_eclis),
         "blank_case_eclis": eclis.get("", 0),

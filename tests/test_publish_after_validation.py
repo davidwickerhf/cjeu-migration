@@ -36,6 +36,7 @@ def good_integrity() -> dict:
         "malformed_celex": 0,
         "duplicate_ecli_language_pairs": 0,
         "derived_fulltext_bodies": 0,
+        "shared_text_bodies": 0,
         "baseline": {"lost_eclis": 0, "lost_cellar_eclis": 0},
     }
 
@@ -63,6 +64,7 @@ def test_validate_gates_accepts_exact_expected_results():
         ("integrity", "derived_fulltext_bodies", 1),
         ("integrity", "duplicate_celex_groups", 3),
         ("integrity", "malformed_celex", 1),
+        ("integrity", "shared_text_bodies", 2),
         ("integrity", "baseline", {"lost_eclis": 0, "lost_cellar_eclis": 290}),
         ("integrity", "baseline", None),
         ("integrity", "fulltexts_rows", mod.MIN_FULLTEXT_ROWS - 1),
