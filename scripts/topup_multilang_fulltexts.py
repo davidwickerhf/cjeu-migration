@@ -27,6 +27,11 @@ Usage::
     MIN_LANGS=24 YEAR_THRESHOLD=0 WORKERS=6 \
     python scripts/topup_multilang_fulltexts.py
 
+Progress is uploaded to HF every ``CHECKPOINT_EVERY`` processed ECLIs
+(default 2000; 0 disables checkpointing). A killed box therefore loses at
+most one checkpoint interval — the July 2026 run uploaded only at the very
+end and lost everything when its box was destroyed.
+
 Default thresholds are deliberately aggressive: ``MIN_LANGS=24`` (the
 current number of official EU languages — anything below that gets
 re-checked) and ``YEAR_THRESHOLD=0`` (every decade). Cases that are
@@ -121,10 +126,17 @@ def find_sparse_eclis(
 
     # First non-null CELEX token
     def _first_celex(v):
+        # Prefer a token without INF and strip _SUM/_INF-style suffixes —
+        # the raw first token can be the summary document's CELEX (e.g.
+        # "62020CJ0414_SUM;62020CJ0414"), whose work family carries only a
+        # partial language set. 3,642 corpus cases have suffixed tokens.
         if pd.isna(v):
             return None
         parts = [p.strip() for p in str(v).split(";") if p.strip()]
-        return parts[0] if parts else None
+        if not parts:
+            return None
+        non_inf = [p for p in parts if "INF" not in p]
+        return (non_inf[0] if non_inf else parts[0]).split("_")[0]
 
     celexes = cases_df["celex"].map(_first_celex)
 
@@ -251,10 +263,17 @@ def find_sparse_eclis_from_index(
     years = dt.dt.year
 
     def _first_celex(v):
+        # Prefer a token without INF and strip _SUM/_INF-style suffixes —
+        # the raw first token can be the summary document's CELEX (e.g.
+        # "62020CJ0414_SUM;62020CJ0414"), whose work family carries only a
+        # partial language set. 3,642 corpus cases have suffixed tokens.
         if pd.isna(v):
             return None
         parts = [p.strip() for p in str(v).split(";") if p.strip()]
-        return parts[0] if parts else None
+        if not parts:
+            return None
+        non_inf = [p for p in parts if "INF" not in p]
+        return (non_inf[0] if non_inf else parts[0]).split("_")[0]
 
     celexes = cases_df["celex"].map(_first_celex)
 
@@ -360,6 +379,187 @@ def append_new_rows_streaming(
     return len(deduped)
 
 
+def stream_stub_index(
+    fulltexts_path: Path,
+    *,
+    ratio: float = 0.25,
+    min_median: int = 10_000,
+    batch_size: int = 2_000,
+) -> dict:
+    """Find stub texts: rows whose length is far below the case's median.
+
+    These are headnotes / OJ notices captured (mostly from InfoCuria)
+    before the full CELLAR manifestation existed. The language *counts* as
+    covered, so the MIN_LANGS topup never revisits it — this index feeds
+    the upgrade mode, which does.
+
+    Returns ``dict[ecli] -> dict[LANG] -> current_length`` for every row
+    with ``length < ratio * median(case lengths)`` where the median itself
+    is ``>= min_median`` (short cases where every rendition is small are
+    not stubs).
+    """
+    per_ecli: dict = {}
+    pf = pq.ParquetFile(fulltexts_path)
+    for batch in pf.iter_batches(
+        batch_size=batch_size, columns=["ecli", "text_language", "text"]
+    ):
+        eclis = batch.column("ecli").to_pylist()
+        langs = batch.column("text_language").to_pylist()
+        # lengths only — the text strings are dropped with the batch
+        lens = [len(t) if t else 0 for t in batch.column("text").to_pylist()]
+        for e, l, n in zip(eclis, langs, lens):
+            lang = (l or "").upper()
+            if not e or not lang or n <= 0:
+                continue
+            per_ecli.setdefault(e, []).append((lang, n))
+
+    stubs: dict = {}
+    for ecli, pairs in per_ecli.items():
+        lengths = sorted(n for _, n in pairs)
+        mid = len(lengths) // 2
+        median = (lengths[mid] if len(lengths) % 2
+                  else (lengths[mid - 1] + lengths[mid]) / 2)
+        if median < min_median:
+            continue
+        for lang, n in pairs:
+            if n < ratio * median:
+                stubs.setdefault(ecli, {})[lang] = n
+    return stubs
+
+
+def stream_infocuria_index(
+    fulltexts_path: Path,
+    *,
+    batch_size: int = 2_000,
+) -> dict:
+    """Index rows whose text came from InfoCuria: dict[ecli] -> {LANG: len}.
+
+    InfoCuria's per-procedure lookup sometimes returns the WRONG document —
+    an AG opinion, a procedural order, a referred-questions notice, or a
+    headnote summary — under the judgment's slot. Those rows block the
+    CELLAR supplementation ("language already covered") and can be long
+    enough to defeat the stub detector (a 55k-char opinion, for example).
+    The source-upgrade mode replaces every such row for which CELLAR holds
+    a manifestation under the document's own CELEX, which is by
+    construction the correct document.
+    """
+    out: dict = {}
+    pf = pq.ParquetFile(fulltexts_path)
+    for batch in pf.iter_batches(
+        batch_size=batch_size,
+        columns=["ecli", "text_language", "text", "text_source"],
+    ):
+        eclis = batch.column("ecli").to_pylist()
+        langs = batch.column("text_language").to_pylist()
+        lens = [len(t) if t else 0 for t in batch.column("text").to_pylist()]
+        sources = batch.column("text_source").to_pylist()
+        for e, l, n, src in zip(eclis, langs, lens, sources):
+            lang = (l or "").upper()
+            if not e or not lang or (src or "") != "INFOCURIA_BLOB_HTML":
+                continue
+            out.setdefault(e, {})[lang] = n
+    return out
+
+
+def stream_nonjudgment_cellar_index(
+    fulltexts_path: Path,
+    *,
+    batch_size: int = 2_000,
+) -> dict:
+    """Index CELLAR rows sourced from summary/non-judgment CELEX works.
+
+    Earlier multilingual top-ups could use a suffixed case CELEX such as
+    ``62020CJ0414_SUM`` as their lookup key.  That put a summary, résumé, or
+    information notice into the judgment's language slot and then blocked a
+    later top-up because the language appeared to be covered.  These rows
+    must be force-refetched under the base ``CJ`` CELEX.
+    """
+    out: dict = {}
+    pf = pq.ParquetFile(fulltexts_path)
+    for batch in pf.iter_batches(
+        batch_size=batch_size,
+        columns=["ecli", "celex", "text_language", "text", "text_source"],
+    ):
+        eclis = batch.column("ecli").to_pylist()
+        celexes = batch.column("celex").to_pylist()
+        langs = batch.column("text_language").to_pylist()
+        lens = [len(t) if t else 0 for t in batch.column("text").to_pylist()]
+        sources = batch.column("text_source").to_pylist()
+        for ecli, celex, lang, length, source in zip(
+            eclis, celexes, langs, lens, sources
+        ):
+            tokens = [p.strip().upper() for p in str(celex or "").split(";")]
+            nonjudgment = any(
+                token.endswith(("_SUM", "_RES", "_INF")) for token in tokens
+            )
+            language = (lang or "").upper()
+            if (
+                not ecli
+                or not language
+                or source != "CELLAR_ITEM"
+                or not nonjudgment
+            ):
+                continue
+            out.setdefault(str(ecli), {})[language] = length
+    return out
+
+
+def replace_rows_streaming(
+    original_path: Path,
+    replacement_rows: list,
+    output_path: Path,
+    collect_dropped: list | None = None,
+) -> int:
+    """Stream-copy *original_path* to *output_path*, DROPPING rows whose
+    (ecli, language) matches a replacement, then append the replacements.
+
+    The upgrade counterpart of :func:`append_new_rows_streaming` — that one
+    refuses to touch existing keys; this one exists precisely to supersede
+    them. Returns the number of replacement rows written.
+    """
+    if not replacement_rows:
+        return 0
+
+    # last-in wins per key, so a retried ECLI can't duplicate
+    by_key = {}
+    for r in replacement_rows:
+        key = (str(r.get("ecli") or ""), (r.get("text_language") or "").upper())
+        by_key[key] = r
+    replace_keys = set(by_key)
+
+    reader = pq.ParquetFile(original_path)
+    orig_schema = reader.schema_arrow
+    new_table = pa.Table.from_pandas(
+        pd.DataFrame(list(by_key.values())), preserve_index=False)
+    target_schema = _union_schema(orig_schema, new_table.schema)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = pq.ParquetWriter(
+        output_path, schema=target_schema,
+        compression="zstd", write_page_index=True,
+    )
+    try:
+        for batch in reader.iter_batches(batch_size=FULLTEXTS_ROW_GROUP_SIZE):
+            eclis = batch.column("ecli").to_pylist()
+            langs = batch.column("text_language").to_pylist()
+            mask = [
+                (str(e or ""), (l or "").upper()) not in replace_keys
+                for e, l in zip(eclis, langs)
+            ]
+            if not all(mask):
+                if collect_dropped is not None:
+                    dropped = batch.filter(pa.array([not m for m in mask]))
+                    collect_dropped.extend(dropped.to_pylist())
+                batch = batch.filter(pa.array(mask))
+            if batch.num_rows:
+                writer.write_batch(_conform_batch(batch, target_schema))
+        for nb in new_table.to_batches(max_chunksize=FULLTEXTS_ROW_GROUP_SIZE):
+            writer.write_batch(_conform_batch(nb, target_schema))
+    finally:
+        writer.close()
+    return len(by_key)
+
+
 # ---------------------------------------------------------------------------
 # CELLAR query (per ECLI) — uses cellar-extractor's helpers
 # ---------------------------------------------------------------------------
@@ -383,7 +583,7 @@ def _topup_one_ecli(
     try:
         work_uri = work_uri_fn(celex, sector="6")
     except Exception as exc:
-        log.debug("work_uri lookup failed for %s: %s", celex, exc)
+        log.warning("work_uri lookup failed for %s: %s", celex, exc)
         return []
     if not work_uri:
         return []
@@ -391,13 +591,13 @@ def _topup_one_ecli(
     try:
         candidates = items_fn(work_uri)
     except Exception as exc:
-        log.debug("items fetch failed for %s: %s", celex, exc)
+        log.warning("items fetch failed for %s: %s", celex, exc)
         return []
 
     try:
         cellar_fulltexts = fanout_fn(candidates, source_label="CELLAR_ITEM")
     except Exception as exc:
-        log.debug("fanout failed for %s: %s", celex, exc)
+        log.warning("fanout failed for %s: %s", celex, exc)
         return []
 
     new_rows = []
@@ -418,6 +618,75 @@ def _topup_one_ecli(
     return new_rows
 
 
+def _upgrade_one_ecli(
+    ecli: str,
+    celex: str,
+    stub_langs: dict,
+    *,
+    work_uri_fn,
+    items_fn,
+    fanout_fn,
+    min_ratio: float = 2.0,
+    source_window: str | None = None,
+) -> list:
+    """For one ECLI, fetch CELLAR manifestations for the flagged languages
+    and return replacement rows.
+
+    ``min_ratio`` guards the stub mode: the fetched text must be > 2x the
+    stored one, so a genuine short rendition is never clobbered by an
+    equally short refetch. The source-upgrade mode passes 0: a CELLAR text
+    under the document's own CELEX replaces an InfoCuria row regardless of
+    length — the stored row may be a LONGER wrong document (an AG opinion
+    over the judgment).
+    """
+    try:
+        work_uri = work_uri_fn(celex, sector="6")
+    except Exception as exc:
+        log.warning("work_uri lookup failed for %s: %s", celex, exc)
+        return []
+    if not work_uri:
+        return []
+
+    try:
+        candidates = items_fn(work_uri)
+    except Exception as exc:
+        log.warning("items fetch failed for %s: %s", celex, exc)
+        return []
+    wanted = [c for c in candidates
+              if (c.get("language") or "").upper() in stub_langs]
+    if not wanted:
+        return []
+
+    try:
+        cellar_fulltexts = fanout_fn(wanted, source_label="CELLAR_ITEM")
+    except Exception as exc:
+        log.warning("fanout failed for %s: %s", celex, exc)
+        return []
+
+    rows = []
+    for ft in cellar_fulltexts:
+        lang = (ft.get("text_language") or "").upper()
+        text = ft.get("text") or ""
+        if lang not in stub_langs or len(text) == 0:
+            continue
+        if min_ratio and len(text) <= min_ratio * stub_langs[lang]:
+            continue
+        rows.append({
+            "celex": celex,
+            "ecli": ecli,
+            "text": text,
+            "text_source": "CELLAR_ITEM",
+            "text_language": lang,
+            "text_format": ft.get("text_format", ""),
+            "missing_reasons": "",
+            "__source_window": source_window or (
+                "upgrade_infocuria_sources" if min_ratio == 0
+                else "upgrade_stub_texts"
+            ),
+        })
+    return rows
+
+
 def topup_dataset(
     cases_df: pd.DataFrame,
     fulltexts_df: pd.DataFrame,
@@ -435,13 +704,18 @@ def topup_dataset(
     can be stubbed for tests.
     """
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
-        from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_work_uri as _default_work_uri,
-            _fetch_sector8_items_for_work as _default_items,
-            _fanout_fulltexts_from_candidates as _default_fanout,
+        from cellar_extractor import (
+            extract_cellar_fulltexts as _default_fanout,
+            get_cellar_manifestations_by_celex as _default_items_for_celex,
         )
-        work_uri_fn = work_uri_fn or _default_work_uri
-        items_fn = items_fn or _default_items
+        # The production path unions manifestations across every CELLAR
+        # work sharing the CELEX (a single arbitrary work missed languages
+        # — nine sampled judgments lost their English text that way). The
+        # two-step seam is kept for the tests: the default work_uri_fn
+        # passes the celex through as the token items_fn consumes.
+        if work_uri_fn is None and items_fn is None:
+            work_uri_fn = lambda celex, sector="6": celex
+            items_fn = lambda celex: _default_items_for_celex(celex, sector="6")[1]
         fanout_fn = fanout_fn or _default_fanout
 
     sparse = find_sparse_eclis(
@@ -555,6 +829,7 @@ def run(
     min_langs: int = 24,
     year_threshold: int = 0,
     max_workers: int = 6,
+    checkpoint_every: int = 0,
     local_cases: Path | None = None,
     local_fulltexts: Path | None = None,
     downloader=_download,
@@ -595,13 +870,18 @@ def run(
     )
 
     if work_uri_fn is None or items_fn is None or fanout_fn is None:
-        from cellar_extractor.eurlex_scraping import (
-            _fetch_sector8_work_uri as _default_work_uri,
-            _fetch_sector8_items_for_work as _default_items,
-            _fanout_fulltexts_from_candidates as _default_fanout,
+        from cellar_extractor import (
+            extract_cellar_fulltexts as _default_fanout,
+            get_cellar_manifestations_by_celex as _default_items_for_celex,
         )
-        work_uri_fn = work_uri_fn or _default_work_uri
-        items_fn = items_fn or _default_items
+        # The production path unions manifestations across every CELLAR
+        # work sharing the CELEX (a single arbitrary work missed languages
+        # — nine sampled judgments lost their English text that way). The
+        # two-step seam is kept for the tests: the default work_uri_fn
+        # passes the celex through as the token items_fn consumes.
+        if work_uri_fn is None and items_fn is None:
+            work_uri_fn = lambda celex, sector="6": celex
+            items_fn = lambda celex: _default_items_for_celex(celex, sector="6")[1]
         fanout_fn = fanout_fn or _default_fanout
 
     sparse = find_sparse_eclis_from_index(
@@ -613,10 +893,36 @@ def run(
         len(sparse), year_threshold, min_langs,
     )
 
-    all_new_rows: list = []
+    pending_rows: list = []
+    total_generated = 0
+    total_added = 0
     failures = 0
     start = time.monotonic()
     processed = 0
+    ckpt_n = 0
+    current_base = fulltexts_path
+
+    def _flush(rows: list) -> int:
+        # Append *rows* onto the current base parquet and (unless DRY_RUN)
+        # upload the result to HF. Each flush becomes the base for the next
+        # one, so a killed box loses at most one checkpoint interval of work
+        # — the run that died before ever uploading is what motivated this.
+        nonlocal ckpt_n, current_base
+        if not rows:
+            return 0
+        ckpt_n += 1
+        out = workdir / f"fulltexts.ckpt{ckpt_n % 2}.parquet"
+        added = append_new_rows_streaming(current_base, rows, out)
+        if added == 0:
+            log.info("checkpoint %d: all %d rows were duplicates", ckpt_n, len(rows))
+            return 0
+        current_base = out
+        if dry_run:
+            log.info("checkpoint %d: +%d rows (DRY_RUN — not uploaded)", ckpt_n, added)
+        else:
+            uploader(repo_id, out, "fulltexts.parquet", token)
+            log.info("checkpoint %d: +%d rows uploaded", ckpt_n, added)
+        return added
 
     def _task(ecli_celex):
         ecli, celex = ecli_celex
@@ -632,7 +938,8 @@ def run(
             processed += 1
             try:
                 rows = fut.result()
-                all_new_rows.extend(rows)
+                pending_rows.extend(rows)
+                total_generated += len(rows)
             except Exception as exc:
                 failures += 1
                 log.warning("topup failed for %s: %s", futures[fut], exc)
@@ -643,47 +950,317 @@ def run(
                 log.info(
                     "topup progress: %d/%d  (+%d rows so far, "
                     "%.1f ECLIs/s, ETA %.1f min)",
-                    processed, len(sparse), len(all_new_rows),
+                    processed, len(sparse), total_generated,
                     rate, eta_min,
                 )
+            if checkpoint_every and processed % checkpoint_every == 0:
+                total_added += _flush(pending_rows)
+                pending_rows = []
 
     log.info(
         "topup network phase complete: %d rows generated, %d failures",
-        len(all_new_rows), failures,
+        total_generated, failures,
     )
+
+    total_added += _flush(pending_rows)
+
+    if total_added:
+        # current_base is the last checkpoint; keep the documented output name
+        final_path = workdir / "fulltexts.topped.parquet"
+        os.replace(current_base, final_path)
+        current_base = final_path
 
     stats = {
         "sparse_eclis": len(sparse),
-        "new_rows_attempted": len(all_new_rows),
-        "new_rows_added": 0,
+        "new_rows_attempted": total_generated,
+        "new_rows_added": total_added,
         "failures": failures,
     }
 
-    if not all_new_rows:
+    if total_generated == 0:
         log.info("no new rows to add — dataset already topped up. Skipping upload.")
-        return stats
-
-    out_path = workdir / "fulltexts.topped.parquet"
-    added = append_new_rows_streaming(fulltexts_path, all_new_rows, out_path)
-    stats["new_rows_added"] = added
-    if added == 0:
+    elif total_added == 0:
         log.info(
             "after dedup all %d generated rows were duplicates; nothing to upload.",
-            len(all_new_rows),
+            total_generated,
         )
-        return stats
-
-    log.info(
-        "wrote %s (%.1f MB, %d new rows appended)",
-        out_path, out_path.stat().st_size / 1e6, added,
-    )
-
-    if dry_run:
-        log.info("DRY_RUN — skipping upload.")
+    elif dry_run:
+        log.info("DRY_RUN — %d rows written locally, nothing uploaded.", total_added)
     else:
-        uploader(repo_id, out_path, "fulltexts.parquet", token)
-        log.info("upload complete. Viewer typically refreshes within ~60s.")
+        log.info("upload complete (%d rows across %d checkpoint(s)). "
+                 "Viewer typically refreshes within ~60s.", total_added, ckpt_n)
 
+    return stats
+
+
+def run_upgrade(
+    repo_id: str,
+    workdir: Path,
+    *,
+    mode: str = "stub",
+    dry_run: bool = False,
+    token: str | None = None,
+    stub_ratio: float = 0.25,
+    stub_min_median: int = 10_000,
+    max_workers: int = 6,
+    checkpoint_every: int = 0,
+    local_cases: Path | None = None,
+    local_fulltexts: Path | None = None,
+    downloader=_download,
+    uploader=_upload,
+    work_uri_fn=None,
+    items_fn=None,
+    fanout_fn=None,
+    target_eclis: set[str] | None = None,
+    target_languages: set[str] | None = None,
+) -> dict:
+    """Upgrade mode: replace stub texts (headnotes captured before the full
+    CELLAR manifestation existed) with the full judgment text. Same
+    checkpointed shape as :func:`run`, but flushes go through
+    :func:`replace_rows_streaming` — existing (ecli, language) rows are
+    superseded, not skipped. Idempotent: an upgraded row is no longer below
+    the stub threshold, so re-runs shrink to a no-op.
+    """
+    workdir.mkdir(parents=True, exist_ok=True)
+    if not dry_run and not token:
+        raise SystemExit("HUGGINGFACE_TOKEN required to upload. Set DRY_RUN=1 to skip.")
+
+    cases_path = Path(local_cases) if local_cases else workdir / "cases.parquet"
+    fulltexts_path = (
+        Path(local_fulltexts) if local_fulltexts else workdir / "fulltexts.parquet"
+    )
+    if not local_cases:
+        downloader(repo_id, "cases.parquet", cases_path)
+    if not local_fulltexts:
+        downloader(repo_id, "fulltexts.parquet", fulltexts_path)
+
+    cases_df = pd.read_parquet(cases_path)
+
+    def _first_celex(v):
+        # Prefer a token without INF and strip _SUM/_INF-style suffixes —
+        # the raw first token can be the summary document's CELEX (e.g.
+        # "62020CJ0414_SUM;62020CJ0414"), whose work family carries only a
+        # partial language set. 3,642 corpus cases have suffixed tokens.
+        if pd.isna(v):
+            return None
+        parts = [p.strip() for p in str(v).split(";") if p.strip()]
+        if not parts:
+            return None
+        non_inf = [p for p in parts if "INF" not in p]
+        return (non_inf[0] if non_inf else parts[0]).split("_")[0]
+
+    celex_by_ecli = {
+        str(e): str(c)
+        for e, c in zip(cases_df["ecli"], cases_df["celex"].map(_first_celex))
+        if not pd.isna(e) and c
+    }
+
+    source_window = None
+    if mode == "source":
+        log.info(
+            "indexing non-canonical source/manifestation rows (streaming) ← %s",
+            fulltexts_path,
+        )
+        flagged = stream_infocuria_index(fulltexts_path)
+        derived = stream_nonjudgment_cellar_index(fulltexts_path)
+        for ecli, languages in derived.items():
+            flagged.setdefault(ecli, {}).update(languages)
+        min_ratio = 0.0
+        source_window = "upgrade_canonical_cellar_sources"
+    elif mode == "manifestation":
+        log.info(
+            "indexing CELLAR summary/non-judgment rows (streaming) ← %s",
+            fulltexts_path,
+        )
+        flagged = stream_nonjudgment_cellar_index(fulltexts_path)
+        min_ratio = 0.0
+        source_window = "upgrade_nonjudgment_manifestations"
+    else:
+        log.info("indexing stub texts (streaming) ← %s", fulltexts_path)
+        flagged = stream_stub_index(
+            fulltexts_path, ratio=stub_ratio, min_median=stub_min_median)
+        min_ratio = 2.0
+    if target_eclis is not None:
+        wanted_eclis = {str(ecli).strip().upper() for ecli in target_eclis}
+        flagged = {
+            ecli: langs for ecli, langs in flagged.items()
+            if ecli.strip().upper() in wanted_eclis
+        }
+    if target_languages is not None:
+        wanted_languages = {
+            str(language).strip().upper() for language in target_languages
+        }
+        flagged = {
+            ecli: {
+                language: length for language, length in langs.items()
+                if language.upper() in wanted_languages
+            }
+            for ecli, langs in flagged.items()
+        }
+        flagged = {ecli: langs for ecli, langs in flagged.items() if langs}
+    work = [(e, celex_by_ecli[e], langs)
+            for e, langs in flagged.items() if e in celex_by_ecli]
+    n_stub_rows = sum(len(l) for _, _, l in work)
+    log.info("mode=%s: %d flagged rows across %d ECLIs",
+             mode, n_stub_rows, len(work))
+
+    if work_uri_fn is None or items_fn is None or fanout_fn is None:
+        from cellar_extractor import (
+            extract_cellar_fulltexts as _default_fanout,
+            get_cellar_manifestations_by_celex as _default_items_for_celex,
+        )
+        # The production path unions manifestations across every CELLAR
+        # work sharing the CELEX (a single arbitrary work missed languages
+        # — nine sampled judgments lost their English text that way). The
+        # two-step seam is kept for the tests: the default work_uri_fn
+        # passes the celex through as the token items_fn consumes.
+        if work_uri_fn is None and items_fn is None:
+            work_uri_fn = lambda celex, sector="6": celex
+            items_fn = lambda celex: _default_items_for_celex(celex, sector="6")[1]
+        fanout_fn = fanout_fn or _default_fanout
+
+    pending: list = []
+    total_generated = 0
+    total_replaced = 0
+    failures = 0
+    processed = 0
+    ckpt_n = 0
+    start = time.monotonic()
+    current_base = fulltexts_path
+
+    superseded: list = []   # every replaced original, archived as a sidecar
+
+    def _flush(rows: list) -> int:
+        nonlocal ckpt_n, current_base
+        if not rows:
+            return 0
+        ckpt_n += 1
+        out = workdir / f"fulltexts.upgrade{ckpt_n % 2}.parquet"
+        replaced = replace_rows_streaming(
+            current_base, rows, out, collect_dropped=superseded)
+        if replaced == 0:
+            return 0
+        current_base = out
+        if dry_run:
+            log.info("checkpoint %d: %d rows upgraded (DRY_RUN — not uploaded)",
+                     ckpt_n, replaced)
+        else:
+            uploader(repo_id, out, "fulltexts.parquet", token)
+            # the superseded archive must be as crash-proof as the data:
+            # re-upload the accumulated sidecar with every checkpoint (a
+            # mid-run box death once lost a run's local archive)
+            side = workdir / f"superseded_{mode}_texts.parquet"
+            pd.DataFrame(superseded).to_parquet(side, index=False)
+            uploader(repo_id, side,
+                     f"superseded/{time.strftime('%Y%m%d')}_{mode}_texts.parquet",
+                     token)
+            log.info("checkpoint %d: %d rows upgraded + uploaded (+sidecar)",
+                     ckpt_n, replaced)
+        return replaced
+
+    def _task(item):
+        ecli, celex, langs = item
+        return _upgrade_one_ecli(
+            ecli, celex, langs,
+            work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+            min_ratio=min_ratio,
+            source_window=source_window,
+        )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_task, w): w for w in work}
+        for fut in as_completed(futures):
+            processed += 1
+            try:
+                rows = fut.result()
+                pending.extend(rows)
+                total_generated += len(rows)
+            except Exception as exc:
+                failures += 1
+                log.warning("upgrade failed for %s: %s", futures[fut][0], exc)
+            if processed % 100 == 0:
+                rate = processed / (time.monotonic() - start)
+                eta_min = ((len(work) - processed) / rate / 60) if rate else 0
+                log.info("upgrade progress: %d/%d  (+%d rows, %.1f ECLIs/s, ETA %.1f min)",
+                         processed, len(work), total_generated, rate, eta_min)
+            if checkpoint_every and processed % checkpoint_every == 0:
+                total_replaced += _flush(pending)
+                pending = []
+
+    log.info("upgrade network phase complete: %d rows generated, %d failures",
+             total_generated, failures)
+    total_replaced += _flush(pending)
+
+    if total_replaced:
+        final_path = workdir / "fulltexts.upgraded.parquet"
+        os.replace(current_base, final_path)
+        current_base = final_path
+
+    # Belt and braces on top of the dataset repo's git history: archive
+    # every replaced original as a sidecar so nothing is lost even at the
+    # file level. Uploaded under superseded/ in the dataset repo.
+    if superseded:
+        side = workdir / f"superseded_{mode}_texts.parquet"
+        pd.DataFrame(superseded).to_parquet(side, index=False)
+        log.info("archived %d superseded rows -> %s", len(superseded), side)
+        if not dry_run:
+            uploader(repo_id, side,
+                     f"superseded/{time.strftime('%Y%m%d')}_{mode}_texts.parquet",
+                     token)
+
+    stats = {
+        "stub_eclis": len(work),
+        "stub_rows": n_stub_rows,
+        "rows_upgraded": total_replaced,
+        "superseded_archived": len(superseded),
+        "failures": failures,
+    }
+    if mode in ("source", "manifestation"):
+        remaining_derived = stream_nonjudgment_cellar_index(current_base)
+        # A targeted diagnostic/repair should validate only the slice it was
+        # asked to change.  The production rerun supplies neither filter, so
+        # it still enforces the invariant across the entire corpus.
+        if target_eclis is not None:
+            validation_eclis = {
+                str(ecli).strip().upper() for ecli in target_eclis
+            }
+            remaining_derived = {
+                ecli: languages
+                for ecli, languages in remaining_derived.items()
+                if ecli.strip().upper() in validation_eclis
+            }
+        if target_languages is not None:
+            validation_languages = {
+                str(language).strip().upper() for language in target_languages
+            }
+            remaining_derived = {
+                ecli: {
+                    language: length
+                    for language, length in languages.items()
+                    if language.upper() in validation_languages
+                }
+                for ecli, languages in remaining_derived.items()
+            }
+            remaining_derived = {
+                ecli: languages
+                for ecli, languages in remaining_derived.items()
+                if languages
+            }
+        stats["derived_manifestation_rows_remaining"] = sum(
+            len(languages) for languages in remaining_derived.values()
+        )
+        if stats["derived_manifestation_rows_remaining"]:
+            log.error(
+                "%d derived CELLAR fulltext rows remain after canonical upgrade",
+                stats["derived_manifestation_rows_remaining"],
+            )
+    if total_replaced == 0:
+        log.info("no stub rows could be upgraded — nothing uploaded.")
+    elif dry_run:
+        log.info("DRY_RUN — %d rows upgraded locally, nothing uploaded.", total_replaced)
+    else:
+        log.info("upgrade complete: %d rows across %d checkpoint(s).",
+                 total_replaced, ckpt_n)
     return stats
 
 
@@ -694,20 +1271,54 @@ def main() -> int:
     min_langs = int(os.environ.get("MIN_LANGS", "24"))
     year_threshold = int(os.environ.get("YEAR_THRESHOLD", "0"))
     max_workers = int(os.environ.get("WORKERS", "6"))
+    checkpoint_every = int(os.environ.get("CHECKPOINT_EVERY", "2000"))
     local_cases = os.environ.get("LOCAL_CASES_PARQUET")
     local_fulltexts = os.environ.get("LOCAL_FULLTEXTS_PARQUET")
 
+    mode = os.environ.get("MODE", "topup")
     with tempfile.TemporaryDirectory(prefix="hf-topup-") as tmp:
-        stats = run(
-            repo_id, Path(tmp),
-            dry_run=dry_run, token=token,
-            min_langs=min_langs, year_threshold=year_threshold,
-            max_workers=max_workers,
-            local_cases=Path(local_cases) if local_cases else None,
-            local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
-        )
+        if mode in ("upgrade", "source_upgrade", "manifestation_upgrade"):
+            target_eclis = None
+            target_languages = None
+            target_tsv = os.environ.get("TARGET_ECLIS_TSV")
+            if target_tsv:
+                target_frame = pd.read_csv(target_tsv, sep="\t", dtype=str)
+                if "ecli" not in target_frame:
+                    raise SystemExit(f"{target_tsv} must contain an ecli column")
+                target_eclis = set(target_frame["ecli"].dropna())
+            target_languages_env = os.environ.get("TARGET_LANGUAGES")
+            if target_languages_env:
+                target_languages = set(target_languages_env.split(","))
+            stats = run_upgrade(
+                repo_id, Path(tmp),
+                mode={
+                    "source_upgrade": "source",
+                    "manifestation_upgrade": "manifestation",
+                }.get(mode, "stub"),
+                dry_run=dry_run, token=token,
+                stub_ratio=float(os.environ.get("STUB_RATIO", "0.25")),
+                stub_min_median=int(os.environ.get("STUB_MIN_MEDIAN", "10000")),
+                max_workers=max_workers,
+                checkpoint_every=checkpoint_every,
+                local_cases=Path(local_cases) if local_cases else None,
+                local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
+                target_eclis=target_eclis,
+                target_languages=target_languages,
+            )
+        else:
+            stats = run(
+                repo_id, Path(tmp),
+                dry_run=dry_run, token=token,
+                min_langs=min_langs, year_threshold=year_threshold,
+                max_workers=max_workers,
+                checkpoint_every=checkpoint_every,
+                local_cases=Path(local_cases) if local_cases else None,
+                local_fulltexts=Path(local_fulltexts) if local_fulltexts else None,
+            )
     log.info("done. stats: %s", stats)
-    return 0
+    failed = stats.get("failures", 0) > 0
+    invalid = stats.get("derived_manifestation_rows_remaining", 0) > 0
+    return 1 if failed or invalid else 0
 
 
 if __name__ == "__main__":

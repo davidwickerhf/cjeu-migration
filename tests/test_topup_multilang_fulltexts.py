@@ -545,3 +545,307 @@ def test_run_skips_upload_when_no_new_rows_to_add(tmp_path):
     )
     assert stats["new_rows_added"] == 0
     assert upload_called == []
+
+
+def test_run_checkpoint_uploads_incrementally(tmp_path):
+    # With checkpoint_every=1 and two sparse ECLIs, each processed ECLI
+    # triggers an upload — a killed run loses at most one interval of work.
+    cpath, fpath = _write_inputs(tmp_path)
+    work_uri_fn, items_fn, fanout_fn = _make_stubs(
+        langs=("EN", "FR", "DE", "IT", "NL", "ES", "PT", "PL", "SV")
+    )
+    uploads = []
+
+    def uploader(repo_id, local_path, repo_filename, token):
+        uploads.append((repo_filename, Path(local_path).exists()))
+
+    stats = mod.run(
+        repo_id="example/x",
+        workdir=tmp_path / "work",
+        dry_run=False, token="t",
+        local_cases=cpath, local_fulltexts=fpath,
+        min_langs=24, year_threshold=0, max_workers=1,
+        checkpoint_every=1,
+        downloader=lambda *a, **kw: pytest.fail("downloader called with local files"),
+        uploader=uploader,
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+    assert stats["sparse_eclis"] == 2
+    # OLD gains PL+SV (has the other 7), NEW gains all but EN
+    assert stats["new_rows_added"] == 10
+    assert uploads == [("fulltexts.parquet", True), ("fulltexts.parquet", True)]
+    # final output keeps the documented name and contains everything
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.topped.parquet")
+    assert len(df) == 8 + 10
+
+
+# ---------------------------------------------------------------------------
+# upgrade mode (stub-text replacement)
+# ---------------------------------------------------------------------------
+
+
+def _write_stub_inputs(tmp_path: Path):
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:STUB", "celex": "62023CJ0001", "sector": "6",
+         "date_publication": "2023-05-01"},
+        {"ecli": "ECLI:SHORT", "celex": "62023CJ0002", "sector": "6",
+         "date_publication": "2023-06-01"},
+    ])
+    fulltexts = pd.DataFrame([
+        # ECLI:STUB — six full renditions plus one stub (CS)
+        *[{"ecli": "ECLI:STUB", "celex": "62023CJ0001", "text": "x" * 20_000,
+           "text_source": "CELLAR_ITEM", "text_language": l,
+           "text_format": "xhtml", "missing_reasons": ""}
+          for l in ["EN", "FR", "DE", "IT", "NL", "ES"]],
+        {"ecli": "ECLI:STUB", "celex": "62023CJ0001", "text": "s" * 300,
+         "text_source": "INFOCURIA_BLOB_HTML", "text_language": "CS",
+         "text_format": "html", "missing_reasons": ""},
+        # ECLI:SHORT — a genuinely short case (median < 10k) — NOT stubs
+        *[{"ecli": "ECLI:SHORT", "celex": "62023CJ0002", "text": "y" * 900,
+           "text_source": "CELLAR_ITEM", "text_language": l,
+           "text_format": "xhtml", "missing_reasons": ""}
+          for l in ["EN", "FR"]],
+    ])
+    cpath = tmp_path / "cases.parquet"
+    fpath = tmp_path / "fulltexts.parquet"
+    cases.to_parquet(cpath, index=False)
+    fulltexts.to_parquet(fpath, index=False)
+    return cpath, fpath
+
+
+def test_stream_stub_index_flags_only_true_stubs(tmp_path):
+    _, fpath = _write_stub_inputs(tmp_path)
+    stubs = mod.stream_stub_index(fpath)
+    assert stubs == {"ECLI:STUB": {"CS": 300}}
+
+
+def test_replace_rows_streaming_supersedes_key(tmp_path):
+    _, fpath = _write_stub_inputs(tmp_path)
+    out = tmp_path / "out.parquet"
+    n = mod.replace_rows_streaming(fpath, [
+        {"ecli": "ECLI:STUB", "text": "z" * 15_000, "text_source": "CELLAR_ITEM",
+         "text_language": "CS", "text_format": "xhtml", "missing_reasons": ""},
+    ], out)
+    assert n == 1
+    df = pd.read_parquet(out)
+    assert len(df) == 9                                   # row count unchanged
+    cs = df[(df["ecli"] == "ECLI:STUB") & (df["text_language"] == "CS")]
+    assert len(cs) == 1 and len(cs.iloc[0]["text"]) == 15_000
+    assert cs.iloc[0]["text_source"] == "CELLAR_ITEM"
+
+
+def test_run_upgrade_end_to_end(tmp_path):
+    cpath, fpath = _write_stub_inputs(tmp_path)
+
+    def work_uri_fn(celex, sector="6"):
+        return "http://cellar/u"
+    def items_fn(uri):
+        return [{"item_url": "http://x/CS", "format": "xhtml", "language": "CS"},
+                {"item_url": "http://x/EN", "format": "xhtml", "language": "EN"}]
+    def fanout_fn(candidates, source_label):
+        # only the stub language is requested
+        assert [c["language"] for c in candidates] == ["CS"]
+        return [{"text": "w" * 18_000, "text_source": source_label,
+                 "text_language": "CS", "text_format": "xhtml"}]
+
+    uploads = []
+    stats = mod.run_upgrade(
+        repo_id="example/x",
+        workdir=tmp_path / "work",
+        dry_run=False, token="t",
+        local_cases=cpath, local_fulltexts=fpath,
+        max_workers=1, checkpoint_every=1,
+        downloader=lambda *a, **kw: pytest.fail("downloader called with local files"),
+        uploader=lambda repo, path, fname, token: uploads.append(fname),
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+    assert stats == {"stub_eclis": 1, "stub_rows": 1, "rows_upgraded": 1,
+                     "superseded_archived": 1, "failures": 0}
+    # the replaced original is archived, not lost
+    sup = pd.read_parquet(tmp_path / "work" / "superseded_stub_texts.parquet")
+    assert len(sup) == 1 and sup.iloc[0]["text_language"] == "CS"
+    assert uploads[0] == "fulltexts.parquet"
+    assert uploads[-1].startswith("superseded/")
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
+    assert len(df) == 9
+    cs = df[(df["ecli"] == "ECLI:STUB") & (df["text_language"] == "CS")].iloc[0]
+    assert len(cs["text"]) == 18_000
+    assert cs["__source_window"] == "upgrade_stub_texts"
+    # idempotence: the upgraded file has no stubs left
+    assert mod.stream_stub_index(tmp_path / "work" / "fulltexts.upgraded.parquet") == {}
+
+
+def test_sparse_celex_token_normalized(tmp_path):
+    # "62020CJ0414_SUM;62020CJ0414" must resolve to the judgment CELEX, not
+    # the summary document's — the suffixed token probes the wrong work
+    # family (6-language summary edition vs the 23-language judgment).
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:SUF", "celex": "62020CJ0414_SUM;62020CJ0414",
+         "sector": "6", "date_publication": "2021-01-13"},
+        {"ecli": "ECLI:INF", "celex": "62021CO0021_INF",
+         "sector": "6", "date_publication": "2021-02-01"},
+    ])
+    sparse = mod.find_sparse_eclis_from_index(
+        cases, {}, min_langs=24, year_threshold=0)
+    assert dict(sparse) == {"ECLI:SUF": "62020CJ0414",
+                            "ECLI:INF": "62021CO0021"}
+
+
+# ---------------------------------------------------------------------------
+# source-upgrade mode (wrong-document InfoCuria rows)
+# ---------------------------------------------------------------------------
+
+
+def _write_source_inputs(tmp_path: Path):
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:WRONGDOC", "celex": "62010CJ0307", "sector": "6",
+         "date_publication": "2012-06-19"},
+    ])
+    fulltexts = pd.DataFrame([
+        # EN slot holds an AG opinion from InfoCuria — LONGER than the real
+        # judgment, so no length heuristic can catch it
+        {"ecli": "ECLI:WRONGDOC", "celex": "62010CJ0307",
+         "text": "OPINION OF ADVOCATE GENERAL " + "o" * 55_000,
+         "text_source": "INFOCURIA_BLOB_HTML", "text_language": "EN",
+         "text_format": "html", "missing_reasons": ""},
+        # FR came from CELLAR — must not be touched
+        {"ecli": "ECLI:WRONGDOC", "celex": "62010CJ0307",
+         "text": "ARRET DE LA COUR " + "f" * 30_000,
+         "text_source": "CELLAR_ITEM", "text_language": "FR",
+         "text_format": "xhtml", "missing_reasons": ""},
+    ])
+    cpath = tmp_path / "cases.parquet"
+    fpath = tmp_path / "fulltexts.parquet"
+    cases.to_parquet(cpath, index=False)
+    fulltexts.to_parquet(fpath, index=False)
+    return cpath, fpath
+
+
+def test_stream_infocuria_index_flags_only_infocuria_rows(tmp_path):
+    _, fpath = _write_source_inputs(tmp_path)
+    idx = mod.stream_infocuria_index(fpath)
+    assert idx == {"ECLI:WRONGDOC": {"EN": 55_028}}
+
+
+def test_source_upgrade_replaces_longer_wrong_document(tmp_path):
+    cpath, fpath = _write_source_inputs(tmp_path)
+
+    def work_uri_fn(celex, sector="6"):
+        return "http://cellar/w"
+    def items_fn(uri):
+        return [{"item_url": "http://x/EN", "format": "xhtml", "language": "EN"}]
+    def fanout_fn(candidates, source_label):
+        assert [c["language"] for c in candidates] == ["EN"]
+        # the real judgment is SHORTER than the stored opinion
+        return [{"text": "JUDGMENT OF THE COURT " + "j" * 35_000,
+                 "text_source": source_label,
+                 "text_language": "EN", "text_format": "xhtml"}]
+
+    uploads = []
+    stats = mod.run_upgrade(
+        repo_id="example/x",
+        workdir=tmp_path / "work",
+        mode="source",
+        dry_run=False, token="t",
+        local_cases=cpath, local_fulltexts=fpath,
+        max_workers=1, checkpoint_every=1,
+        downloader=lambda *a, **kw: pytest.fail("downloader called with local files"),
+        uploader=lambda repo, path, fname, token: uploads.append(fname),
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+    assert stats["rows_upgraded"] == 1
+    assert stats["superseded_archived"] == 1
+    assert stats["derived_manifestation_rows_remaining"] == 0
+    # dry_run=False: the sidecar upload lands under superseded/ after the
+    # checkpointed fulltexts uploads
+    assert uploads[0] == "fulltexts.parquet"
+    assert uploads[-1].startswith("superseded/") and uploads[-1].endswith(
+        "_source_texts.parquet")
+    sup = pd.read_parquet(tmp_path / "work" / "superseded_source_texts.parquet")
+    assert sup.iloc[0]["text"].startswith("OPINION OF ADVOCATE GENERAL")
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
+    assert len(df) == 2
+    en = df[df["text_language"] == "EN"].iloc[0]
+    assert en["text"].startswith("JUDGMENT OF THE COURT")
+    assert en["text_source"] == "CELLAR_ITEM"
+    assert en["__source_window"] == "upgrade_canonical_cellar_sources"
+    fr = df[df["text_language"] == "FR"].iloc[0]
+    assert fr["text_source"] == "CELLAR_ITEM" and fr["text"].startswith("ARRET")
+
+
+# ---------------------------------------------------------------------------
+# manifestation-upgrade mode (summaries occupying judgment language slots)
+# ---------------------------------------------------------------------------
+
+
+def _write_manifestation_inputs(tmp_path: Path):
+    cases = pd.DataFrame([
+        {"ecli": "ECLI:SUMMARY", "celex": "62020CJ0414_SUM;62020CJ0414",
+         "sector": "6", "date_publication": "2021-01-13"},
+        {"ecli": "ECLI:UNRELATED", "celex": "62020CJ0999",
+         "sector": "6", "date_publication": "2021-02-01"},
+    ])
+    fulltexts = pd.DataFrame([
+        {"ecli": "ECLI:SUMMARY", "celex": "62020CJ0414_SUM",
+         "text": "Judgment summary", "text_source": "CELLAR_ITEM",
+         "text_language": "EN", "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+        {"ecli": "ECLI:SUMMARY", "celex": "62020CJ0414",
+         "text": "Arrêt intégral", "text_source": "CELLAR_ITEM",
+         "text_language": "FR", "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+        {"ecli": "ECLI:UNRELATED", "celex": "62020CJ0999_RES",
+         "text": "Unrelated résumé", "text_source": "CELLAR_ITEM",
+         "text_language": "EN", "text_format": "xhtml", "missing_reasons": "",
+         "__source_window": "topup_v2_multilang"},
+    ])
+    cpath = tmp_path / "cases.parquet"
+    fpath = tmp_path / "fulltexts.parquet"
+    cases.to_parquet(cpath, index=False)
+    fulltexts.to_parquet(fpath, index=False)
+    return cpath, fpath
+
+
+def test_stream_nonjudgment_cellar_index_flags_suffixed_cellar_rows(tmp_path):
+    _, fpath = _write_manifestation_inputs(tmp_path)
+    assert mod.stream_nonjudgment_cellar_index(fpath) == {
+        "ECLI:SUMMARY": {"EN": len("Judgment summary")},
+        "ECLI:UNRELATED": {"EN": len("Unrelated résumé")},
+    }
+
+
+def test_source_upgrade_also_targets_and_replaces_summary(tmp_path):
+    cpath, fpath = _write_manifestation_inputs(tmp_path)
+
+    def work_uri_fn(celex, sector="6"):
+        assert celex == "62020CJ0414"
+        return celex
+
+    def items_fn(celex):
+        return [{"item_url": "http://x/EN", "format": "xhtml", "language": "EN"}]
+
+    def fanout_fn(candidates, source_label):
+        return [{"text": "JUDGMENT OF THE COURT " + "j" * 20_000,
+                 "text_source": source_label, "text_language": "EN",
+                 "text_format": "xhtml"}]
+
+    stats = mod.run_upgrade(
+        repo_id="example/x", workdir=tmp_path / "work",
+        mode="source", dry_run=True,
+        local_cases=cpath, local_fulltexts=fpath,
+        max_workers=1, checkpoint_every=1,
+        target_eclis={"ECLI:SUMMARY"},
+        target_languages={"EN"},
+        work_uri_fn=work_uri_fn, items_fn=items_fn, fanout_fn=fanout_fn,
+    )
+
+    assert stats["stub_eclis"] == 1
+    assert stats["rows_upgraded"] == 1
+    assert stats["derived_manifestation_rows_remaining"] == 0
+    df = pd.read_parquet(tmp_path / "work" / "fulltexts.upgraded.parquet")
+    en = df[(df["ecli"] == "ECLI:SUMMARY") & (df["text_language"] == "EN")].iloc[0]
+    assert en["celex"] == "62020CJ0414"
+    assert en["text"].startswith("JUDGMENT OF THE COURT")
+    assert en["__source_window"] == "upgrade_canonical_cellar_sources"
+    unrelated = df[df["ecli"] == "ECLI:UNRELATED"].iloc[0]
+    assert unrelated["celex"] == "62020CJ0999_RES"

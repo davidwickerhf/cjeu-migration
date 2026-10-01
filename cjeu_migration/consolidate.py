@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -23,7 +26,6 @@ from typing import List, Optional
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +43,18 @@ log = logging.getLogger(__name__)
 # Both stay comfortably under the 300 MB viewer cap with headroom.
 CASES_ROW_GROUP_SIZE = 2_000
 FULLTEXTS_ROW_GROUP_SIZE = 500
+
+
+@dataclass(frozen=True)
+class FulltextConsolidation:
+    """Small, memory-bounded summary of a streamed fulltext consolidation."""
+
+    row_count: int
+    columns: tuple[str, ...]
+    eclis_with_text: frozenset[str]
+    text_row_count: int
+    language_counts: dict[str, int]
+    missing_reason_counts: dict[str, int]
 
 
 def _write_parquet(df: pd.DataFrame, output_path: Path, row_group_size: int) -> None:
@@ -74,6 +88,28 @@ def _write_parquet(df: pd.DataFrame, output_path: Path, row_group_size: int) -> 
     )
 
 
+def primary_celex(value) -> str:
+    """First CELEX of a (possibly ``;``-joined, suffixed) metadata cell."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    return str(value).split(";", 1)[0].split("_", 1)[0].strip()
+
+
+def unresolved_celex_eclis(df: pd.DataFrame) -> set[str]:
+    """ECLIs known only to InfoCuria whose CELEX another ECLI also carries.
+
+    InfoCuria labels every order in a procedure with the procedure's CELEX,
+    and the extractor can only disambiguate within one window. Across the
+    corpus such a CELEX identifies no single document, so it is dropped; the
+    text was fetched by InfoCuria document id and is unaffected.
+    """
+    celex = df["celex"].map(primary_celex)
+    shared = celex[celex != ""].duplicated(keep=False)
+    shared = shared[shared].index
+    infocuria_only = df["identity_source"].fillna("").astype(str).eq("infocuria")
+    return set(df.loc[shared][infocuria_only.loc[shared]]["ecli"].dropna())
+
+
 def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     """Concatenate every window CSV into a single parquet table.
 
@@ -104,26 +140,93 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     else:
         df = pd.concat(frames, ignore_index=True, sort=False)
 
+    # A CELLAR work can be rediscovered in more than one date window (for
+    # example when publication metadata changes). The dataset contract is one
+    # row per ECLI, so collapse repeats and retain their provenance windows.
+    # Rows without an ECLI are retained because they cannot be grouped safely.
+    if not df.empty and "ecli" in df.columns:
+        valid = df[df["ecli"].notna()].copy()
+        missing = df[df["ecli"].isna()].copy()
+        if "__source_window" in valid.columns:
+            windows = valid.groupby("ecli", sort=False)["__source_window"].agg(
+                lambda values: ";".join(
+                    sorted(
+                        {
+                            str(value)
+                            for value in values
+                            if pd.notna(value) and str(value).strip()
+                        }
+                    )
+                )
+            )
+            # The same ECLI can land in different monthly windows when CELLAR
+            # and InfoCuria disagree on document dates. Prefer the row whose
+            # identity was reconciled against InfoCuria, then retain all
+            # source windows for auditability.
+            if "metadata_catalog_source" in valid.columns:
+                valid["__catalog_priority"] = (
+                    valid["metadata_catalog_source"]
+                    .fillna("")
+                    .astype(str)
+                    .str.lower()
+                    .eq("infocuria")
+                    .astype(int)
+                )
+                valid = valid.sort_values(
+                    "__catalog_priority", ascending=False, kind="stable"
+                )
+            valid = valid.drop_duplicates(subset=["ecli"], keep="first")
+            valid = valid.drop(columns=["__catalog_priority"], errors="ignore")
+            valid["__source_window"] = valid["ecli"].map(windows)
+        else:
+            valid = valid.drop_duplicates(subset=["ecli"], keep="first")
+        df = pd.concat([valid, missing], ignore_index=True)
+
+    if not df.empty and {"celex", "identity_source"}.issubset(df.columns):
+        blanked = unresolved_celex_eclis(df)
+        if blanked:
+            log.warning(
+                "blanking ambiguous InfoCuria CELEX on %d ECLIs", len(blanked)
+            )
+            df.loc[df["ecli"].isin(blanked), "celex"] = None
+
     _write_parquet(df, output_path, CASES_ROW_GROUP_SIZE)
     log.info("wrote %d cases rows -> %s", len(df), output_path)
     return df
 
 
-def consolidate_fulltexts(window_json_dir: Path, output_path: Path) -> pd.DataFrame:
-    """Concatenate every window fulltext JSON into a single parquet table.
+def consolidate_fulltexts(
+    window_json_dir: Path,
+    output_path: Path,
+    blank_celex_eclis: frozenset[str] = frozenset(),
+) -> FulltextConsolidation:
+    """Stream every window fulltext JSON into a single parquet table.
 
     Each input file is a list of ``{celex, ecli, text, text_source, ...}``
     dicts (the shape cellar-extractor writes). The output is one row per
     document, with ``__source_window`` added so users can join back to a window.
+
+    Only one monthly JSON file and one 500-row Arrow batch are held at a time.
+    This is important for the full corpus: materialising its multi-gigabyte
+    ``text`` column as Python strings can use tens of gigabytes and trigger the
+    OOM killer.  The returned object contains only the small aggregates needed
+    by the dataset card.
     """
     json_files = sorted(window_json_dir.glob("*.json"))
     if not json_files:
         log.warning("no fulltext JSON files found in %s", window_json_dir)
         df = pd.DataFrame()
         _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
-        return df
+        return FulltextConsolidation(0, (), frozenset(), 0, {}, {})
 
-    rows: List[dict] = []
+    # Pass 1 discovers the union schema and, for every (ECLI, language) key,
+    # which window holds the best row. Files are parsed one at a time;
+    # importantly, text bodies are never kept.
+    columns: set[str] = set()
+    valid_files: list[Path] = []
+    candidates: dict[tuple[str, str], list[tuple[str, str, int]]] = {}
+    longest_body: Counter[str] = Counter()
+    keyless_rows = 0
     for path in json_files:
         try:
             with path.open("r", encoding="utf-8") as f:
@@ -134,25 +237,230 @@ def consolidate_fulltexts(window_json_dir: Path, output_path: Path) -> pd.DataFr
         if not isinstance(entries, list):
             log.warning(
                 "fulltext JSON %s wasn't a list (got %s) — skipping",
-                path.name, type(entries).__name__,
+                path.name,
+                type(entries).__name__,
             )
             continue
+        valid_files.append(path)
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            entry = dict(entry)
-            entry["__source_window"] = path.stem
-            rows.append(entry)
+            columns.update(str(key) for key in entry)
+            ecli_key = str(entry.get("ecli") or "").strip().upper()
+            if not ecli_key:
+                keyless_rows += 1
+                continue
+            language_key = str(entry.get("text_language") or "").strip().upper()
+            text = entry.get("text")
+            length = len(text.strip()) if isinstance(text, str) else 0
+            longest_body[ecli_key] = max(longest_body[ecli_key], length)
+            windows = candidates.setdefault((ecli_key, language_key), [])
+            if all(window != path.stem for window, _, _ in windows):
+                windows.append((path.stem, str(entry.get("text_source") or ""), length))
 
-    df = pd.DataFrame(rows) if rows else pd.DataFrame()
-    _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
-    log.info("wrote %d fulltext rows -> %s", len(df), output_path)
-    return df
+    chosen_window: dict[tuple[str, str], str] = {}
+    duplicate_windows: dict[tuple[str, str], set[str]] = {}
+    for key, windows in candidates.items():
+        chosen_window[key] = min(
+            windows,
+            key=lambda item: _source_rank(
+                effective_text_source(item[1], item[2], longest_body[key[0]]),
+                item[2],
+            ),
+        )[0]
+        if len(windows) > 1:
+            duplicate_windows[key] = {window for window, _, _ in windows}
+    row_count = len(candidates) + keyless_rows
+    del candidates
+
+    ordered_columns = _ordered_fulltext_columns(columns)
+    if row_count == 0:
+        df = pd.DataFrame(columns=ordered_columns)
+        _write_parquet(df, output_path, FULLTEXTS_ROW_GROUP_SIZE)
+        return FulltextConsolidation(
+            0,
+            tuple(ordered_columns),
+            frozenset(),
+            0,
+            {},
+            {},
+        )
+
+    schema = pa.schema([pa.field(column, pa.string()) for column in ordered_columns])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = output_path.with_name(f".{output_path.name}.tmp")
+    temp_path.unlink(missing_ok=True)
+    writer = pq.ParquetWriter(
+        temp_path,
+        schema=schema,
+        compression="zstd",
+        write_page_index=True,
+    )
+    written = 0
+    emitted_keys: set[tuple[str, str]] = set()
+    text_row_count = 0
+    eclis_with_text: set[str] = set()
+    language_counts: Counter[str] = Counter()
+    missing_reason_counts: Counter[str] = Counter()
+    try:
+        for file_number, path in enumerate(valid_files, start=1):
+            with path.open("r", encoding="utf-8") as f:
+                entries = json.load(f)
+            rows: list[dict[str, Optional[str]]] = []
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                ecli_key = str(entry.get("ecli") or "").strip().upper()
+                language_key = str(entry.get("text_language") or "").strip().upper()
+                dedup_key = (ecli_key, language_key) if ecli_key else None
+                if dedup_key is not None and (
+                    dedup_key in emitted_keys
+                    or chosen_window[dedup_key] != path.stem
+                ):
+                    continue
+                if dedup_key is not None:
+                    emitted_keys.add(dedup_key)
+                row = {
+                    column: _fulltext_scalar(entry.get(column))
+                    for column in ordered_columns
+                    if column != "__source_window"
+                }
+                if ecli_key in blank_celex_eclis and "celex" in row:
+                    row["celex"] = None
+                text = entry.get("text")
+                length = len(text.strip()) if isinstance(text, str) else 0
+                if "text_source" in row:
+                    row["text_source"] = effective_text_source(
+                        row["text_source"] or "",
+                        length,
+                        longest_body[ecli_key] if ecli_key else 0,
+                    ) or row["text_source"]
+                if isinstance(text, str) and len(text) >= 200:
+                    text_row_count += 1
+                    if entry.get("ecli"):
+                        eclis_with_text.add(str(entry.get("ecli")))
+                language = entry.get("text_language")
+                if language:
+                    language_counts[str(language)] += 1
+                reasons = entry.get("missing_reasons")
+                if reasons:
+                    for reason in str(reasons).split(";"):
+                        reason = reason.strip()
+                        if reason:
+                            missing_reason_counts[reason] += 1
+                row["__source_window"] = (
+                    ";".join(sorted(duplicate_windows[dedup_key]))
+                    if dedup_key in duplicate_windows
+                    else path.stem
+                )
+                rows.append(row)
+                if len(rows) == FULLTEXTS_ROW_GROUP_SIZE:
+                    writer.write_table(pa.Table.from_pylist(rows, schema=schema))
+                    written += len(rows)
+                    rows.clear()
+            if rows:
+                writer.write_table(pa.Table.from_pylist(rows, schema=schema))
+                written += len(rows)
+            if file_number % 100 == 0:
+                log.info(
+                    "streamed %d/%d fulltext windows (%d rows)",
+                    file_number,
+                    len(valid_files),
+                    written,
+                )
+    except BaseException:
+        writer.close()
+        temp_path.unlink(missing_ok=True)
+        raise
+    else:
+        writer.close()
+
+    if written != row_count:
+        temp_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"fulltext row-count changed during consolidation: "
+            f"expected {row_count}, wrote {written}"
+        )
+    os.replace(temp_path, output_path)
+    log.info("wrote %d fulltext rows -> %s", written, output_path)
+    return FulltextConsolidation(
+        row_count=written,
+        columns=tuple(ordered_columns),
+        eclis_with_text=frozenset(eclis_with_text),
+        text_row_count=text_row_count,
+        language_counts=dict(language_counts),
+        missing_reason_counts=dict(missing_reason_counts),
+    )
+
+
+# InfoCuria returns the Official Journal notice ("Judgment of the General
+# Court of 17 May 2018 – X v Parliament (Case T-566/16)") for languages the
+# judgment was never translated into. Such rows are a small fraction of the
+# document's real body; label them so they are not mistaken for judgments.
+OJ_NOTICE_SOURCE = "INFOCURIA_OJ_NOTICE"
+OJ_NOTICE_MAX_RATIO = 0.25
+OJ_NOTICE_MIN_REFERENCE_CHARS = 10_000
+
+
+def effective_text_source(source: str, length: int, longest_body: int) -> str:
+    """Return *source*, relabelled as an OJ notice when the row is one."""
+    if (
+        source == "INFOCURIA_BLOB_HTML"
+        and length > 0
+        and longest_body >= OJ_NOTICE_MIN_REFERENCE_CHARS
+        and length < OJ_NOTICE_MAX_RATIO * longest_body
+    ):
+        return OJ_NOTICE_SOURCE
+    return source
+
+
+def _source_rank(source: str, length: int) -> int:
+    """Lower is better when one (ECLI, language) appears in several windows."""
+    if length == 0:
+        return 4
+    if source == "CELLAR_ITEM":
+        return 0
+    if source == OJ_NOTICE_SOURCE:
+        return 3
+    if source == "INFOCURIA_BLOB_HTML":
+        return 2
+    return 1
+
+
+def _ordered_fulltext_columns(columns: set[str]) -> list[str]:
+    """Return a deterministic schema with familiar fields first."""
+    preferred = [
+        "celex",
+        "ecli",
+        "text",
+        "text_source",
+        "text_language",
+        "text_format",
+        "missing_reasons",
+    ]
+    return (
+        [c for c in preferred if c in columns]
+        + sorted(columns - set(preferred))
+        + ["__source_window"]
+    )
+
+
+def _fulltext_scalar(value) -> Optional[str]:
+    """Normalise JSON values to the string schema used by the HF dataset."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
 
 
 def compute_coverage_stats(
     cases_df: pd.DataFrame,
-    fulltexts_df: pd.DataFrame,
+    fulltexts_df: Optional[pd.DataFrame] = None,
+    *,
+    fulltext_summary: Optional[FulltextConsolidation] = None,
 ) -> dict:
     """Return summary statistics for the dataset card's Coverage section.
 
@@ -183,7 +491,11 @@ def compute_coverage_stats(
     out: dict = {
         "decade_table": [],
         "sector_table": [],
-        "fulltext_total": int(len(fulltexts_df)),
+        "fulltext_total": int(
+            fulltext_summary.row_count
+            if fulltext_summary is not None
+            else len(fulltexts_df) if fulltexts_df is not None else 0
+        ),
         "fulltext_with_text": 0,
         "fulltext_languages": [],
         "missing_reason_top": [],
@@ -217,7 +529,13 @@ def compute_coverage_stats(
         decade = (dt.dt.year // 10 * 10).astype("Int64")
 
         # text presence — derived from the case's matching fulltext row.
-        if not fulltexts_df.empty and "text" in fulltexts_df.columns:
+        if fulltext_summary is not None:
+            has_text_ecli = set(fulltext_summary.eclis_with_text)
+        elif (
+            fulltexts_df is not None
+            and not fulltexts_df.empty
+            and "text" in fulltexts_df.columns
+        ):
             has_text_ecli = set(
                 fulltexts_df.loc[
                     fulltexts_df["text"].astype("string").str.len().fillna(0) >= 200,
@@ -256,7 +574,17 @@ def compute_coverage_stats(
             out["sector_table"].append((str(sec), int(n), round(100 * n / total, 1)))
 
     # ---- fulltext-side stats ----
-    if not fulltexts_df.empty:
+    if fulltext_summary is not None:
+        out["fulltext_with_text"] = fulltext_summary.text_row_count
+        out["fulltext_languages"] = sorted(
+            fulltext_summary.language_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:10]
+        out["missing_reason_top"] = sorted(
+            fulltext_summary.missing_reason_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:5]
+    elif fulltexts_df is not None and not fulltexts_df.empty:
         if "text" in fulltexts_df.columns:
             txt_len = fulltexts_df["text"].astype("string").str.len().fillna(0)
             out["fulltext_with_text"] = int((txt_len >= 200).sum())
@@ -283,9 +611,7 @@ def compute_coverage_stats(
     # ---- ECLI-duplicate count (post-consolidation) ----
     if "ecli" in cases_df.columns:
         dup_eclis = cases_df["ecli"].dropna()
-        out["dup_ecli_count"] = int(
-            len(dup_eclis) - dup_eclis.nunique()
-        )
+        out["dup_ecli_count"] = int(len(dup_eclis) - dup_eclis.nunique())
 
     # ---- Top atom distributions (subject / procedure / country) ----
     def _atoms(col: str):
@@ -353,11 +679,13 @@ def compute_coverage_stats(
         # Pull the date-publication year for context, fall back to "".
         year_col = pd.Series([""] * len(cases_df), index=cases_df.index)
         if "date_publication" in cases_df.columns:
+
             def _first(v):
                 if pd.isna(v):
                     return None
                 parts = [p.strip() for p in str(v).split(";") if p.strip()]
                 return min(parts) if parts else None
+
             dt = pd.to_datetime(
                 cases_df["date_publication"].map(_first), errors="coerce", utc=True
             )
@@ -368,8 +696,11 @@ def compute_coverage_stats(
             (
                 str(cases_df.loc[i, "ecli"]) if "ecli" in cases_df.columns else "",
                 int(in_deg.loc[i]),
-                str(cases_df.loc[i, "subject_matter"])
-                    if "subject_matter" in cases_df.columns else "",
+                (
+                    str(cases_df.loc[i, "subject_matter"])
+                    if "subject_matter" in cases_df.columns
+                    else ""
+                ),
                 str(year_col.loc[i]),
             )
             for i in top_idx
@@ -465,7 +796,9 @@ def write_dataset_card(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     canonical_md = "\n".join(f"- `{c}`" for c in canonical_columns) or "_(none)_"
-    discovered_md = "\n".join(f"- `{c}`" for c in discovered_columns) or "_(none populated)_"
+    discovered_md = (
+        "\n".join(f"- `{c}`" for c in discovered_columns) or "_(none populated)_"
+    )
 
     # --- Rich content blocks ---
     # Each block is only emitted when the relevant stats are available, so
@@ -474,7 +807,7 @@ def write_dataset_card(
     if coverage_stats:
         ft_total = coverage_stats.get("fulltext_total", 0)
         ft_with = coverage_stats.get("fulltext_with_text", 0)
-        ft_pct = (round(100 * ft_with / ft_total, 1) if ft_total else 0.0)
+        ft_pct = round(100 * ft_with / ft_total, 1) if ft_total else 0.0
 
         # --- Coverage section ---
         coverage_section = f"""## Coverage
@@ -517,7 +850,7 @@ CELLAR provides them, in additional EU-official-language translations. Top
         cg_total = coverage_stats.get("citation_edges_total", 0)
         cg_internal = coverage_stats.get("citation_edges_internal", 0)
         cg_external = coverage_stats.get("citation_edges_external", 0)
-        cg_pct = (round(100 * cg_internal / cg_total, 1) if cg_total else 0.0)
+        cg_pct = round(100 * cg_internal / cg_total, 1) if cg_total else 0.0
         citation_graph_section = f"""## Citation graph
 
 Each case row carries two citation columns, both as `;`-separated lists
@@ -736,7 +1069,7 @@ print(joined.shape)  # ~46 k rows (one per ECLI; no fan-out post-dedup)
 | `ecli` | string | Join key against `cases.parquet`. |
 | `celex` | string | Sometimes multi-valued (`62019CJ0793;62019CJ0793_RES`) when an ECLI bundles multiple work items. |
 | `text` | string | Plain text. Empty when CELLAR has no body for this work. |
-| `text_source` | string | `CELLAR_ITEM` / `CELLAR_REST_XHTML` / `INFOCURIA_BLOB_HTML` / `EXTRACTOR_FALLBACK_TEXT`. |
+| `text_source` | string | `CELLAR_ITEM` / `CELLAR_REST_XHTML` / `INFOCURIA_BLOB_HTML` / `EXTRACTOR_FALLBACK_TEXT` / `INFOCURIA_OJ_NOTICE` (the Official Journal notice of a judgment, stored for languages the judgment itself was never published in). |
 | `text_format` | string | `html` / `xhtml` / `pdf` / `xml`. Original markup format before plain-text extraction. |
 | `text_language` | string | ISO 639-1 code (`FR`, `EN`, `DE`, …). The procedural language at the CJEU is historically French, hence FR dominance. |
 | `missing_reasons` | string | `;`-separated tags explaining empty fields, e.g. `FULLTEXT_UNAVAILABLE_UPSTREAM`. |
@@ -917,7 +1250,9 @@ def copy_fields_md(output_path: Path) -> bool:
     # 1. Local install candidates (will work once upstream MANIFEST.in is fixed).
     for candidate in _locate_fields_md():
         try:
-            output_path.write_text(candidate.read_text(encoding="utf-8"), encoding="utf-8")
+            output_path.write_text(
+                candidate.read_text(encoding="utf-8"), encoding="utf-8"
+            )
             log.info("copied FIELDS.md from %s -> %s", candidate, output_path)
             return True
         except OSError as exc:
@@ -936,7 +1271,8 @@ def copy_fields_md(output_path: Path) -> bool:
         log.warning(
             "FIELDS.md not in install and could not be fetched from %s: %s — "
             "skipping copy. The dataset card still lists canonical columns.",
-            FIELDS_MD_RAW_URL, exc,
+            FIELDS_MD_RAW_URL,
+            exc,
         )
         return False
 
