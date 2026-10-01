@@ -16,7 +16,7 @@ authors = [
 dependencies = [
     # Immutable revision with canonical text selection plus date-windowed
     # CELLAR/InfoCuria catalogue reconciliation.
-    "cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@d6024cf6f2773a885906f71116b5431eadefd8dc",
+    "cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@e4e2ecb584bcfc424a75c8cd1c6a09686e68e2c7",
     "pandas>=2.0",
     "pyarrow>=14.0",                # parquet writer / reader
     "huggingface_hub>=0.24",

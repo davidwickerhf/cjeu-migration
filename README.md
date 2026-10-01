@@ -45,9 +45,10 @@ cp .env.example .env
 ```
 
 `cellar-extractor` is pinned to immutable commit
-`d6024cf6f2773a885906f71116b5431eadefd8dc` (canonical CELEX/text selection,
-public manifestation APIs, and date-windowed CELLAR/InfoCuria catalogue
-reconciliation); pip installs straight from git.
+`e4e2ecb584bcfc424a75c8cd1c6a09686e68e2c7` (canonical CELEX/text selection,
+public manifestation APIs, date-windowed CELLAR/InfoCuria catalogue
+reconciliation with CELLAR as the identity authority, and InfoCuria-only
+documents fetched by document id); pip installs straight from git.
 
 ## Run
 
