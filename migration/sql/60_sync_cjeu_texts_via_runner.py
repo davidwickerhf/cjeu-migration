@@ -201,6 +201,10 @@ def runner(sql, params=None, execute=False):
             # surface the body — the runner's 4xx JSON (e.g.
             # write_row_limit_exceeded) is what callers dispatch on
             last = RuntimeError(f"HTTP {exc.code}: {exc.read().decode()[:300]}")
+            if "QueryCanceled" in str(last):
+                # A statement timeout repeats for the same batch; callers
+                # split the batch instead of waiting through retries.
+                raise last
             time.sleep(3 * (attempt + 1))
         except Exception as exc:
             last = exc
@@ -272,11 +276,31 @@ def main() -> int:
     if recompute_only:
         print("RECOMPUTE_ONLY=1 — skipping parquet scan/insert phase")
 
+    def execute_split(sql, rows, ncols):
+        """Run a batched statement, halving the batch on a statement timeout.
+
+        Inserts compute fulltext_tsv server-side, so a batch of long texts
+        can exceed the runner's 30s statement timeout."""
+        try:
+            out = runner(
+                sql,
+                params=[[row[i] for row in rows] for i in range(ncols)],
+                execute=True,
+            )
+            return out.get("row_count") or 0
+        except RuntimeError as exc:
+            if "QueryCanceled" not in str(exc) or len(rows) < 2:
+                raise
+            half = len(rows) // 2
+            return execute_split(sql, rows[:half], ncols) + execute_split(
+                sql, rows[half:], ncols
+            )
+
     def flush():
         nonlocal inserted, batch, batch_bytes
         if not batch:
             return
-        out = runner(
+        inserted += execute_split(
             """
             INSERT INTO case_text (case_id, language, fulltext, source,
                                    text_format, missing_reasons)
@@ -287,10 +311,9 @@ def main() -> int:
                  AS v(case_id, language, fulltext, source, text_format,
                       missing_reasons)
             ON CONFLICT (case_id, language, source) DO NOTHING""",
-            params=[[b[i] for b in batch] for i in range(6)],
-            execute=True,
+            batch,
+            6,
         )
-        inserted += out.get("row_count") or 0
         batch, batch_bytes = [], 0
 
     def flush_upgrades():
@@ -303,7 +326,7 @@ def main() -> int:
         nonlocal upgraded, upd_batch, upd_bytes
         if not upd_batch:
             return
-        out = runner(
+        upgraded += execute_split(
             """
             UPDATE case_text ct
                SET source = v.source, fulltext = nullif(v.fulltext, ''),
@@ -313,10 +336,9 @@ def main() -> int:
                           %s::text[], %s::text[])
                    AS v(id, fulltext, source, text_format, missing_reasons)
              WHERE ct.id = v.id""",
-            params=[[b[i] for b in upd_batch] for i in range(5)],
-            execute=True,
+            upd_batch,
+            5,
         )
-        upgraded += out.get("row_count") or 0
         upd_batch, upd_bytes = [], 0
 
     pf = open_parquet(path) if not recompute_only else None
