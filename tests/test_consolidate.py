@@ -924,3 +924,32 @@ def test_consolidate_fulltexts_blanks_celex_for_listed_eclis(tmp_path):
     consolidate_fulltexts(win_dir, out, blank_celex_eclis=frozenset({"ECLI:EU:C:2007:218"}))
 
     assert pd.isna(pd.read_parquet(out).iloc[0]["celex"])
+
+
+def test_consolidate_fulltexts_drops_texts_attached_to_the_wrong_ecli(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    judgment = "JUDGMENT OF THE COURT 7 January 2004 " + "grounds " * 100
+    order = "ORDER OF THE PRESIDENT 21 June 2005 " + "removal " * 100
+    (win_dir / "2002-07.json").write_text(
+        json.dumps(
+            [
+                # The judgment's own ECLI holds it as CELLAR: it stays.
+                _fulltext("ECLI:EU:C:2004:6", "DE", judgment, "CELLAR_ITEM"),
+                # An order received the judgment's InfoCuria text: dropped.
+                _fulltext("ECLI:EU:C:2002:333", "DE", judgment, "INFOCURIA_BLOB_HTML"),
+                _fulltext("ECLI:EU:C:2002:333", "FR", "ordonnance " * 80, "INFOCURIA_BLOB_HTML"),
+                # Two orders share one InfoCuria body with no CELLAR owner: both dropped.
+                _fulltext("ECLI:EU:C:2004:843", "EL", order, "INFOCURIA_BLOB_HTML"),
+                _fulltext("ECLI:EU:C:2005:400", "EL", order, "INFOCURIA_BLOB_HTML"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    keys = {(row.ecli, row.text_language) for row in pd.read_parquet(out).itertuples()}
+
+    assert keys == {("ECLI:EU:C:2004:6", "DE"), ("ECLI:EU:C:2002:333", "FR")}
+    assert result.row_count == 2

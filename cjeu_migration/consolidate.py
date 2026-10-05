@@ -14,6 +14,7 @@ later years) is handled by filling missing values with null.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -195,6 +196,41 @@ def consolidate_cases(window_csv_dir: Path, output_path: Path) -> pd.DataFrame:
     return df
 
 
+SHARED_BODY_MIN_CHARS = 500
+
+
+def _body_digest(text) -> Optional[bytes]:
+    if not isinstance(text, str):
+        return None
+    normalized = " ".join(text.split())
+    if len(normalized) < SHARED_BODY_MIN_CHARS:
+        return None
+    return hashlib.md5(normalized.encode("utf-8")).digest()
+
+
+def misattached_text_keys(
+    bodies: dict[tuple[str, bytes], list[tuple[str, str]]],
+) -> set[tuple[str, str]]:
+    """(ECLI, language) keys whose non-CELLAR text is another ECLI's document.
+
+    InfoCuria can return a sibling document of the same procedure (an order
+    receiving the judgment's text). When one body sits under several ECLIs in
+    a language, a CELLAR row proves which ECLI owns it, since CELLAR is keyed
+    by the document's own CELEX; non-CELLAR copies elsewhere are dropped. With
+    no CELLAR owner the true owner cannot be told apart, so every non-CELLAR
+    copy is dropped: a missing language is better than a wrong document.
+    """
+    drop: set[tuple[str, str]] = set()
+    for (language, _), users in bodies.items():
+        if len({ecli for ecli, _ in users}) < 2:
+            continue
+        owners = {ecli for ecli, source in users if source == "CELLAR_ITEM"}
+        for ecli, source in users:
+            if source != "CELLAR_ITEM" and ecli not in owners:
+                drop.add((ecli, language))
+    return drop
+
+
 def consolidate_fulltexts(
     window_json_dir: Path,
     output_path: Path,
@@ -224,7 +260,7 @@ def consolidate_fulltexts(
     # importantly, text bodies are never kept.
     columns: set[str] = set()
     valid_files: list[Path] = []
-    candidates: dict[tuple[str, str], list[tuple[str, str, int]]] = {}
+    candidates: dict[tuple[str, str], list[tuple[str, str, int, Optional[bytes]]]] = {}
     longest_body: Counter[str] = Counter()
     keyless_rows = 0
     for path in json_files:
@@ -255,23 +291,40 @@ def consolidate_fulltexts(
             length = len(text.strip()) if isinstance(text, str) else 0
             longest_body[ecli_key] = max(longest_body[ecli_key], length)
             windows = candidates.setdefault((ecli_key, language_key), [])
-            if all(window != path.stem for window, _, _ in windows):
-                windows.append((path.stem, str(entry.get("text_source") or ""), length))
+            if all(window != path.stem for window, *_ in windows):
+                windows.append(
+                    (
+                        path.stem,
+                        str(entry.get("text_source") or ""),
+                        length,
+                        _body_digest(text),
+                    )
+                )
 
     chosen_window: dict[tuple[str, str], str] = {}
     duplicate_windows: dict[tuple[str, str], set[str]] = {}
+    bodies: dict[tuple[str, bytes], list[tuple[str, str]]] = {}
     for key, windows in candidates.items():
-        chosen_window[key] = min(
+        chosen = min(
             windows,
             key=lambda item: _source_rank(
                 effective_text_source(item[1], item[2], longest_body[key[0]]),
                 item[2],
             ),
-        )[0]
+        )
+        chosen_window[key] = chosen[0]
+        if chosen[3] is not None:
+            bodies.setdefault((key[1], chosen[3]), []).append((key[0], chosen[1]))
         if len(windows) > 1:
-            duplicate_windows[key] = {window for window, _, _ in windows}
-    row_count = len(candidates) + keyless_rows
-    del candidates
+            duplicate_windows[key] = {window for window, *_ in windows}
+    misattached = misattached_text_keys(bodies)
+    if misattached:
+        log.warning(
+            "dropping %d non-CELLAR texts whose body belongs to another ECLI",
+            len(misattached),
+        )
+    row_count = len(candidates) - len(misattached) + keyless_rows
+    del candidates, bodies
 
     ordered_columns = _ordered_fulltext_columns(columns)
     if row_count == 0:
@@ -316,6 +369,7 @@ def consolidate_fulltexts(
                 if dedup_key is not None and (
                     dedup_key in emitted_keys
                     or chosen_window[dedup_key] != path.stem
+                    or dedup_key in misattached
                 ):
                     continue
                 if dedup_key is not None:
