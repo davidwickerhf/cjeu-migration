@@ -202,6 +202,7 @@ def test_repair_missing_cellar_texts_refetches_dropped_cellar_rows(tmp_path):
 
     repaired = repair_missing_cellar_texts(
         path,
+        sleep_fn=lambda seconds: None,
         manifestations_fn=manifestations,
         refetch_fn=lambda celex: next(responses.get(celex, iter([])), None),
         build_records_fn=lambda data, *args: _records(data, *args) if data else [],
@@ -287,6 +288,7 @@ def test_repair_missing_cellar_texts_refetches_infocuria_only_documents_by_id(tm
 
     repaired = repair_missing_cellar_texts(
         path,
+        sleep_fn=lambda seconds: None,
         cases_path=cases,
         manifestations_fn=lambda celex: pytest.fail("CELLAR must not be consulted"),
         refetch_fn=refetch,
@@ -317,6 +319,7 @@ def test_repair_missing_cellar_texts_retries_textless_cases_without_cellar(tmp_p
 
     repaired = repair_missing_cellar_texts(
         path,
+        sleep_fn=lambda seconds: None,
         manifestations_fn=lambda celex: [],
         refetch_fn=lambda celex: next(responses.get(celex, iter([])), None),
         build_records_fn=lambda data, *args: _records(data, *args) if data else [],
@@ -326,3 +329,41 @@ def test_repair_missing_cellar_texts_retries_textless_cases_without_cellar(tmp_p
     assert repaired == 1
     assert rows["ECLI:EU:T:2014:24"]["text"] == "Urteil"
     assert rows["ECLI:EU:T:2014:25"]["text"] == ""
+
+
+def test_repair_missing_cellar_texts_replaces_legacy_fallback_text(tmp_path):
+    from cjeu_migration.scraper import repair_missing_cellar_texts
+
+    path = tmp_path / "2012-11.json"
+    _write_fulltexts(path, [
+        {"celex": "62010TJ0590", "ecli": "ECLI:EU:T:2012:635", "text": "A Törvényszék ítélete",
+         "text_source": "LEGACY_EURLEX_HTML", "text_language": "EN"},
+        {"celex": "82014DE0425(51)", "ecli": "ECLI:DE:OLGHB:2014:0425", "text": "Urteil",
+         "text_source": "LEGACY_EURLEX_HTML", "text_language": "EN"},
+    ])
+    sleeps = []
+    infocuria = iter([None, {"fulltexts": [
+        {"text": "JUDGMENT", "text_source": "INFOCURIA_BLOB_HTML", "text_language": "EN"},
+        {"text": "ARRÊT", "text_source": "INFOCURIA_BLOB_HTML", "text_language": "FR"}]}])
+
+    def refetch(celex):
+        if celex.startswith("8"):
+            return {"fulltexts": [{"text": "Urteil", "text_source": "CELLAR_ITEM", "text_language": "DE"}]}
+        return next(infocuria)
+
+    repaired = repair_missing_cellar_texts(
+        path,
+        manifestations_fn=lambda celex: [{"language": "DE"}] if celex.startswith("8") else [],
+        refetch_fn=refetch,
+        build_records_fn=lambda data, *args: _records(data, *args) if data else [],
+        sleep_fn=sleeps.append,
+    )
+
+    rows = sorted((r["ecli"], r["text_language"], r["text_source"]) for r in json.loads(path.read_text(encoding="utf-8")))
+    assert repaired == 2
+    assert sleeps == [2]
+    assert rows == [
+        ("ECLI:DE:OLGHB:2014:0425", "DE", "CELLAR_ITEM"),
+        ("ECLI:EU:T:2012:635", "EN", "INFOCURIA_BLOB_HTML"),
+        ("ECLI:EU:T:2012:635", "FR", "INFOCURIA_BLOB_HTML"),
+    ]

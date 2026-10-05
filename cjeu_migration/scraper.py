@@ -176,7 +176,7 @@ class CellarCoverageError(RuntimeError):
 def _default_manifestations_fn(celex: str) -> list:
     from cellar_extractor import get_cellar_manifestations_by_celex  # type: ignore
 
-    _, manifestations = get_cellar_manifestations_by_celex(celex, sector="6")
+    _, manifestations = get_cellar_manifestations_by_celex(celex, sector=celex[:1])
     return manifestations
 
 
@@ -219,7 +219,16 @@ def _read_identities(cases_path: Optional[Path]) -> dict[str, dict]:
 
 
 def _has_text(rows: list) -> bool:
-    return any(str(row.get("text") or "").strip() for row in rows)
+    """Whether any row has a text other than the legacy EUR-Lex fallback.
+
+    The legacy fallback returns the page in whatever language EUR-Lex serves
+    by default but always labels it English, so it is not a usable text.
+    """
+    return any(
+        str(row.get("text") or "").strip()
+        and row.get("text_source") != "LEGACY_EURLEX_HTML"
+        for row in rows
+    )
 
 
 def _build_records(data: Any, celex: str, ecli: str, missing_reasons: str) -> list:
@@ -243,12 +252,13 @@ def repair_missing_cellar_texts(
     refetch_fn: Optional[Callable[[str], Any]] = None,
     build_records_fn: Optional[Callable[..., list]] = None,
     max_attempts: int = 3,
+    sleep_fn: Optional[Callable[[float], None]] = None,
 ) -> int:
-    """Re-fetch sector-6 documents whose CELLAR texts were silently dropped.
+    """Re-fetch CJEU documents whose CELLAR texts were silently dropped.
 
     ``cellar-extractor`` treats any CELLAR failure during the language merge
     as "no CELLAR text" and keeps whatever InfoCuria returned (possibly
-    nothing). For every sector-6 ECLI in the window with no CELLAR text, ask
+    nothing). For every sector-6 or -8 ECLI in the window with no CELLAR text, ask
     CELLAR whether manifestations exist; if they do, re-fetch the document
     and replace its rows. Returns the number of ECLIs repaired and raises
     :class:`CellarCoverageError` if CELLAR still yields no text, so the
@@ -265,6 +275,17 @@ def repair_missing_cellar_texts(
     manifestations_fn = manifestations_fn or _default_manifestations_fn
     refetch_fn = refetch_fn or _default_refetch_fn
     build_records_fn = build_records_fn or _build_records
+    if sleep_fn is None:
+        import time
+
+        sleep_fn = time.sleep
+
+    def attempts():
+        # InfoCuria throttles bursts, so back off between retries.
+        for attempt in range(max_attempts):
+            if attempt:
+                sleep_fn(2**attempt)
+            yield attempt
 
     import json
 
@@ -289,7 +310,7 @@ def repair_missing_cellar_texts(
             lookup = identity.get("lookup_celex") or ""
             if _has_text(rows) or not identity.get("document_id") or not lookup:
                 continue
-            for _ in range(max_attempts):
+            for _ in attempts():
                 data = refetch_fn(
                     lookup, document_id=identity["document_id"], use_cellar=False
                 )
@@ -298,7 +319,7 @@ def repair_missing_cellar_texts(
                     replacements[ecli] = records
                     break
             continue
-        if not celex.startswith("6") or _has_cellar_text(rows):
+        if celex[:1] not in {"6", "8"} or _has_cellar_text(rows):
             continue
         # CELLAR text is required when CELLAR has the document; otherwise any
         # text (InfoCuria's) is recovered on a best-effort basis.
@@ -306,7 +327,7 @@ def repair_missing_cellar_texts(
         if not required and _has_text(rows):
             continue
         recovered = _has_cellar_text if required else _has_text
-        for _ in range(max_attempts):
+        for _ in attempts():
             data = (
                 refetch_fn(celex, document_id=identity["document_id"])
                 if identity.get("document_id")
