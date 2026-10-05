@@ -209,7 +209,7 @@ SCALAR_COLUMNS = [
     "case_law_is_about_case_law_subject_matter", "origin_country_or_role_qualifier",
     "judge_rapporteur", "case_law_delivered_by_judge", "origin_country",
     "advocate_general", "conclusions", "opinion_advocate_general_joined_to_case_court",
-    "summary", "summary_source",
+    "summary", "summary_source", "infocuria_celex",
 ]
 NEEDED_COLUMNS = list(dict.fromkeys(
     SCALAR_COLUMNS + list(DOMAIN_COLUMNS) + [c for c, _ in AGENT_COLUMNS]
@@ -356,9 +356,13 @@ def map_row(d, include_keywords=False) -> CaseMapping:
     get = d.get
     ecli = norm_ecli(get("ecli"))
     celex = first(get("celex"))
-    court, dtcode, is_opinion = celex_kind(celex)
+    # Documents known only to InfoCuria may have no CELEX of their own (the
+    # consolidation blanks ambiguous procedure CELEXes). Court, document type
+    # and case number still follow from InfoCuria's procedure CELEX.
+    descriptive_celex = celex or first(get("infocuria_celex"))
+    court, dtcode, is_opinion = celex_kind(descriptive_celex)
     form_raw = first(get("delivered_by_court_formation"))
-    cn = case_number(celex)
+    cn = case_number(descriptive_celex)
     title = first(get("work_title"))
     sector = first(get("sector"))
     m = CaseMapping(
@@ -441,8 +445,9 @@ def map_row(d, include_keywords=False) -> CaseMapping:
 
 
 def load_corpus(path) -> pd.DataFrame:
-    """Read and normalize cases.parquet the way 50 does (ecli+celex required,
-    dedup by ECLI keeping the first row)."""
+    """Read and normalize cases.parquet the way 50 does (dedup by ECLI keeping
+    the first row). A row needs an ECLI and either a CELEX or, for documents
+    known only to InfoCuria, an ``infocuria_celex``."""
     import pyarrow.parquet as pq
 
     available = set(pq.ParquetFile(path).schema_arrow.names)
@@ -456,7 +461,9 @@ def load_corpus(path) -> pd.DataFrame:
     for c in missing:
         df[c] = None
     df["x_celex"] = df["celex"].map(first)
-    df = df[df["ecli"].notna() & df["x_celex"].notna()]
+    # Rows without a CELEX are kept when InfoCuria identifies them; they are
+    # loaded with a NULL celex_id.
+    df = df[df["ecli"].notna() & (df["x_celex"].notna() | df["infocuria_celex"].map(first).notna())]
     df = df.drop_duplicates(subset=["ecli"])
     df["x_ecli"] = df["ecli"].map(norm_ecli)
     df = df.drop_duplicates(subset=["x_ecli"])
@@ -680,15 +687,21 @@ def build_plan(df, prod: ProdState, runner, extra_edges=None, limit=None,
     # would silently drop the row, so collisions are validation errors.
     celex_rows = query_any(runner,
         "SELECT id, ecli, celex_id FROM cases WHERE celex_id = ANY(%s::text[])",
-        [m.celex for m in new])
+        [m.celex for m in new if m.celex])
     celex_owner = {r["celex_id"]: r["ecli"] for r in celex_rows}
     # Several new ECLIs sharing one CELEX: which ECLI owns it is ambiguous,
     # so the whole group is rejected (no arbitrary first-row-wins).
     by_celex = defaultdict(list)
     for m in new:
-        by_celex[m.celex].append(m.ecli)
+        if m.celex:
+            by_celex[m.celex].append(m.ecli)
     valid = []
     for m in new:
+        if not m.celex:
+            # InfoCuria-only document without a CELEX of its own: loaded with
+            # a NULL celex_id, so there is no CELEX identity to check.
+            valid.append(m)
+            continue
         if not celex_well_formed(m.celex):
             errors.append((m.ecli, f"malformed CELEX {m.celex!r}"))
             continue
@@ -832,7 +845,8 @@ def resolvable_new_celex(new, attach):
     attaches to a pre-existing row keeps that row's celex_id (never updated),
     so it only resolves by CELEX when the existing value already matches."""
     return {m.celex for m in new
-            if m.ecli not in attach or attach[m.ecli].get("celex_id") == m.celex}
+            if m.celex
+            and (m.ecli not in attach or attach[m.ecli].get("celex_id") == m.celex)}
 
 
 def citation_resolution(runner, plan: Plan):

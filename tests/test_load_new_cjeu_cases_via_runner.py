@@ -891,3 +891,23 @@ def test_counts_trigger_handles_link_updates():
     upd = s[s.index("IF TG_OP = 'UPDATE' THEN"):]
     assert "IF OLD.target_case_id IS DISTINCT FROM NEW.target_case_id THEN" in upd
     assert "cited_by_count = case_citation_counts.cited_by_count + 1" in upd
+
+
+def test_infocuria_only_case_without_celex_loads_with_null_celex(tmp_path):
+    # Consolidation blanks an InfoCuria procedure CELEX shared by several
+    # orders; such documents are loaded with a NULL celex_id and described
+    # from InfoCuria's procedure CELEX.
+    df = _df(tmp_path, [
+        _row(ecli="ECLI:EU:C:2007:218", celex=None, infocuria_celex="62007CO0193"),
+        _row(ecli="ECLI:EU:C:2007:465", celex=None, infocuria_celex="62007CO0193"),
+        _row(ecli="ECLI:EU:C:2007:999", celex=None, infocuria_celex=None),
+    ])
+    runner = FakeRunner()
+    plan = mod.build_plan(df, _prod_state(runner), runner)
+
+    assert sorted(m.ecli for m in plan.new) == ["ECLI:EU:C:2007:218", "ECLI:EU:C:2007:465"]
+    assert plan.errors == []
+    m = next(m for m in plan.new if m.ecli == "ECLI:EU:C:2007:218")
+    assert m.celex is None and m.case["celex"] is None and m.document["celex"] is None
+    assert (m.case["court_code"], m.case["doctype"], m.case["case_number"]) == (
+        "CJEU", "order", "C-193/07")
