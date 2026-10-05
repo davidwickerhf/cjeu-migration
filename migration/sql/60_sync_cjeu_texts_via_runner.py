@@ -17,7 +17,8 @@ Env:
   SQL_RUNNER_URL      e.g. https://demo-psql.caselawexplorer.tech
   SQL_RUNNER_TOKEN    HMAC token
   SQL_RUNNER_CONFIRM  default execute-cle-v2
-  FULLTEXTS_PARQUET   local path; downloads from HF when unset
+  FULLTEXTS_PARQUET   local path, or an hf:// URL streamed row group by row
+                      group (no local copy); downloads from HF when unset
   TARGET_ECLIS_TSV    optional ecli/celex TSV; force-replaces only those ECLIs
   TARGET_LANGUAGE     language used with TARGET_ECLIS_TSV (default: en)
 """
@@ -51,6 +52,15 @@ COLS = (
 )
 BATCH_ROWS = 250
 BATCH_BYTES = 6_000_000
+
+
+def open_parquet(path):
+    """Open a local parquet file, or stream an ``hf://`` one without a copy."""
+    if str(path).startswith("hf://"):
+        from huggingface_hub import HfFileSystem
+
+        return pq.ParquetFile(HfFileSystem().open(path, "rb"))
+    return pq.ParquetFile(path)
 
 
 def load_targets(path):
@@ -309,7 +319,7 @@ def main() -> int:
         upgraded += out.get("row_count") or 0
         upd_batch, upd_bytes = [], 0
 
-    pf = pq.ParquetFile(path) if not recompute_only else None
+    pf = open_parquet(path) if not recompute_only else None
     parquet_rows = iter_parquet_rows(pf) if pf else []
     if targets and pf:
         print(
