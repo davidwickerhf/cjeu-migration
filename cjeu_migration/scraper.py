@@ -253,6 +253,7 @@ def repair_missing_cellar_texts(
     build_records_fn: Optional[Callable[..., list]] = None,
     max_attempts: int = 3,
     sleep_fn: Optional[Callable[[float], None]] = None,
+    unrecovered: Optional[list] = None,
 ) -> int:
     """Re-fetch CJEU documents whose CELLAR texts were silently dropped.
 
@@ -263,6 +264,12 @@ def repair_missing_cellar_texts(
     and replace its rows. Returns the number of ECLIs repaired and raises
     :class:`CellarCoverageError` if CELLAR still yields no text, so the
     window is failed and retried instead of being published incomplete.
+    Pass an ``unrecovered`` list to collect those ECLIs instead: the
+    recovered rows are then written and nothing is raised.
+
+    CELLAR text is required only for sector-6 (CJEU) documents. National
+    decisions (sector 8) often list manifestations CELLAR cannot serve as
+    text, so they are retried but never fail the window.
 
     Documents known only to InfoCuria (``identity_source == "infocuria"`` in
     the window's cases CSV) carry at best InfoCuria's procedure-level CELEX,
@@ -301,7 +308,7 @@ def repair_missing_cellar_texts(
 
     identities = _read_identities(cases_path)
     replacements: dict[str, list] = {}
-    unrecovered: list[str] = []
+    missing: list[str] = []
     for ecli, rows in by_ecli.items():
         identity = identities.get(ecli, {})
         celex = str(rows[0].get("celex") or "").strip()
@@ -323,7 +330,9 @@ def repair_missing_cellar_texts(
             continue
         # CELLAR text is required when CELLAR has the document; otherwise any
         # text (InfoCuria's) is recovered on a best-effort basis.
-        required = bool(manifestations_fn(celex))
+        if not celex.startswith("6") and _has_text(rows):
+            continue
+        required = celex.startswith("6") and bool(manifestations_fn(celex))
         if not required and _has_text(rows):
             continue
         recovered = _has_cellar_text if required else _has_text
@@ -339,13 +348,15 @@ def repair_missing_cellar_texts(
                 break
         else:
             if required:
-                unrecovered.append(f"{ecli} ({celex})")
+                missing.append(f"{ecli} ({celex})")
 
-    if unrecovered:
+    if missing and unrecovered is None:
         raise CellarCoverageError(
             f"CELLAR has manifestations but no text was fetched for "
-            f"{len(unrecovered)} ECLIs: {', '.join(unrecovered[:10])}"
+            f"{len(missing)} ECLIs: {', '.join(missing[:10])}"
         )
+    if unrecovered is not None:
+        unrecovered.extend(missing)
     if not replacements:
         return 0
 

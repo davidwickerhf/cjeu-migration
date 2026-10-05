@@ -9,7 +9,7 @@ afterwards.
 
 Usage::
 
-    repair_windows.py WORKSPACE_DIR SUMMARY_JSON [WORKERS]
+    repair_windows.py WORKSPACE_DIR SUMMARY_JSON [WORKERS] [WINDOW ...]
 """
 
 from __future__ import annotations
@@ -20,22 +20,26 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from cjeu_migration.scraper import CellarCoverageError, repair_missing_cellar_texts
+from cjeu_migration.scraper import repair_missing_cellar_texts
 
 log = logging.getLogger("repair_windows")
 
 
 def repair(cases_dir: Path, fulltexts_path: Path) -> tuple[str, int, str]:
     window = fulltexts_path.stem
-    try:
-        repaired = repair_missing_cellar_texts(
-            fulltexts_path,
-            cases_path=cases_dir / f"{window}.csv",
-            max_attempts=4,
-        )
-        return window, repaired, ""
-    except CellarCoverageError as exc:
-        return window, 0, str(exc)
+    unrecovered: list[str] = []
+    repaired = repair_missing_cellar_texts(
+        fulltexts_path,
+        cases_path=cases_dir / f"{window}.csv",
+        max_attempts=4,
+        unrecovered=unrecovered,
+    )
+    error = (
+        f"no CELLAR text for {len(unrecovered)} ECLIs: {', '.join(unrecovered[:10])}"
+        if unrecovered
+        else ""
+    )
+    return window, repaired, error
 
 
 def main() -> int:
@@ -45,6 +49,9 @@ def main() -> int:
     workers = int(sys.argv[3]) if len(sys.argv) > 3 else 4
     cases_dir = workspace / "windows" / "cases"
     windows = sorted((workspace / "windows" / "fulltexts").glob("*.json"))
+    if len(sys.argv) > 4:
+        wanted = set(sys.argv[4:])
+        windows = [path for path in windows if path.stem in wanted]
 
     results = {"repaired": {}, "unrecovered": {}}
     with ThreadPoolExecutor(max_workers=workers) as pool:

@@ -367,3 +367,38 @@ def test_repair_missing_cellar_texts_replaces_legacy_fallback_text(tmp_path):
         ("ECLI:EU:T:2012:635", "EN", "INFOCURIA_BLOB_HTML"),
         ("ECLI:EU:T:2012:635", "FR", "INFOCURIA_BLOB_HTML"),
     ]
+
+
+def test_repair_missing_cellar_texts_collects_unrecovered_and_keeps_repairs(tmp_path):
+    from cjeu_migration.scraper import repair_missing_cellar_texts
+
+    path = tmp_path / "2016-09.json"
+    _write_fulltexts(path, [
+        {"celex": "62016CJ0001", "ecli": "ECLI:EU:C:2016:1", "text": "",
+         "text_source": "", "text_language": ""},
+        {"celex": "62016CJ0002", "ecli": "ECLI:EU:C:2016:2", "text": "",
+         "text_source": "", "text_language": ""},
+        {"celex": "82016FI0912(51)", "ecli": "ECLI:FI:KKO:2016:59", "text": "",
+         "text_source": "", "text_language": ""},
+    ])
+    unrecovered = []
+
+    def refetch(celex):
+        if celex == "62016CJ0001":
+            return {"fulltexts": [{"text": "judgment", "text_source": "CELLAR_ITEM", "text_language": "EN"}]}
+        return None
+
+    repaired = repair_missing_cellar_texts(
+        path,
+        manifestations_fn=lambda celex: [{"language": "EN"}],
+        refetch_fn=refetch,
+        build_records_fn=lambda data, *args: _records(data, *args) if data else [],
+        sleep_fn=lambda seconds: None,
+        unrecovered=unrecovered,
+    )
+
+    rows = {r["ecli"]: r for r in json.loads(path.read_text(encoding="utf-8"))}
+    assert repaired == 1
+    assert rows["ECLI:EU:C:2016:1"]["text"] == "judgment"
+    # Sector-8 documents are best-effort and never reported as unrecovered.
+    assert unrecovered == ["ECLI:EU:C:2016:2 (62016CJ0002)"]
