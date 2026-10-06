@@ -27,6 +27,11 @@ Env:
   CLASSIFICATION_CSV  output of 63 (REPORT_TSV of a dry run)
   ARCHIVE_DIR         where step 1 writes its archive (required to write)
   DRY_RUN             default 1: print the plan, write nothing
+  LABEL_DECISIONS     default 0: also label texts of the decision itself.
+                      Unlabelled rows already count as the decision, and every
+                      UPDATE recomputes the row's generated fulltext_tsv, so
+                      labelling ~600k decision texts takes hours; by default
+                      only the labels that change what is served are written.
 """
 
 from __future__ import annotations
@@ -329,10 +334,13 @@ def main() -> int:
 
     archive(plan, Path(os.environ["ARCHIVE_DIR"]))
     print("writing:", flush=True)
+    labels = plan["classify"]
+    if os.environ.get("LABEL_DECISIONS") != "1":
+        labels = [label for label in labels if label[1] not in DECISION_KINDS]
     execute_chunks("classify", """
         UPDATE case_text ct SET document_kind = v.kind, document_celex = v.celex
           FROM unnest(%s::bigint[], %s::text[], %s::text[]) AS v(id, kind, celex)
-         WHERE ct.id = v.id AND ct.document_kind IS NULL""", plan["classify"], 3)
+         WHERE ct.id = v.id AND ct.document_kind IS NULL""", labels, 3)
     execute_chunks("copy summaries", """
         UPDATE case_text t SET summary = s.summary, summary_source = s.summary_source
           FROM unnest(%s::bigint[], %s::bigint[]) AS v(target, source)
