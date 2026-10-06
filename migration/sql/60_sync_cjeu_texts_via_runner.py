@@ -51,6 +51,7 @@ COLS = (
     "missing_reasons",
 )
 BATCH_ROWS = 250
+DECISION_KINDS = {"judgment", "order", "opinion", "ruling", "decision", "other"}
 BATCH_BYTES = 6_000_000
 
 
@@ -239,11 +240,23 @@ def main() -> int:
 
     print("fetching ECLI map ...", flush=True)
     ecli_to_id = {}
+    case_kind = {}  # case_id -> (document_kind, document_celex) of its decision
     for r in paginated("""
-            SELECT c.id, c.ecli FROM cases c
+            SELECT c.id, c.ecli, c.celex_id, dt.code AS doctype FROM cases c
             JOIN cjeu_document d ON d.case_id = c.id
+            LEFT JOIN document_type dt ON dt.id = c.document_type_id
             WHERE c.id > %s ORDER BY c.id LIMIT 900"""):
         ecli_to_id[r["ecli"]] = r["id"]
+        case_kind[r["id"]] = (
+            r["doctype"] if r["doctype"] in DECISION_KINDS else "other",
+            re.sub(r"_(SUM|RES|INF|EXT)$", "", r["celex_id"] or "") or None,
+        )
+
+    def document_of(case_id, source):
+        """document_kind/document_celex (caselaw-coolify migration 0008) of a
+        corpus text: the case's decision, or its OJ notice."""
+        kind, celex = case_kind.get(case_id, (None, None))
+        return ("oj_notice" if source == "INFOCURIA_OJ_NOTICE" else kind), celex
     print(f"  {len(ecli_to_id)} CJEU-corpus ECLIs")
     if targets:
         missing_db_cases = sorted(set(targets).difference(ecli_to_id))
@@ -303,16 +316,18 @@ def main() -> int:
         inserted += execute_split(
             """
             INSERT INTO case_text (case_id, language, fulltext, source,
-                                   text_format, missing_reasons)
+                                   text_format, missing_reasons,
+                                   document_kind, document_celex)
             SELECT v.case_id, v.language, nullif(v.fulltext, ''), v.source,
-                   nullif(v.text_format, ''), nullif(v.missing_reasons, '')
+                   nullif(v.text_format, ''), nullif(v.missing_reasons, ''),
+                   v.document_kind, v.document_celex
             FROM unnest(%s::bigint[], %s::text[], %s::text[], %s::text[],
-                        %s::text[], %s::text[])
+                        %s::text[], %s::text[], %s::text[], %s::text[])
                  AS v(case_id, language, fulltext, source, text_format,
-                      missing_reasons)
+                      missing_reasons, document_kind, document_celex)
             ON CONFLICT (case_id, language, source) DO NOTHING""",
             batch,
-            6,
+            8,
         )
         batch, batch_bytes = [], 0
 
@@ -331,13 +346,16 @@ def main() -> int:
             UPDATE case_text ct
                SET source = v.source, fulltext = nullif(v.fulltext, ''),
                    text_format = nullif(v.text_format, ''),
-                   missing_reasons = nullif(v.missing_reasons, '')
+                   missing_reasons = nullif(v.missing_reasons, ''),
+                   document_kind = v.document_kind,
+                   document_celex = v.document_celex
               FROM unnest(%s::bigint[], %s::text[], %s::text[],
-                          %s::text[], %s::text[])
-                   AS v(id, fulltext, source, text_format, missing_reasons)
+                          %s::text[], %s::text[], %s::text[], %s::text[])
+                   AS v(id, fulltext, source, text_format, missing_reasons,
+                        document_kind, document_celex)
              WHERE ct.id = v.id""",
             upd_batch,
-            5,
+            7,
         )
         upd_batch, upd_bytes = [], 0
 
@@ -378,7 +396,7 @@ def main() -> int:
                 (row_id, row_source, text_md5 if row_id == rid else old_md5)
                 for row_id, row_source, old_md5 in existing
             ]
-            upd_batch.append((rid, t or "", src, f2 or "", m2 or ""))
+            upd_batch.append((rid, t or "", src, f2 or "", m2 or "", *document_of(cid, src)))
             upd_bytes += len(t or "")
             if len(upd_batch) >= BATCH_ROWS or upd_bytes >= BATCH_BYTES:
                 flush_upgrades()
@@ -399,13 +417,13 @@ def main() -> int:
                 )
                 for row_id, row_source, old_md5 in existing
             ]
-            upd_batch.append((rid, t or "", src, f2 or "", m2 or ""))
+            upd_batch.append((rid, t or "", src, f2 or "", m2 or "", *document_of(cid, src)))
             upd_bytes += len(t or "")
             if len(upd_batch) >= BATCH_ROWS or upd_bytes >= BATCH_BYTES:
                 flush_upgrades()
             continue
         db_pair_rows.setdefault((cid, lang), []).append((None, src, text_md5))
-        batch.append((cid, lang, t or "", src, f2 or "", m2 or ""))
+        batch.append((cid, lang, t or "", src, f2 or "", m2 or "", *document_of(cid, src)))
         batch_bytes += len(t or "")
         if len(batch) >= BATCH_ROWS or batch_bytes >= BATCH_BYTES:
             flush()

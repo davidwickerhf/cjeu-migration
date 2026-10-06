@@ -732,9 +732,9 @@ class TextTable:
 
     def runner(self, sql, params=None, execute=False):
         s = " ".join(sql.split())
-        if s.startswith("SELECT c.id, c.ecli FROM cases c"):
-            return {"ok": True, "rows": [{"id": i, "ecli": e} for e, i in self.cases.items()
-                                         if i > params[0]]}
+        if s.startswith("SELECT c.id, c.ecli"):
+            return {"ok": True, "rows": [{"id": i, "ecli": e, "celex_id": None, "doctype": "judgment"}
+                                         for e, i in self.cases.items() if i > params[0]]}
         if "FROM case_text ct JOIN cjeu_document" in s:
             return {"ok": True, "rows": [
                 {"id": r["id"], "case_id": r["case_id"], "language": r["language"],
@@ -743,13 +743,15 @@ class TextTable:
                 for r in sorted(self.rows.values(), key=lambda r: r["id"]) if r["id"] > params[0]]}
         if s.startswith("INSERT INTO case_text"):
             n = sum(self.add(case_id=c, language=l, fulltext=f or None, source=src,
-                             text_format=tf or None, missing_reasons=mr or None)
-                    for c, l, f, src, tf, mr in zip(*params))
+                             text_format=tf or None, missing_reasons=mr or None,
+                             document_kind=kind, document_celex=celex)
+                    for c, l, f, src, tf, mr, kind, celex in zip(*params))
             return {"ok": True, "row_count": n}
         if s.startswith("UPDATE case_text ct SET source = v.source"):
-            for rid, f, src, tf, mr in zip(*params):
+            for rid, f, src, tf, mr, kind, celex in zip(*params):
                 self.rows[rid].update(source=src, fulltext=f or None,
-                                      text_format=tf or None, missing_reasons=mr or None)
+                                      text_format=tf or None, missing_reasons=mr or None,
+                                      document_kind=kind, document_celex=celex)
             return {"ok": True, "row_count": len(params[0])}
         if "SET is_stub" in s:
             return {"ok": True, "row_count": 0}
@@ -783,6 +785,8 @@ def test_sync60_fills_fulltext_into_the_summary_row(tmp_path, monkeypatch):
     assert de["fulltext"] == "Urteil ..." and de["summary"] == m.summary["summary"]
     assert de["summary_source"] == "INFOCURIA_DOCUMENT_CONTENT" and de["text_format"] == "xhtml"
     assert en["summary"] is None
+    # synced texts record what they are (migration 0008)
+    assert en["document_kind"] == "judgment" and de["document_kind"] == "judgment"
     # idempotent: a second 60 pass changes nothing and adds no rows
     before = {k: dict(v) for k, v in table.rows.items()}
     _run_sync60(tmp_path, monkeypatch, table, [_text("de", "Urteil ..."), _text("en", "Judgment ...")])
