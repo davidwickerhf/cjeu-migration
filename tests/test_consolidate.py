@@ -15,7 +15,6 @@ from cjeu_migration.consolidate import (
     write_dataset_card,
 )
 
-
 # ---------------------------------------------------------------------------
 # Cases consolidation
 # ---------------------------------------------------------------------------
@@ -82,6 +81,46 @@ def test_consolidate_cases_handles_schema_drift(tmp_path):
     assert pd.isna(late_row["early_only_column"])
 
 
+def test_consolidate_cases_deduplicates_ecli_and_merges_windows(tmp_path):
+    win_dir = tmp_path / "windows"
+    _write_window_csv(
+        win_dir / "2020-01.csv",
+        ["celex", "ecli"],
+        [("62020CJ0001", "ECLI:EU:C:2020:1")],
+    )
+    _write_window_csv(
+        win_dir / "2020-02.csv",
+        ["celex", "ecli"],
+        [("62020CJ0001", "ECLI:EU:C:2020:1")],
+    )
+
+    df = consolidate_cases(win_dir, tmp_path / "cases.parquet")
+
+    assert len(df) == 1
+    assert df.iloc[0]["__source_window"] == "2020-01;2020-02"
+
+
+def test_consolidate_cases_prefers_infocuria_reconciled_identity(tmp_path):
+    win_dir = tmp_path / "windows"
+    _write_window_csv(
+        win_dir / "2014-01.csv",
+        ["celex", "ecli", "metadata_catalog_source"],
+        [("62013TO0505(01)", "ECLI:EU:T:2014:1", "")],
+    )
+    _write_window_csv(
+        win_dir / "2014-02.csv",
+        ["celex", "ecli", "metadata_catalog_source"],
+        [("62013TO0505(02)", "ECLI:EU:T:2014:1", "infocuria")],
+    )
+
+    df = consolidate_cases(win_dir, tmp_path / "cases.parquet")
+
+    assert len(df) == 1
+    assert df.iloc[0]["celex"] == "62013TO0505(02)"
+    assert df.iloc[0]["metadata_catalog_source"] == "infocuria"
+    assert df.iloc[0]["__source_window"] == "2014-01;2014-02"
+
+
 def test_consolidate_cases_empty_dir_writes_empty_parquet(tmp_path):
     out = tmp_path / "out" / "cases.parquet"
     df = consolidate_cases(tmp_path / "no-windows", out)
@@ -118,13 +157,17 @@ def test_consolidate_fulltexts_concatenates_all_windows(tmp_path):
         encoding="utf-8",
     )
     (win_dir / "2020-02.json").write_text(
-        json.dumps([{"celex": "62020CJ0003", "ecli": "ECLI:EU:C:2020:3", "text": "foo"}]),
+        json.dumps(
+            [{"celex": "62020CJ0003", "ecli": "ECLI:EU:C:2020:3", "text": "foo"}]
+        ),
         encoding="utf-8",
     )
     out = tmp_path / "out" / "fulltexts.parquet"
-    df = consolidate_fulltexts(win_dir, out)
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
 
     assert out.exists()
+    assert result.row_count == 3
     assert len(df) == 3
     assert set(df["celex"]) == {"62020CJ0001", "62020CJ0002", "62020CJ0003"}
     assert set(df["__source_window"]) == {"2020-01", "2020-02"}
@@ -137,15 +180,40 @@ def test_consolidate_fulltexts_skips_malformed_files(tmp_path):
     (win_dir / "bad.json").write_text("not json at all")
     (win_dir / "wrong-shape.json").write_text(json.dumps({"not": "a list"}))
     out = tmp_path / "out" / "fulltexts.parquet"
-    df = consolidate_fulltexts(win_dir, out)
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+    assert result.row_count == 1
     assert len(df) == 1
     assert df.iloc[0]["celex"] == "A"
 
 
+def test_consolidate_fulltexts_deduplicates_ecli_language_and_merges_windows(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    row = {
+        "celex": "62020CJ0001",
+        "ecli": "ECLI:EU:C:2020:1",
+        "text_language": "EN",
+        "text": "judgment body",
+    }
+    (win_dir / "2020-01.json").write_text(json.dumps([row]), encoding="utf-8")
+    (win_dir / "2020-02.json").write_text(json.dumps([row]), encoding="utf-8")
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+
+    assert result.row_count == 1
+    assert len(df) == 1
+    assert df.iloc[0]["__source_window"] == "2020-01;2020-02"
+
+
 def test_consolidate_fulltexts_empty_dir(tmp_path):
     out = tmp_path / "out" / "fulltexts.parquet"
-    df = consolidate_fulltexts(tmp_path / "no-fulltexts", out)
+    result = consolidate_fulltexts(tmp_path / "no-fulltexts", out)
+    df = pd.read_parquet(out)
     assert out.exists()
+    assert result.row_count == 0
     assert df.empty
 
 
@@ -177,15 +245,15 @@ def test_cases_parquet_uses_small_row_groups_for_hf_viewer(tmp_path):
     consolidate_cases(win_dir, out)
 
     pf = pq.ParquetFile(out)
-    assert pf.num_row_groups >= 3, (
-        f"expected multi-row-group layout, got {pf.num_row_groups}"
-    )
+    assert (
+        pf.num_row_groups >= 3
+    ), f"expected multi-row-group layout, got {pf.num_row_groups}"
     # Every group should respect the configured cap.
     for i in range(pf.num_row_groups):
         rg = pf.metadata.row_group(i)
-        assert rg.num_rows <= CASES_ROW_GROUP_SIZE, (
-            f"row group {i} has {rg.num_rows} rows, cap is {CASES_ROW_GROUP_SIZE}"
-        )
+        assert (
+            rg.num_rows <= CASES_ROW_GROUP_SIZE
+        ), f"row group {i} has {rg.num_rows} rows, cap is {CASES_ROW_GROUP_SIZE}"
     # Page index is required for the viewer to seek without scanning.
     first_col = pf.metadata.row_group(0).column(0)
     assert first_col.has_offset_index, "page-offset index missing — HF viewer needs it"
@@ -251,6 +319,7 @@ def test_copy_fields_md_falls_back_to_github_when_not_installed(tmp_path, monkey
 
     # Force the local lookup to return nothing.
     from cjeu_migration import consolidate
+
     monkeypatch.setattr(consolidate, "_locate_fields_md", lambda: [])
 
     # Fake urllib response.
@@ -278,13 +347,16 @@ def test_copy_fields_md_falls_back_to_github_when_not_installed(tmp_path, monkey
     assert "cellar-extractor" in called_url
 
 
-def test_copy_fields_md_returns_false_when_local_and_remote_both_fail(tmp_path, monkeypatch):
+def test_copy_fields_md_returns_false_when_local_and_remote_both_fail(
+    tmp_path, monkeypatch
+):
     """If neither the local install nor GitHub is reachable, the helper logs
     a warning and returns False — the rest of the pipeline keeps going."""
     from unittest.mock import patch
 
     out = tmp_path / "FIELDS.md"
     from cjeu_migration import consolidate
+
     monkeypatch.setattr(consolidate, "_locate_fields_md", lambda: [])
 
     with patch("urllib.request.urlopen", side_effect=OSError("network down")):
@@ -318,39 +390,92 @@ def test_write_dataset_card_handles_no_discovered_columns(tmp_path):
 def _make_coverage_fixture():
     """Two small frames covering decades, sectors, languages, dupes, and
     missing-reason cases — everything compute_coverage_stats touches."""
-    cases = pd.DataFrame([
-        # 1960s, sector 6, no fulltext (pre-CELLAR-digitisation)
-        {"ecli": "ECLI:EU:C:1965:1",  "celex": "61965CJ0001", "sector": "6",
-         "date_publication": "1965-04-01"},
-        # 2000s, sector 6, with fulltext
-        {"ecli": "ECLI:EU:C:2005:10", "celex": "62005CJ0010", "sector": "6",
-         "date_publication": "2005-04-01"},
-        # 2020s, sector 6, with fulltext
-        {"ecli": "ECLI:EU:C:2022:50", "celex": "62022CJ0050", "sector": "6",
-         "date_publication": "2022-06-15"},
-        # 2020s, sector 8 (national case law), with fulltext
-        {"ecli": "ECLI:DE:BVerwG:2023:1", "celex": "82023DE0001", "sector": "8",
-         "date_publication": "2023-01-12"},
-        # 2020s, multi-sector cell
-        {"ecli": "ECLI:EU:C:2024:99", "celex": "62024CJ0099", "sector": "6;8",
-         "date_publication": "2024-02-22"},
-        # duplicate ECLI (same as 2022:50) — should bump dup_ecli_count
-        {"ecli": "ECLI:EU:C:2022:50", "celex": "62022CJ0050", "sector": "6",
-         "date_publication": "2022-06-15"},
-    ])
-    fulltexts = pd.DataFrame([
-        # The 1965 case has no fulltext — empty body and a missing reason.
-        {"ecli": "ECLI:EU:C:1965:1",  "celex": "61965CJ0001", "text": "",
-         "text_language": "", "missing_reasons": "FULLTEXT_UNAVAILABLE_UPSTREAM"},
-        {"ecli": "ECLI:EU:C:2005:10", "celex": "62005CJ0010", "text": "x" * 500,
-         "text_language": "FR", "missing_reasons": ""},
-        {"ecli": "ECLI:EU:C:2022:50", "celex": "62022CJ0050", "text": "y" * 5000,
-         "text_language": "EN", "missing_reasons": ""},
-        {"ecli": "ECLI:DE:BVerwG:2023:1", "celex": "82023DE0001", "text": "z" * 800,
-         "text_language": "DE", "missing_reasons": ""},
-        {"ecli": "ECLI:EU:C:2024:99", "celex": "62024CJ0099", "text": "q" * 1200,
-         "text_language": "FR", "missing_reasons": ""},
-    ])
+    cases = pd.DataFrame(
+        [
+            # 1960s, sector 6, no fulltext (pre-CELLAR-digitisation)
+            {
+                "ecli": "ECLI:EU:C:1965:1",
+                "celex": "61965CJ0001",
+                "sector": "6",
+                "date_publication": "1965-04-01",
+            },
+            # 2000s, sector 6, with fulltext
+            {
+                "ecli": "ECLI:EU:C:2005:10",
+                "celex": "62005CJ0010",
+                "sector": "6",
+                "date_publication": "2005-04-01",
+            },
+            # 2020s, sector 6, with fulltext
+            {
+                "ecli": "ECLI:EU:C:2022:50",
+                "celex": "62022CJ0050",
+                "sector": "6",
+                "date_publication": "2022-06-15",
+            },
+            # 2020s, sector 8 (national case law), with fulltext
+            {
+                "ecli": "ECLI:DE:BVerwG:2023:1",
+                "celex": "82023DE0001",
+                "sector": "8",
+                "date_publication": "2023-01-12",
+            },
+            # 2020s, multi-sector cell
+            {
+                "ecli": "ECLI:EU:C:2024:99",
+                "celex": "62024CJ0099",
+                "sector": "6;8",
+                "date_publication": "2024-02-22",
+            },
+            # duplicate ECLI (same as 2022:50) — should bump dup_ecli_count
+            {
+                "ecli": "ECLI:EU:C:2022:50",
+                "celex": "62022CJ0050",
+                "sector": "6",
+                "date_publication": "2022-06-15",
+            },
+        ]
+    )
+    fulltexts = pd.DataFrame(
+        [
+            # The 1965 case has no fulltext — empty body and a missing reason.
+            {
+                "ecli": "ECLI:EU:C:1965:1",
+                "celex": "61965CJ0001",
+                "text": "",
+                "text_language": "",
+                "missing_reasons": "FULLTEXT_UNAVAILABLE_UPSTREAM",
+            },
+            {
+                "ecli": "ECLI:EU:C:2005:10",
+                "celex": "62005CJ0010",
+                "text": "x" * 500,
+                "text_language": "FR",
+                "missing_reasons": "",
+            },
+            {
+                "ecli": "ECLI:EU:C:2022:50",
+                "celex": "62022CJ0050",
+                "text": "y" * 5000,
+                "text_language": "EN",
+                "missing_reasons": "",
+            },
+            {
+                "ecli": "ECLI:DE:BVerwG:2023:1",
+                "celex": "82023DE0001",
+                "text": "z" * 800,
+                "text_language": "DE",
+                "missing_reasons": "",
+            },
+            {
+                "ecli": "ECLI:EU:C:2024:99",
+                "celex": "62024CJ0099",
+                "text": "q" * 1200,
+                "text_language": "FR",
+                "missing_reasons": "",
+            },
+        ]
+    )
     return cases, fulltexts
 
 
@@ -473,54 +598,82 @@ def test_write_dataset_card_skips_coverage_section_without_stats(tmp_path):
 def _make_rich_coverage_fixture():
     """Bigger fixture exercising the new stat dimensions: subjects,
     procedures, countries, citation graph topology, and most-cited cases."""
-    cases = pd.DataFrame([
-        {
-            "ecli": "ECLI:EU:T:2003:199", "celex": "C001", "sector": "6",
-            "date_publication": "2003-04-01",
-            "subject_matter": "Trade marks;Intellectual, industrial and commercial property",
-            "type_procedure": "Action for annulment",
-            "origin_country": "Germany",
-            "work_cites_work": "C002;EXTERNAL_LAW_1",
-            "cited_by": "C002;C003;C004;C005;C006",
-        },
-        {
-            "ecli": "ECLI:EU:C:2014:317", "celex": "C002", "sector": "6",
-            "date_publication": "2014-05-13",
-            "subject_matter": "Approximation of laws;Right to be forgotten",
-            "type_procedure": "Reference for a preliminary ruling",
-            "origin_country": "Spain",
-            "work_cites_work": "C001",
-            "cited_by": "C003;C004",
-        },
-        {
-            "ecli": "ECLI:EU:C:2020:001", "celex": "C003", "sector": "6",
-            "date_publication": "2020-01-15",
-            "subject_matter": "Value added tax;Taxation",
-            "type_procedure": "Reference for a preliminary ruling",
-            "origin_country": "Germany",
-            "work_cites_work": "C001;C002",
-            "cited_by": "",
-        },
-        {
-            "ecli": "ECLI:DE:BVerwG:2023:1", "celex": "C004", "sector": "8",
-            "date_publication": "2023-06-10",
-            "subject_matter": "Competition;State aids",
-            "type_procedure": "Reference for a preliminary ruling",
-            "origin_country": "Germany",
-            "work_cites_work": "C001;EXTERNAL_TREATY_1",
-            "cited_by": "",
-        },
-    ])
-    fulltexts = pd.DataFrame([
-        {"ecli": "ECLI:EU:T:2003:199", "text": "x" * 1000, "text_language": "EN",
-         "missing_reasons": ""},
-        {"ecli": "ECLI:EU:C:2014:317", "text": "y" * 5000, "text_language": "EN",
-         "missing_reasons": ""},
-        {"ecli": "ECLI:EU:C:2020:001", "text": "z" * 800, "text_language": "DE",
-         "missing_reasons": ""},
-        {"ecli": "ECLI:DE:BVerwG:2023:1", "text": "q" * 600, "text_language": "DE",
-         "missing_reasons": ""},
-    ])
+    cases = pd.DataFrame(
+        [
+            {
+                "ecli": "ECLI:EU:T:2003:199",
+                "celex": "C001",
+                "sector": "6",
+                "date_publication": "2003-04-01",
+                "subject_matter": "Trade marks;Intellectual, industrial and commercial property",
+                "type_procedure": "Action for annulment",
+                "origin_country": "Germany",
+                "work_cites_work": "C002;EXTERNAL_LAW_1",
+                "cited_by": "C002;C003;C004;C005;C006",
+            },
+            {
+                "ecli": "ECLI:EU:C:2014:317",
+                "celex": "C002",
+                "sector": "6",
+                "date_publication": "2014-05-13",
+                "subject_matter": "Approximation of laws;Right to be forgotten",
+                "type_procedure": "Reference for a preliminary ruling",
+                "origin_country": "Spain",
+                "work_cites_work": "C001",
+                "cited_by": "C003;C004",
+            },
+            {
+                "ecli": "ECLI:EU:C:2020:001",
+                "celex": "C003",
+                "sector": "6",
+                "date_publication": "2020-01-15",
+                "subject_matter": "Value added tax;Taxation",
+                "type_procedure": "Reference for a preliminary ruling",
+                "origin_country": "Germany",
+                "work_cites_work": "C001;C002",
+                "cited_by": "",
+            },
+            {
+                "ecli": "ECLI:DE:BVerwG:2023:1",
+                "celex": "C004",
+                "sector": "8",
+                "date_publication": "2023-06-10",
+                "subject_matter": "Competition;State aids",
+                "type_procedure": "Reference for a preliminary ruling",
+                "origin_country": "Germany",
+                "work_cites_work": "C001;EXTERNAL_TREATY_1",
+                "cited_by": "",
+            },
+        ]
+    )
+    fulltexts = pd.DataFrame(
+        [
+            {
+                "ecli": "ECLI:EU:T:2003:199",
+                "text": "x" * 1000,
+                "text_language": "EN",
+                "missing_reasons": "",
+            },
+            {
+                "ecli": "ECLI:EU:C:2014:317",
+                "text": "y" * 5000,
+                "text_language": "EN",
+                "missing_reasons": "",
+            },
+            {
+                "ecli": "ECLI:EU:C:2020:001",
+                "text": "z" * 800,
+                "text_language": "DE",
+                "missing_reasons": "",
+            },
+            {
+                "ecli": "ECLI:DE:BVerwG:2023:1",
+                "text": "q" * 600,
+                "text_language": "DE",
+                "missing_reasons": "",
+            },
+        ]
+    )
     return cases, fulltexts
 
 
@@ -573,7 +726,7 @@ def test_compute_coverage_stats_top_cited_cases_ordered_by_in_degree():
     eclis = [t[0] for t in top]
     assert eclis[0] == "ECLI:EU:T:2003:199"  # 5 cites
     assert eclis[1] == "ECLI:EU:C:2014:317"  # 2 cites
-    assert len(top) == 2                     # zero-cite rows excluded
+    assert len(top) == 2  # zero-cite rows excluded
     # Each entry has (ecli, count, subject, year) and the year is parseable.
     assert top[0][1] == 5
     assert "2003" in top[0][3]
@@ -590,7 +743,8 @@ def test_write_dataset_card_emits_all_new_sections(tmp_path):
         out,
         cases_rows=len(cases),
         fulltexts_rows=len(fulltexts),
-        start_date="2003-01-01", end_date="2023-12-31",
+        start_date="2003-01-01",
+        end_date="2023-12-31",
         canonical_columns=["ecli", "celex", "sector"],
         discovered_columns=[],
         hf_dataset_repo="example/cjeu",
@@ -619,8 +773,8 @@ def test_write_dataset_card_emits_all_new_sections(tmp_path):
 
     # The recipes mention concrete query patterns
     assert "Reference for a preliminary ruling" in body  # recipe #2
-    assert "PageRank" in body                            # recipe #4
-    assert "fetch_text" in body                          # recipe #5
+    assert "PageRank" in body  # recipe #4
+    assert "fetch_text" in body  # recipe #5
 
     # Demographics tables include the actual atoms from the fixture
     assert "Trade marks" in body
@@ -649,9 +803,12 @@ def test_write_dataset_card_recipe_code_blocks_are_valid_python(tmp_path):
     out = tmp_path / "README.md"
     write_dataset_card(
         out,
-        cases_rows=len(cases), fulltexts_rows=len(fulltexts),
-        start_date="2003-01-01", end_date="2023-12-31",
-        canonical_columns=["ecli"], discovered_columns=[],
+        cases_rows=len(cases),
+        fulltexts_rows=len(fulltexts),
+        start_date="2003-01-01",
+        end_date="2023-12-31",
+        canonical_columns=["ecli"],
+        discovered_columns=[],
         hf_dataset_repo="example/cjeu",
         coverage_stats=stats,
     )
@@ -666,3 +823,133 @@ def test_write_dataset_card_recipe_code_blocks_are_valid_python(tmp_path):
             raise AssertionError(
                 f"code block #{i+1} doesn't parse: {e}\n--- block ---\n{block}"
             )
+
+
+def _fulltext(ecli, lang, text, source, celex="62016TJ0566"):
+    return {
+        "celex": celex,
+        "ecli": ecli,
+        "text_language": lang,
+        "text": text,
+        "text_source": source,
+    }
+
+
+def test_consolidate_fulltexts_prefers_cellar_row_over_earlier_window(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    ecli = "ECLI:EU:T:2018:278"
+    (win_dir / "2018-04.json").write_text(
+        json.dumps([_fulltext(ecli, "EN", "x" * 900, "INFOCURIA_BLOB_HTML")]),
+        encoding="utf-8",
+    )
+    (win_dir / "2018-05.json").write_text(
+        json.dumps([_fulltext(ecli, "EN", "y" * 1000, "CELLAR_ITEM")]),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+
+    assert result.row_count == 1
+    assert df.iloc[0]["text_source"] == "CELLAR_ITEM"
+    assert df.iloc[0]["__source_window"] == "2018-04;2018-05"
+
+
+def test_consolidate_fulltexts_labels_short_infocuria_rows_as_oj_notices(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    ecli = "ECLI:EU:T:2018:278"
+    (win_dir / "2018-05.json").write_text(
+        json.dumps(
+            [
+                _fulltext(ecli, "FR", "j" * 28_000, "CELLAR_ITEM"),
+                _fulltext(ecli, "ET", "n" * 1_300, "INFOCURIA_BLOB_HTML"),
+                _fulltext(ecli, "DE", "d" * 27_000, "INFOCURIA_BLOB_HTML"),
+                # A short order with no long body elsewhere stays untouched.
+                _fulltext("ECLI:EU:T:2018:1", "ET", "o" * 1_300, "INFOCURIA_BLOB_HTML"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    consolidate_fulltexts(win_dir, out)
+    sources = {
+        (row.ecli, row.text_language): row.text_source
+        for row in pd.read_parquet(out).itertuples()
+    }
+
+    assert sources[(ecli, "ET")] == "INFOCURIA_OJ_NOTICE"
+    assert sources[(ecli, "DE")] == "INFOCURIA_BLOB_HTML"
+    assert sources[(ecli, "FR")] == "CELLAR_ITEM"
+    assert sources[("ECLI:EU:T:2018:1", "ET")] == "INFOCURIA_BLOB_HTML"
+
+
+def test_consolidate_cases_blanks_ambiguous_infocuria_celex(tmp_path):
+    csv_dir = tmp_path / "cases"
+    header = ["celex", "ecli", "identity_source", "infocuria_celex"]
+    _write_window_csv(
+        csv_dir / "2007-04.csv", header,
+        [["62007CO0193", "ECLI:EU:C:2007:218", "infocuria", "62007CO0193"],
+         ["62013CO0072", "ECLI:EU:C:2014:10", "cellar", ""]],
+    )
+    _write_window_csv(
+        csv_dir / "2007-07.csv", header,
+        [["62007CO0193", "ECLI:EU:C:2007:465", "infocuria", "62007CO0193"],
+         ["62013CO0072", "ECLI:EU:C:2015:1", "infocuria", "62013CO0072"],
+         ["62011CO0444", "ECLI:EU:C:2013:656", "infocuria", "62011CO0444"]],
+    )
+
+    df = consolidate_cases(csv_dir, tmp_path / "cases.parquet")
+    celex = dict(zip(df["ecli"], df["celex"]))
+
+    assert pd.isna(celex["ECLI:EU:C:2007:218"])
+    assert pd.isna(celex["ECLI:EU:C:2007:465"])
+    assert pd.isna(celex["ECLI:EU:C:2015:1"])
+    assert celex["ECLI:EU:C:2014:10"] == "62013CO0072"
+    assert celex["ECLI:EU:C:2013:656"] == "62011CO0444"
+
+
+def test_consolidate_fulltexts_blanks_celex_for_listed_eclis(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    (win_dir / "2007-04.json").write_text(
+        json.dumps([_fulltext("ECLI:EU:C:2007:218", "FR", "ordonnance", "INFOCURIA_BLOB_HTML", celex="62007CO0193")]),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    consolidate_fulltexts(win_dir, out, blank_celex_eclis=frozenset({"ECLI:EU:C:2007:218"}))
+
+    assert pd.isna(pd.read_parquet(out).iloc[0]["celex"])
+
+
+def test_consolidate_fulltexts_drops_texts_attached_to_the_wrong_ecli(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    judgment = "JUDGMENT OF THE COURT 7 January 2004 " + "grounds " * 100
+    order = "ORDER OF THE PRESIDENT 21 June 2005 " + "removal " * 100
+    (win_dir / "2002-07.json").write_text(
+        json.dumps(
+            [
+                # The judgment's own ECLI holds it as CELLAR: it stays.
+                _fulltext("ECLI:EU:C:2004:6", "DE", judgment, "CELLAR_ITEM"),
+                # An order received the judgment's InfoCuria text: dropped.
+                _fulltext("ECLI:EU:C:2002:333", "DE", judgment, "INFOCURIA_BLOB_HTML"),
+                _fulltext("ECLI:EU:C:2002:333", "FR", "ordonnance " * 80, "INFOCURIA_BLOB_HTML"),
+                # Two orders share one InfoCuria body with no CELLAR owner: both dropped.
+                _fulltext("ECLI:EU:C:2004:843", "EL", order, "INFOCURIA_BLOB_HTML"),
+                _fulltext("ECLI:EU:C:2005:400", "EL", order, "INFOCURIA_BLOB_HTML"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    keys = {(row.ecli, row.text_language) for row in pd.read_parquet(out).itertuples()}
+
+    assert keys == {("ECLI:EU:C:2004:6", "DE"), ("ECLI:EU:C:2002:333", "FR")}
+    assert result.row_count == 2
