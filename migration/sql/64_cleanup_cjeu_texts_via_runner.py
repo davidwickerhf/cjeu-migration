@@ -27,6 +27,8 @@ Env:
   CLASSIFICATION_CSV  output of 63 (REPORT_TSV of a dry run)
   ARCHIVE_DIR         where step 1 writes its archive (required to write)
   DRY_RUN             default 1: print the plan, write nothing
+  LINK_ONLY           default 0: only step 7, for the CELEX changes recorded
+                      in ARCHIVE_DIR/case_celex_changes.jsonl.gz
   LABEL_DECISIONS     default 0: also label texts of the decision itself.
                       Unlabelled rows already count as the decision, and every
                       UPDATE recomputes the row's generated fulltext_tsv, so
@@ -92,7 +94,10 @@ def runner(sql, params=None, execute=False):
 
 
 def rows(sql, params=None):
-    return runner(sql, params)["rows"]
+    out = runner(sql, params)
+    if out.get("truncated"):
+        raise RuntimeError(f"runner truncated the result at {len(out['rows']):,} rows; page the query")
+    return out["rows"]
 
 
 def chunked(items, size=CHUNK):
@@ -299,7 +304,9 @@ def link_candidates(fixes):
     new_celex = [new for _, _, new in fixes]
     found = []
     for batch in chunked(new_celex, 500):
-        found += rows("""
+        last = 0
+        while True:
+            page = rows("""
             SELECT cc.id, c.id AS target
               FROM case_citation cc JOIN cases c ON c.celex_id = cc.target_celex_raw
              WHERE cc.target_case_id IS NULL AND cc.source_dataset = 'cellar_sparql'
@@ -309,12 +316,40 @@ def link_candidates(fixes):
                     WHERE twin.source_case_id = cc.source_case_id
                       AND twin.target_case_id = c.id
                       AND twin.relation_type = cc.relation_type
-                      AND twin.source_dataset = cc.source_dataset)""", [batch])
+                      AND twin.source_dataset = cc.source_dataset)
+               AND cc.id > %s
+             ORDER BY cc.id LIMIT 1000""", [batch, last])
+            found += page
+            if len(page) < 1000:
+                break
+            last = page[-1]["id"]
     return [(row["id"], row["target"]) for row in found]
+
+
+def link_citations(fixes, dry_run):
+    links = link_candidates(fixes)
+    print(f"  citations to link: {len(links):,}", flush=True)
+    if dry_run:
+        return
+    execute_chunks("link citations", """
+        UPDATE case_citation cc SET target_case_id = v.target
+          FROM unnest(%s::bigint[], %s::bigint[]) AS v(id, target)
+         WHERE cc.id = v.id AND cc.target_case_id IS NULL""", links, 2)
+
+
+def link_only(archive_dir, dry_run):
+    with gzip.open(archive_dir / "case_celex_changes.jsonl.gz", "rt", encoding="utf-8") as handle:
+        fixes = [(c["case_id"], c["old"], c["new"]) for c in map(json.loads, handle)]
+    print(f"linking citations for {len(fixes):,} recorded CELEX changes", flush=True)
+    link_citations(fixes, dry_run)
+    print("DRY RUN: nothing written" if dry_run else "done")
+    return 0
 
 
 def main() -> int:
     dry_run = os.environ.get("DRY_RUN", "1") != "0"
+    if os.environ.get("LINK_ONLY", "0") == "1":
+        return link_only(Path(os.environ["ARCHIVE_DIR"]), dry_run)
     with open(os.environ["CLASSIFICATION_CSV"], newline="", encoding="utf-8") as handle:
         classification = list(csv.DictReader(handle))
     print("reading production ...", flush=True)
@@ -376,12 +411,7 @@ def main() -> int:
         UPDATE cjeu_document d SET celex_id = v.new
           FROM unnest(%s::bigint[], %s::text[], %s::text[]) AS v(id, old, new)
          WHERE d.case_id = v.id AND d.celex_id = v.old""", plan["celex_fixes"], 3)
-    links = link_candidates(plan["celex_fixes"])
-    print(f"  citations to link: {len(links):,}", flush=True)
-    execute_chunks("link citations", """
-        UPDATE case_citation cc SET target_case_id = v.target
-          FROM unnest(%s::bigint[], %s::bigint[]) AS v(id, target)
-         WHERE cc.id = v.id AND cc.target_case_id IS NULL""", links, 2)
+    link_citations(plan["celex_fixes"], dry_run=False)
     print("done")
     return 0
 

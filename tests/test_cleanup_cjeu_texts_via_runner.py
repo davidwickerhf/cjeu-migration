@@ -73,3 +73,28 @@ def test_document_celex_keeps_derived_suffix_from_label():
     assert mod.document_celex(_entry(1, "summary", "label", "62019CO0791(01)",
                                      "62019CO0791(01)_RES Predmet ...")) == "62019CO0791(01)_RES"
     assert mod.document_celex(_entry(1, "judgment", "corpus", "62015CJ0005_SUM")) == "62015CJ0005"
+
+
+def test_link_candidates_pages_past_the_runner_row_limit(monkeypatch):
+    citations = [{"id": i, "target": 7} for i in range(1, 2501)]
+    calls = []
+
+    def fake_rows(sql, params):
+        _, last = params
+        calls.append(last)
+        return [c for c in citations if c["id"] > last][:1000]
+
+    monkeypatch.setattr(mod, "rows", fake_rows)
+    links = mod.link_candidates([(7, "62015CJ0005_SUM", "62015CJ0005")])
+    assert len(links) == 2500
+    assert calls == [0, 1000, 2000]
+
+
+def test_rows_refuses_a_truncated_result(monkeypatch):
+    monkeypatch.setattr(mod, "runner", lambda sql, params=None: {"rows": [{}] * 1000, "truncated": True})
+    try:
+        mod.rows("SELECT 1")
+    except RuntimeError as exc:
+        assert "truncated" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError")
