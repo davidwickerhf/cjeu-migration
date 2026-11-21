@@ -1,0 +1,414 @@
+# CJEU pipeline handoff
+
+State of the CJEU data-quality campaign as of 2026-09-16: what the pipeline
+is, what broke and why, what has been fixed, and exactly where work stopped.
+Written so someone (or a future session) can pick this up cold. Companion
+docs: [DB_ACCESS.md](DB_ACCESS.md) for the database transport,
+[postgres-schema/KNOWN_ISSUES.md](postgres-schema/KNOWN_ISSUES.md) for the
+issue ledger, [postgres-schema/DECISIONS.md](postgres-schema/DECISIONS.md)
+for schema decisions.
+
+## 2026-10-01 rebuild validation failed; targeted re-scrape running
+
+The 2026-09-22 rebuild (finished 2026-09-27 on Vast instance `52582623`)
+was never published. Validation on 2026-09-30 failed it:
+
+- **Kamil 603/604**: C-685/16 (`ECLI:EU:C:2018:743`) lost its English
+  judgment. cellar-extractor swallows CELLAR errors during the language merge
+  (`except Exception: pass`) and lru-caches the degraded result, so 290
+  ECLIs lost all CELLAR text (4,437 language versions) with no error logged.
+  InfoCuria failures are swallowed the same way.
+- **CELEX identity corruption** from extractor PR #15, which let InfoCuria's
+  procedure-level `celex` override CELLAR: 312 known ECLIs got a wrong CELEX,
+  35 were glued (`62013CC043962013CC0439(01)`), and 1,633 ECLIs shared a
+  CELEX. Texts are fetched by CELEX, so many got a sibling document's text.
+  This also explains most of the 589 ECLIs left without any text.
+- **Shared text bodies**: an identical body under two ECLIs. 3,352 in the
+  rebuild, and 774 already in the published 2026-09-16 build (orders that
+  received their sibling judgment's InfoCuria text).
+- 31k language slots hold the Official Journal notice of a judgment for
+  languages the judgment was never published in (EUR-Lex has only FR plus
+  the language of the case). These are now labelled `INFOCURIA_OJ_NOTICE`.
+
+Fixes:
+
+- cellar-extractor `e4e2ecb` (upstream PR #16): CELLAR identity wins
+  for every ECLI it knows. InfoCuria-only documents keep InfoCuria's CELEX
+  only when unambiguous, and their texts are fetched by InfoCuria document
+  id across all sub-procedures, never through CELLAR or EUR-Lex. Rows carry
+  `identity_source` and `infocuria_*` locator columns.
+  `ECLI:EU:T:2014:1` is now CELLAR's `62013TO0505(01)`.
+- cjeu-migration:
+  - a window guard re-fetches dropped CELLAR and InfoCuria texts, failing
+    the window if CELLAR has a document but its text never arrives;
+  - consolidation keeps the best source per (ECLI, language), labels OJ
+    notices, and blanks InfoCuria-only CELEXes shared across windows;
+  - `scripts/vastai/validate_rebuild.py` adds gates for CELEX uniqueness,
+    malformed CELEX, shared text bodies, and ECLIs or CELLAR texts lost
+    relative to the published build;
+  - `migration/sql/62_load_new_cjeu_cases_via_runner.py` loads cases that
+    production does not have yet (DRY_RUN by default).
+
+Box state (instance `52582623`):
+
+- `/workspace/cjeu-data`: the 303 affected monthly windows were reset to
+  `pending` and are being re-scraped by supervisor program
+  `cjeu_full_rebuild` (`SKIP_UPLOAD=1`), started 2026-10-01 00:52 UTC. The
+  runner re-consolidates all windows afterwards. The window list is in
+  `validation/rescrape_windows.json`.
+- `/workspace/cjeu-data-20260922-rollback`: the 2026-09-22 dataset,
+  manifest, validation outputs, and the pre-re-scrape copies of the 303
+  windows.
+- `/workspace/cjeu-data-pre-catalogue-20260916`: the published build
+  (HF `a20299f`), used as the validation baseline.
+
+After consolidation:
+
+1. Run `validate_rebuild.py` against the 2026-09-16 baseline.
+2. Run the Kamil verifier with `--live-cellar`.
+3. Re-run the CELLAR coverage audit for ECLIs without CELLAR text.
+4. Publish only if every gate in `publish_after_validation.py` passes.
+5. For production, take the before-snapshot, then run 62 (dry run, then
+   write), 60, the `is_stub` recompute, the after-snapshot, and the Kamil
+   check in production. Then disable and rotate the runner, which was found
+   enabled with writes on 2026-09-30.
+
+## 2026-09-22 catalogue reconciliation
+
+The September 16 rebuild fixed Kamil's 604 English judgment bodies and was
+published to Hugging Face at revision
+`a20299fed970e3372d6bf17cefe1b280ba006897`. A later production/corpus identity
+comparison exposed a separate source-catalogue defect: CELLAR SPARQL was the
+only source used to enumerate rows, even though current InfoCuria contains
+official procedural documents absent from that graph. Twelve production ECLIs
+were absent from the corpus; seven are current InfoCuria documents, two are
+stale aliases whose CELEX resolves to another ECLI, and the oldest tail is not
+present in InfoCuria's current catalogue.
+
+The complete fix is `cellar-extractor` PR #15, immutable revision
+`d6024cf6f2773a885906f71116b5431eadefd8dc`. It adds date-windowed InfoCuria
+catalogue enumeration, reconciles identity fields, requires exact CELEX
+document selection, and confines multilingual fanout to the chosen logical
+document. Package verification: 144 tests passed, 53 opt-in integration tests
+skipped. Live acceptance recovered `ECLI:EU:C:2013:656` as `62011CO0444` and
+returned the order body rather than the sibling judgment.
+
+Airflow PR #46 (`42-migrate-data-towards-psql`) pins that revision, rejects
+within-window ECLI/CELEX conflicts, and documents the mandatory
+`force_refresh: true` historical rerun. The Vast rebuild must start from a new
+workspace while preserving the September artifacts as a rollback copy. Keep
+`SKIP_UPLOAD=1` until the new catalogue identity gate, parquet integrity scan,
+and 604-case live verification all pass.
+
+The forced rebuild was launched at 2026-09-22 09:29 UTC on Vast instance
+`51127671`, using migration commit `057935e` and extractor commit `d6024cf`.
+The September workspace is preserved at
+`/workspace/cjeu-data-pre-catalogue-20260916` (45 GB); the active clean
+workspace is `/workspace/cjeu-data`. Supervisor program `cjeu_full_rebuild`
+is running with `SKIP_UPLOAD=1`, and `cjeu-health.cron` records health every
+30 minutes. Do not delete the rollback workspace until the new HF revision and
+production reconciliation have both passed acceptance.
+
+## TL;DR — where things stand right now
+
+The September 16 run completed all 873 windows, consolidated with bounded
+memory, passed the exact 604-case verifier, and published 46,637 unique ECLIs
+and 608,668 fulltexts to Hugging Face. Its production text sync did not reach a
+completion marker and must not be treated as final acceptance.
+
+The September 22 catalogue fix now requires another full, forced rebuild. Do
+not resume the old manifest: preserve the old workspace as rollback evidence
+and create a fresh `/workspace/cjeu-data`. The new run must remain
+validation-first (`SKIP_UPLOAD=1`). After all windows and streamed
+consolidation complete:
+
+1. Run parquet integrity and catalogue identity validation.
+2. Run the exact Kamil 604-case verifier with `--live-cellar`.
+3. Publish to Hugging Face only if all gates pass.
+4. Reconcile production metadata and texts from the new corpus, bracketed by
+   before/after snapshots; do not copy stale production aliases into HF.
+5. Verify the catalogue identities and Kamil cases in production, then disable
+   and rotate the SQL runner.
+
+## What this project is
+
+Three assets, kept in sync:
+
+| Asset | Where | Role |
+|---|---|---|
+| CJEU corpus | HF dataset `davidwickerhf/cjeu-opendata` (`cases.parquet`, `fulltexts.parquet`, `citations.parquet`) | source of truth for scraped data |
+| cellar-extractor | `maastrichtlawtech/cellar-extractor` (upstream), fork `davidwickerhf/…` | the scraping library (CELLAR SPARQL + InfoCuria) |
+| production DB | Postgres `cle_v2` schema, self-hosted on Coolify | serves the Case Law Explorer app/API |
+
+The corpus is authoritative: every fix lands there first, then syncs into
+the DB. The DB has been recovered from the corpus before (19,803 summaries
+after a botched sequence); never treat the DB as the only copy of
+anything.
+
+Production endpoints: `demo-api.caselawexplorer.tech`,
+`demo-app.caselawexplorer.tech`, sql-runner at
+`https://demo-psql.caselawexplorer.tech`. Postgres itself is only
+reachable inside the compose network (`db:5432`). Note that
+`app.`/`api.caselawexplorer.tech` (no `demo-`) are a separate legacy
+Vercel deployment; do not confuse them. Neon is fully deprecated.
+
+## The campaign: three external reports, five root causes
+
+Kamil Szostak (external user extracting CJEU judgments from our dataset)
+sent three successive data-quality reports over the summer. Each one
+exposed a real bug. Full ledger with verification details in
+KNOWN_ISSUES.md; the short version:
+
+**Report 1 (July).** A recent case with almost no language versions.
+Root causes found while digging: (#1) CELLAR curates `work_cites_work`
+citation edges weeks-to-months after publication, so recent judgments
+legitimately have no citation rows yet — mitigated with
+`59_supplement_cjeu_citations.py`, to be re-run monthly; (#2) the loader
+stored full-word language codes ("english") instead of ISO codes from
+`language_procedure` — fixed and normalized DB-wide; (#3, operational)
+fixes applied to the old Neon staging DB do not propagate to Coolify by
+themselves.
+
+**Report 2 (July 30).** Nine preliminary-ruling judgments missing their
+English text that EUR-Lex clearly has. Root cause (#4a): a CELEX can map
+to several CELLAR work records with different language coverage, and the
+extractor picked one arbitrarily (`order by asc(str(?doc)) limit 1`).
+Fixed upstream (extractor PR #10): `_fetch_sector8_items_for_celex` now
+unions manifestations across all works sharing a CELEX. The corpus-wide
+re-run surfaced (#4b): 3,642 cases whose first CELEX token is a suffixed
+variant (`_SUM`/`_INF`) got probed under the wrong identifier — fixed by
+normalizing the token (`_first_celex`). Campaign totals: +60,660 language
+rows in the corpus, +60,422 in the DB, cases with 20+ fulltext languages
+went 17,326 → 20,637. Issue #4 closed, all nine cases verified.
+
+**Report 3 (Sept 9, the one in flight).** Of ~9k preliminary-ruling
+judgments on the merits, 657 lack a usable English judgment; 604 of those
+have it on EUR-Lex, concentrated in 2012+ cases. Root cause (#5, verified
+on samples): InfoCuria's per-procedure lookup sometimes returned the
+WRONG document for a language slot — the Advocate General's opinion, a
+procedural order, a referred-questions notice, or a headnote summary —
+and the extractor stored it as the judgment (`INFOCURIA_BLOB_HTML`
+source). That wrong row then blocked CELLAR supplementation ("language
+already covered"), and a long wrong document (a 55k-char AG opinion)
+defeats the stub-length detector by design. This is not an ECHR/HUDOC
+issue and not limited to English: the Trojan control case had the Italian
+AG opinion sitting in its Italian judgment slot.
+
+Two findings that shaped the fix:
+
+- **AG opinions are already first-class corpus documents** under their
+  own ECLIs/CELEXes (11,270 of them). The bug is misfiling, not missing
+  scope — a misfiled opinion is a duplicate of a text we already store at
+  its proper home (verified byte-identical for C-307/10).
+- **CELLAR under the document's own CELEX is correct by construction** —
+  whatever the celex-keyed work carries IS that document. So the fix
+  replaces every InfoCuria row with the CELLAR manifestation when one
+  exists, with no length-ratio guard (the wrong text is often longer than
+  the right one).
+
+## The fix in flight: MODE=source_upgrade sweep
+
+`scripts/topup_multilang_fulltexts.py` is the one sweep tool, with three
+modes selected by the `MODE` env var:
+
+- `topup` — add missing language versions (`MIN_LANGS` gate)
+- `upgrade` — replace stub texts with longer CELLAR texts (min_ratio=2.0)
+- `source_upgrade` — replace ALL `INFOCURIA_BLOB_HTML` rows with CELLAR
+  texts under the document's own CELEX (min_ratio=0). This is the mode
+  the current campaign runs.
+
+Safety properties (these were deliberate, keep them):
+
+- **No data loss.** Replaced originals are archived to a "superseded"
+  sidecar parquet uploaded to `superseded/` in the dataset repo. After
+  the 9/11 box death (sidecar only uploaded at run end, so the completed
+  half's archive died with the box RAM), the script was patched to
+  re-upload the accumulated sidecar **with every checkpoint**. That patch
+  is currently uncommitted in the working tree. Independently, the HF
+  dataset repo is git: every checkpoint is a commit, so any historical
+  text is recoverable by revision.
+- **Idempotent / resumable.** Replaced rows carry `CELLAR_ITEM` as their
+  source in the uploaded parquet, so a relaunch's index pass
+  (`stream_infocuria_index`) simply does not flag them again. Relaunching
+  after a crash re-does nothing and costs only the index scan.
+- **Checkpointed.** `CHECKPOINT_EVERY=1000` uploads the full corpus
+  parquet every 1,000 processed cases. A dead box loses minutes.
+- CELLAR rows already in the corpus are passed through byte-identical
+  (verified in dry-run).
+
+Dry-run validation (7-case mini corpus): 22/23 InfoCuria rows replaced,
+all five known wrong-document English slots became judgments, 0 failures,
+idempotent on second pass. ~4.4s/case at 3 workers.
+
+**Run status:** launched 2026-09-11 08:05 UTC on a Vast box with
+WORKERS=6. Index pass flagged exactly 69,073 InfoCuria rows across 30,083
+cases. 15 checkpoints uploaded (08:27–11:22 UTC), i.e. ~15,000 cases
+done at ~1.3 cases/s average. Box then died (connection refused;
+Vast instance destroyed or outbid — third box lost this way). Remaining:
+~15,000 cases, roughly 3–3.5h on a similar machine.
+
+## Runbook: resuming the sweep on a new box
+
+What lived on the dead box (all reproducible): `launch_sweep.sh`,
+`chain_sync.sh`, `topup_multilang_fulltexts.py`,
+`60_sync_cjeu_texts_via_runner.py`, `61_snapshot_cjeu_text_stats.py`,
+`diff_snapshots.py`, `.runner_env` (runner URL + token), `.hf_token`, and
+a venv with pandas/pyarrow/huggingface_hub/requests plus
+`cellar-extractor` installed from the upstream `dev` branch.
+
+Setup on a fresh box:
+
+```bash
+apt-get update && apt-get install -y python3-venv git
+python3 -m venv /root/venv && . /root/venv/bin/activate
+pip install pandas pyarrow huggingface_hub requests xmltodict sparqlwrapper beautifulsoup4
+pip install "git+https://github.com/maastrichtlawtech/cellar-extractor@dev"
+mkdir -p /root/work
+```
+
+Copy up the scripts (from this repo: `scripts/topup_multilang_fulltexts.py`,
+`migration/sql/60…`, `migration/sql/61…`, `migration/verify/diff_snapshots.py`)
+and the secrets (HF write token; `SQL_RUNNER_URL` + `SQL_RUNNER_TOKEN`
+from `caselaw-coolify/.env.coolify` — never commit either). Launch:
+
+```bash
+cd /root && . venv/bin/activate && . .runner_env
+HF_TOKEN=$(cat .hf_token) MODE=source_upgrade WORKERS=6 CHECKPOINT_EVERY=1000 \
+TMPDIR=/root/work nohup python topup_multilang_fulltexts.py > sweep.log 2>&1 &
+```
+
+Then arm the chain (waits for "done. stats:" in sweep.log, then runs
+before-snapshot → 60 sync → after-snapshot → diff): `chain_sync.sh`
+pattern, writing status to `/root/chain_status.txt`. The chain can just
+as well run from the Mac afterwards — the sync only needs the runner URL,
+the token, and the HF parquet.
+
+Gotchas that have actually bitten:
+
+- **pkill self-match**: a remote `pkill -f topup_multilang` where the ssh
+  command text itself contains the plain script name kills your own
+  session. Use a bracketed pattern (`pkill -f 'topup[_]multilang'`) or
+  separate kill and relaunch into different ssh invocations.
+- **HTTP 400 from the runner is usually a Postgres statement timeout**
+  (`QueryCanceled`), not a transport problem. Shrink the chunk and
+  bisect; 60 already does this for the is_stub recompute (400-case
+  chunks, split on failure).
+- Runner limits that shape code: 30s statement timeout, 1,000-row result
+  cap (keyset-paginate), 10k-row UPDATE/DELETE cap (403), 1MB SQL text
+  but `params` exempt (60MB bodies fine), DROP/TRUNCATE blocked, one
+  transaction per request. Full table in DB_ACCESS.md.
+- Take the before-snapshot before the first write. Always. Skipping it
+  once cost 19,803 summaries.
+
+## After the sweep: DB sync and verification
+
+`migration/sql/60_sync_cjeu_texts_via_runner.py` diffs the corpus parquet
+against the DB through the runner and does two things:
+
+- **Inserts** missing (case_id, language, source) triples
+  (`INSERT … ON CONFLICT DO NOTHING`, ~250 rows / 6MB batches).
+- **Upgrades in place**: when the parquet row for a (case, language) pair
+  supersedes a stale DB row of a different CJEU source (the InfoCuria
+  wrong-documents), it UPDATEs that row rather than inserting a sibling —
+  keeping the row id and summary, and keeping the canonical view from
+  serving the stale text (the D12 source-preference order ranks INFOCURIA
+  above CELLAR_ITEM, so a stale InfoCuria row would otherwise win).
+  RECHTSPRAAK rows are never touched.
+
+Then it recomputes `is_stub` (fulltext shorter than 40% of the case's
+median CJEU-rendition length, median ≥ 10k chars, RECHTSPRAAK excluded)
+in chunked windowed UPDATEs. `RECOMPUTE_ONLY=1` skips the parquet phase.
+
+Bracket the sync with `61_snapshot_cjeu_text_stats.py` (before + after)
+and diff. The snapshot separates **control metrics that must not move**
+(total cases, CJEU cases, citation rows, RECHTSPRAAK text rows, HUDOC
+text rows) from expected movement (text rows by source, language-coverage
+histogram). If a control moves, stop and investigate before anything
+else.
+
+Verification targets for this campaign:
+
+- `migration/verify/kamil_2026-09_en_gaps.tsv` — the 604 reported cases
+  (case number, ECLI, CELEX). Every one should now have an English
+  fulltext row whose text looks like a judgment (starts with
+  JUDGMENT/Judgment, not "OPINION OF ADVOCATE GENERAL"). Check corpus and
+  DB. For final acceptance, run `verify_kamil_en_gaps.py` with
+  `--live-cellar --workers 2`: this refetches the English manifestation
+  under each base `CJ` CELEX and compares the complete whitespace-normalized
+  body by SHA-256. Required result: 604 structural passes, 604
+  `exact_match`, and 0 residuals. Do not run this live comparison alongside
+  the scrape because both jobs contend for the same CELLAR service.
+- Residual list: InfoCuria rows the sweep could not replace (CELLAR has
+  no manifestation in that language). These keep their InfoCuria text by
+  design. Count them, sample a few, and report — this is Kamil's "~33
+  genuinely unavailable" tail.
+
+## cellar-extractor repo state
+
+- Upstream PR #14 was merged and released as v2.0.3. The catalogue follow-up
+  is PR #15: <https://github.com/maastrichtlawtech/cellar-extractor/pull/15>.
+- The immutable fixed revision is
+  `d6024cf6f2773a885906f71116b5431eadefd8dc` on the fork. It includes the
+  manifestation fixes plus InfoCuria catalogue reconciliation and exact
+  logical-document selection.
+- `cjeu-migration` and the Airflow handoff pin this exact revision until
+  an upstream release containing PR #15 is available. Do not use PyPI
+  `2.0.3` or the old moving `dev` branch for a rerun.
+- Package verification: 144 tests passed, 53 opt-in integration tests
+  skipped.
+
+## 2026-09-15 correction: the first sweep was not sufficient
+
+The first acceptance check incorrectly treated any English `CELLAR_ITEM`
+row as success. The exact 604-case audit showed:
+
+- 294 base-CELEX English judgments fixed;
+- 310 English rows still backed by derived works: 282 `_SUM`, 27 `_RES`,
+  and 1 `_INF`;
+- every residual came from `__source_window=topup_v2_multilang`.
+
+Root cause: the earlier top-up populated the language slot from a derived
+work. Later top-ups skipped it because English appeared covered, and the
+first `source_upgrade` indexed only `INFOCURIA_BLOB_HTML` rows. The generic
+SQL sync also keyed equality on `(case, language, source)`, so it could not
+notice corrected content within an existing `CELLAR_ITEM` row.
+
+The replacement must therefore be corpus-wide, not a Kamil-only patch:
+
+1. Install the fixed extractor revision above on Vast.ai.
+2. Run `MODE=source_upgrade` without `TARGET_ECLIS_TSV` or
+   `TARGET_LANGUAGES`. The mode now indexes both InfoCuria rows and all
+   CELLAR rows whose CELEX ends in `_SUM`, `_RES`, or `_INF`, then refetches
+   the canonical base work for every affected language.
+3. Archive replaced rows and checkpoint to HF as usual.
+4. Verify the full corpus contains no derived-work fulltext rows, then run
+   the exact Kamil 604-case verifier with `--live-cellar`. Required result:
+   604 structural passes, 604 fresh full-body matches, and 0 residuals.
+5. Run a content-aware production sync so corrected same-source
+   `CELLAR_ITEM` bodies are updated, recompute all CJEU `is_stub` flags, and
+   bracket with control snapshots.
+
+The original DB sync was stopped after it had applied 37,404 source
+replacements and while it was recomputing `is_stub`. Production is an
+intermediate state until the corrected full rerun and final snapshot pass.
+
+Airflow has a separate implementation/deployment handoff at
+`case-law-explorer/docs/etl/CELLAR_JUDGMENT_FIX_HANDOFF.md`. Its historical
+rerun must use `force_refresh: true`; otherwise month-scoped artifacts from
+the old package are silently reused.
+
+## Standing/recurring work
+
+- **Monthly**: re-run `migration/sql/59_supplement_cjeu_citations.py`
+  against the Coolify DB. CELLAR curates citation edges with a lag;
+  recent judgments fill in over time. (KNOWN_ISSUES #1.)
+- **Corpus refresh**: the corpus covers decisions up to the 2026-05-28
+  extraction. Cases decided since need a scrape pass at some point.
+- **Runner hygiene**: `SQL_RUNNER_ENABLED=false` (and ideally rotate the
+  token) outside maintenance windows; writes additionally gated by
+  `SQL_RUNNER_ALLOW_WRITES`. Tokens live only in the Coolify env editor
+  and local `.env.coolify` copies.
+- **Kamil correspondence**: he has been told (Sept 11) that the rebuild
+  runs on a dedicated server for 12–15h and updates HF automatically.
+  Owe him a short confirmation once the sweep + sync are verified, with
+  the residual-tail explanation.

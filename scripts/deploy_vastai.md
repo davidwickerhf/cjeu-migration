@@ -97,13 +97,15 @@ The default pacing (`INFOCURIA_MIN_INTERVAL_SECONDS = 0.05` in `cellar_extractor
 1. The retry-with-backoff (`tenacity`) already retries with exponential delay — short bursts of 429s are handled automatically.
 2. For sustained 429s, edit `INFOCURIA_MIN_INTERVAL_SECONDS` to `0.1` (10 req/s) in the installed `cellar-extractor`; restart the run. Resumability ensures already-completed windows are skipped.
 
-## v2 extraction — what to change vs the v1 runbook
+## Current extraction revision
 
-When PR #6 in `cellar-extractor` has merged to `dev`, the existing `cjeu-migration` pin (`cellar-extractor@dev`) picks up the v2 code automatically. Until then, pin to the feature branch directly:
+Install the immutable dependency already recorded in `pyproject.toml`; do not
+substitute a moving branch or PyPI 2.0.3. The current revision contains the
+InfoCuria catalogue reconciliation required for a complete rebuild:
 
 ```bash
-pip install -e .   # NOTE: edit pyproject.toml first if pulling pre-merge code:
-#   cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@feat/multilang-and-sector6-cellar-fallback
+pip install -e .
+python -c "import importlib.metadata as m; print(m.version('cellar-extractor'))"
 ```
 
 Other v2-specific differences from v1:

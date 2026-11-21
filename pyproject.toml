@@ -14,9 +14,9 @@ authors = [
 ]
 
 dependencies = [
-    # Live wire to the upstream extractor's dev branch. Once a release tag
-    # lands on PyPI we'll pin to that instead.
-    "cellar-extractor @ git+https://github.com/maastrichtlawtech/cellar-extractor.git@dev",
+    # Immutable revision with canonical text selection plus date-windowed
+    # CELLAR/InfoCuria catalogue reconciliation.
+    "cellar-extractor @ git+https://github.com/davidwickerhf/cellar-extractor.git@e4e2ecb584bcfc424a75c8cd1c6a09686e68e2c7",
     "pandas>=2.0",
     "pyarrow>=14.0",                # parquet writer / reader
     "huggingface_hub>=0.24",
