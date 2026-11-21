@@ -31,9 +31,11 @@ PORT_LIDO="${PORT_LIDO:-false}"
 
 # parse legacy url ->  host/db/user/password psql vars
 eval "$(python3 - "$LEGACY_DB_URL" <<'PY'
-import sys, urllib.parse as u
+import shlex, sys, urllib.parse as u
 p = u.urlparse(sys.argv[1])
-print(f"LH={p.hostname}\nLD={p.path.lstrip('/')}\nLU={p.username}\nLP={p.password}")
+parts = {"LH": p.hostname, "LD": p.path.lstrip('/'), "LU": p.username, "LP": p.password}
+for name, value in parts.items():
+    print(f"{name}={shlex.quote(u.unquote(value or ''))}")
 PY
 )"
 

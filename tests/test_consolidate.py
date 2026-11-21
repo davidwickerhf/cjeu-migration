@@ -857,6 +857,32 @@ def test_consolidate_fulltexts_prefers_cellar_row_over_earlier_window(tmp_path):
     assert df.iloc[0]["__source_window"] == "2018-04;2018-05"
 
 
+def test_consolidate_fulltexts_prefers_cellar_row_within_one_window(tmp_path):
+    win_dir = tmp_path / "fulltexts"
+    win_dir.mkdir()
+    ecli = "ECLI:EU:T:2018:278"
+    (win_dir / "2018-05.json").write_text(
+        json.dumps(
+            [
+                _fulltext(ecli, "EN", "", "INFOCURIA_BLOB_HTML"),
+                _fulltext(ecli, "EN", "x" * 900, "INFOCURIA_BLOB_HTML"),
+                _fulltext(ecli, "EN", "y" * 1000, "CELLAR_ITEM"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    out = tmp_path / "fulltexts.parquet"
+
+    result = consolidate_fulltexts(win_dir, out)
+    df = pd.read_parquet(out)
+
+    assert result.row_count == 1
+    assert len(df) == 1
+    assert df.iloc[0]["text_source"] == "CELLAR_ITEM"
+    assert df.iloc[0]["text"] == "y" * 1000
+    assert df.iloc[0]["__source_window"] == "2018-05"
+
+
 def test_consolidate_fulltexts_labels_short_infocuria_rows_as_oj_notices(tmp_path):
     win_dir = tmp_path / "fulltexts"
     win_dir.mkdir()

@@ -256,11 +256,12 @@ def consolidate_fulltexts(
         return FulltextConsolidation(0, (), frozenset(), 0, {}, {})
 
     # Pass 1 discovers the union schema and, for every (ECLI, language) key,
-    # which window holds the best row. Files are parsed one at a time;
+    # which row (window and position) is the best. Files are parsed one at a time;
     # importantly, text bodies are never kept.
     columns: set[str] = set()
     valid_files: list[Path] = []
-    candidates: dict[tuple[str, str], list[tuple[str, str, int, Optional[bytes]]]] = {}
+    # (window, position in the window's file, text_source, body length, digest)
+    candidates: dict[tuple[str, str], list[tuple[str, int, str, int, Optional[bytes]]]] = {}
     longest_body: Counter[str] = Counter()
     keyless_rows = 0
     for path in json_files:
@@ -278,7 +279,7 @@ def consolidate_fulltexts(
             )
             continue
         valid_files.append(path)
-        for entry in entries:
+        for position, entry in enumerate(entries):
             if not isinstance(entry, dict):
                 continue
             columns.update(str(key) for key in entry)
@@ -290,33 +291,35 @@ def consolidate_fulltexts(
             text = entry.get("text")
             length = len(text.strip()) if isinstance(text, str) else 0
             longest_body[ecli_key] = max(longest_body[ecli_key], length)
-            windows = candidates.setdefault((ecli_key, language_key), [])
-            if all(window != path.stem for window, *_ in windows):
-                windows.append(
-                    (
-                        path.stem,
-                        str(entry.get("text_source") or ""),
-                        length,
-                        _body_digest(text),
-                    )
+            # Every row is a candidate, including repeats inside one window, so
+            # the ranking below also decides between rows of the same file.
+            candidates.setdefault((ecli_key, language_key), []).append(
+                (
+                    path.stem,
+                    position,
+                    str(entry.get("text_source") or ""),
+                    length,
+                    _body_digest(text),
                 )
+            )
 
-    chosen_window: dict[tuple[str, str], str] = {}
+    chosen_row: dict[tuple[str, str], tuple[str, int]] = {}
     duplicate_windows: dict[tuple[str, str], set[str]] = {}
     bodies: dict[tuple[str, bytes], list[tuple[str, str]]] = {}
     for key, windows in candidates.items():
         chosen = min(
             windows,
             key=lambda item: _source_rank(
-                effective_text_source(item[1], item[2], longest_body[key[0]]),
-                item[2],
+                effective_text_source(item[2], item[3], longest_body[key[0]]),
+                item[3],
             ),
         )
-        chosen_window[key] = chosen[0]
-        if chosen[3] is not None:
-            bodies.setdefault((key[1], chosen[3]), []).append((key[0], chosen[1]))
-        if len(windows) > 1:
-            duplicate_windows[key] = {window for window, *_ in windows}
+        chosen_row[key] = (chosen[0], chosen[1])
+        if chosen[4] is not None:
+            bodies.setdefault((key[1], chosen[4]), []).append((key[0], chosen[2]))
+        distinct_windows = {window for window, *_ in windows}
+        if len(distinct_windows) > 1:
+            duplicate_windows[key] = distinct_windows
     misattached = misattached_text_keys(bodies)
     if misattached:
         log.warning(
@@ -360,7 +363,7 @@ def consolidate_fulltexts(
             with path.open("r", encoding="utf-8") as f:
                 entries = json.load(f)
             rows: list[dict[str, Optional[str]]] = []
-            for entry in entries:
+            for position, entry in enumerate(entries):
                 if not isinstance(entry, dict):
                     continue
                 ecli_key = str(entry.get("ecli") or "").strip().upper()
@@ -368,7 +371,7 @@ def consolidate_fulltexts(
                 dedup_key = (ecli_key, language_key) if ecli_key else None
                 if dedup_key is not None and (
                     dedup_key in emitted_keys
-                    or chosen_window[dedup_key] != path.stem
+                    or chosen_row[dedup_key] != (path.stem, position)
                     or dedup_key in misattached
                 ):
                     continue
