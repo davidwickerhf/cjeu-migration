@@ -1,6 +1,14 @@
 # Cross-dataset linking roadmap
 
-Last updated 2026-11-24 (after independent review).
+Last updated 2026-11-24 (after independent review; status below).
+
+## Status (2026-11-24, evening)
+
+- Phase 1 design: [LINKING_DESIGN.md](LINKING_DESIGN.md) v2, after a second independent review. Migrations are `0009`/`0010` (two `0008` files already exist), on caselaw-coolify `feature/cross-dataset-link-schema`, tested on a fresh build; not deployed.
+- Shared linking code (identifiers, JSONL link artifact, insert-only link loader, resolver): case-law-explorer `feature/cross-dataset-linking`.
+- In progress on branches stacked on it: R1.2a (`case_identifier`), R2.1, R2.2 + R2.6, R2.3–R2.5.
+- Phase 2 data stays in db-dev until a count/API guard and R7.1 are deployed with the owner's go-ahead (design, "Order of work").
+- No new pull requests while the open-PR cap is reached.
 
 The Rechtspraak (RS), CJEU and ECtHR collections are each well linked
 internally, but the links between them, the links to legislation outside
@@ -131,10 +139,10 @@ ECtHR pages never show them. The RS endpoint omits `rs_lido_sqlite`
 |---|---|---|---|
 | R0.1 | Keep Rechtspraak requests under 10/s (limiter, sequential metadata, no fake headers, circuit breaker after 25 consecutive failures, no repeated live calls for rows already fetched from the API) | case-law-explorer [#86](https://github.com/maastrichtlawtech/case-law-explorer/pull/86) | PR open |
 | R0.2 | Get the Airflow IP unblocked at data.rechtspraak.nl, then re-run the 2, 9 and 16 Nov weeks one at a time | ops | Email sent to kennissystemen@rechtspraak.nl on 2026-11-24 |
-| R0.3 | Evaluation set as a regression fixture, scored after every extractor change: the 17 citation links of the E-01 gold set, plus about 50 adversarial and negative pairs (court typos such as C-178/98 for C-178/94, non-CJEU "C-"/"T-" codes, application numbers shared by several ECtHR documents, art. 81 RO rulings that cite only in their summary, citations inside quoted domestic judgments, joined-case members) | case-law-explorer tests + cjeu-migration `migration/verify/` | To do |
-| R0.4 | Find out why lido.db answers 0 of ~840 ECLIs a day in the weekly RS run (every metadata row falls back to the live API). Do this before the catch-up of the three blocked weeks: fixing it could cut the live requests for that run by more than half | case-law-explorer, rechtspraak-lido-sqlite [#1](https://github.com/maastrichtlawtech/rechtspraak-lido-sqlite/pull/1) | To investigate |
+| R0.3 | Evaluation set as a regression fixture: the 17 gold citation links, the 3 non-citations and 63 adversarial/negative entries grounded in the research files (83 entries, 54 with exact text excerpts), plus a scorer reporting TP/FP/FN per category. Categories the research files could not ground (court typos without a named source, non-CJEU "C-" codes, shared application numbers, Caribbean court) are listed in its README | case-law-explorer `feature/linking-evaluation-set` (05fcbca) | Built; no PR yet (PR cap) |
+| R0.4 | Why lido.db answered 0 of ~840 ECLIs a day: not a lookup bug. Until case-law-explorer 578684b (2 Nov) the build downloaded rls 0.2.0's old export address, which returned an HTML error page that parsed into an empty `metadata` table; the extractor then falls back silently. rls #1 (CELEX-first identifiers) is unrelated. Correction: a working lido.db saves about a third of live requests on main, and less with #86, because judgment text is still fetched live; real savings need deferred or bulk text fetching. Before the catch-up: confirm a `lido_sqlite_build` run has finished since 2 Nov (`COUNT(*)`, `MAX(date_decision)` on the server's lido.db) | case-law-explorer `fix/lido-sqlite-lookup` (3cd2e87, logs lido.db status on every run) | Diagnosed; needs an ops check of the server's lido.db |
 | R0.5 | Merge #80, #81, #82 (LiDO download restart, base-file fix, promotion unblock) | case-law-explorer | Waiting for review |
-| R0.6 | `update_citation_details` (paused) calls `get_rechtspraak(eclis=...)`, which rechtspraak_extractor 1.6.0 doesn't accept, so it fails before reaching the API; fix or retire the DAG, and give API-calling tasks a shared Airflow pool before any of them run alongside `rechtspraak_etl` | case-law-explorer | To do |
+| R0.6 | `get_rechtspraak(eclis=...)` is unsupported in 1.6.0, but the DAG never reaches it (dead `process_failed_eclis` branch); the live task uses the LiDO links service, not data.rechtspraak.nl. Now fails fast before any request; opt-in shared pool `rechtspraak_api` (size 1) for API-calling tasks, enabled by creating the pool and setting `RECHTSPRAAK_API_POOL` | case-law-explorer `fix/update-citation-details-call` (38f1ee0) | Built; no PR yet (PR cap); pool needs an ops action |
 
 ## Phase 1: foundations (schema, identity, provenance)
 
