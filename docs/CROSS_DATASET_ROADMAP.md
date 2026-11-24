@@ -7,7 +7,9 @@ Last updated 2026-11-24 (after independent review; status below).
 - Phase 1 design: [LINKING_DESIGN.md](LINKING_DESIGN.md) v2, after two independent reviews (design, then the SQL). Migrations are `0009`/`0010` (two `0008` files already exist), on caselaw-coolify `feature/cross-dataset-link-schema`, tested on a fresh build; not deployed.
 - Shared linking code (identifiers, JSONL link artifact, insert-only link loader, resolver): case-law-explorer `feature/cross-dataset-linking`.
 - R1.2a built: case-law-explorer `feature/case-identifier-population` (identifier loader, weekly loaders maintain `case_identifier` behind `CASE_IDENTIFIER_ENABLED`, default off) and cjeu-migration `feature/case-identifier-backfill` (`migration/sql/65_backfill_case_identifier.py`, dry run by default, db-dev first). Found: no weekly code writes `echr_document_appno` or `rs_document.replaces_identifier`, so new cases lacked those identifiers.
-- In progress on branches stacked on the shared code: R2.1, R2.2 + R2.6, R2.3–R2.5.
+- R2.1 built: `feature/rs-text-links` (ECLIs, CJEU case numbers, ECtHR application numbers, fulltext and summary; R2.8 fix keeps formal-relation labels out of `rs_lido_sqlite` citations). Gold set: all 8 RS→CJEU citations found from the recorded reference forms; evaluation excerpts in scope 20 TP / 0 FP / 0 FN; precision 30/30 on ECtHR passages, because the research files hold no Rechtspraak text. A db-dev sample on real RS text is still required.
+- R2.2 + R2.6 built: `feature/echr-cjeu-text-links`. Evaluation (ECtHR text) 20 TP / 0 FP / 0 FN / 16 TN; precision ECtHR→CJEU 22/22, CJEU→ECtHR 22/22 (20 of them parse-and-exists checks only), ECtHR→RS and name+date 0 checked so far. D4 implemented as recommended behind `ECHR_DOMESTIC_LAW_RELATION` (on).
+- In progress: R2.3–R2.5.
 - Phase 2 data stays in db-dev until a count/API guard and R7.1 are deployed with the owner's go-ahead (design, "Order of work").
 - No new pull requests while the open-PR cap is reached.
 
