@@ -246,8 +246,13 @@ CREATE TABLE citation_source_dataset (
 procedural types, none of which count as citations). `citation_source_dataset`
 starts empty. The count and API guard (step 3) registers every dataset and
 relation type present in production, read from production when it ships, with
-today's datasets `counted` and `active_in_api`, so it changes no number; new
-datasets start as neither. Seeding from `case_citation` inside `0010` was
+today's datasets `counted`, so it changes no number; new datasets start
+uncounted. `active_in_api` is set only for datasets a collection endpoint shows
+today (`rs_body_cite`, `rs_legacy_ddb`, `rs_formal_relation`, `echr_edge`,
+`cellar_sparql`), never for `rs_lido_sqlite`: in citations-api (R7.1, branch
+`feature/active-dataset-config`) a row marked active joins its collection's
+endpoint, and `rs_lido_sqlite` is shown only by `/api/combined/expand` today,
+which keeps it by default. New datasets start inactive. Seeding from `case_citation` inside `0010` was
 dropped: two more full scans under its lock, and an empty db-dev would get
 different rows than production. Nothing reads either table until step 3.
 
