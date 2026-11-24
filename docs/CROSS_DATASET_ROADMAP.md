@@ -2,18 +2,20 @@
 
 Last updated 2026-11-24 (after independent review; status below).
 
-## Status (2026-11-24, evening)
+## Status (2026-11-24, night)
 
-- Phase 1 design: [LINKING_DESIGN.md](LINKING_DESIGN.md) v2, after two independent reviews (design, then the SQL). Migrations are `0009`/`0010` (two `0008` files already exist), on caselaw-coolify `feature/cross-dataset-link-schema`, tested on a fresh build; not deployed.
-- Shared linking code (identifiers, JSONL link artifact, insert-only link loader, resolver): case-law-explorer `feature/cross-dataset-linking`.
-- R1.2a built: case-law-explorer `feature/case-identifier-population` (identifier loader, weekly loaders maintain `case_identifier` behind `CASE_IDENTIFIER_ENABLED`, default off) and cjeu-migration `feature/case-identifier-backfill` (`migration/sql/65_backfill_case_identifier.py`, dry run by default, db-dev first). Found: no weekly code writes `echr_document_appno` or `rs_document.replaces_identifier`, so new cases lacked those identifiers.
-- R2.1 built: `feature/rs-text-links` (ECLIs, CJEU case numbers, ECtHR application numbers, fulltext and summary; R2.8 fix keeps formal-relation labels out of `rs_lido_sqlite` citations). Gold set: all 8 RS→CJEU citations found from the recorded reference forms; evaluation excerpts in scope 20 TP / 0 FP / 0 FN; precision 30/30 on ECtHR passages, because the research files hold no Rechtspraak text. A db-dev sample on real RS text is still required.
-- R2.2 + R2.6 built: `feature/echr-cjeu-text-links`. Evaluation (ECtHR text) 20 TP / 0 FP / 0 FN / 16 TN; precision ECtHR→CJEU 22/22, CJEU→ECtHR 22/22 (20 of them parse-and-exists checks only), ECtHR→RS and name+date 0 checked so far. D4 implemented as recommended behind `ECHR_DOMESTIC_LAW_RELATION` (on).
-- R2.3–R2.5 built: `feature/cellar-metadata-links` (Cellar referral data, AG opinion → judgment, Cellar URI/dossier relations as new rows). Evaluation in scope 8 TP / 0 FP / 0 FN / 10 TN (all Belgian notices rejected); precision (metadata checks) 25/25, 22/22, 22/22; reproduces 624 of the research's 634 referral pairs (the 10 others are interim lines, skipped). Decided rules recorded in the branch (D2 canonical duplicate, HR vs PHR, relation directions); `referred_for_preliminary_ruling` rows are split by date into `preliminary_reference` / `national_follow_up`.
-- R7.1 built: citations-api `feature/active-dataset-config`. Every `case_citation` query reads one shared allowlist; defaults reproduce today's responses exactly (expand keeps `rs_lido_sqlite`; legacy datasets stay requestable via `edgeSources`); datasets added later stay hidden until switched on by env or `active_in_api`. Also fixes `detect_dataset` (foreign ECLIs labelled `OTHER`, not `RS`).
-- All Phase 2 branches merged into `feature/cross-dataset-linking` (e7fc70d): 342 targeted tests pass. Next: one `match_method` convention, helper consolidation, R2.9 late binding (`feature/linking-late-binding`); weekly DAG wiring behind `LINK_EXTRACTION_ENABLED` (`feature/linking-dag-wiring`); then the promoter change in caselaw-coolify.
-- Phase 2 data stays in db-dev until a count/API guard and R7.1 are deployed with the owner's go-ahead (design, "Order of work").
-- No new pull requests while the open-PR cap is reached.
+Ready for pull requests (four independent review rounds; no blocking findings left), waiting for the open-PR cap and the owner's go-ahead. Nothing is deployed and nothing has run against db-dev or production.
+
+| Branch | Contents | Tests (targeted) |
+|---|---|---|
+| caselaw-coolify `feature/cross-dataset-link-schema` | migrations `0009` (provenance columns, `case_citation_mention`, `case_identifier`, lookups, Phase 4/5 tables, R6.1 archive/staging, uncalled `refresh_case_citation_counts`) and `0010` (indexes); promoter grants | fresh build + rerun on PostgreSQL 18 |
+| caselaw-coolify `feature/promoter-link-artifacts` | promoter verifies and replays link artifacts; per-dataset, twin-aware metrics; flags in compose; deploy order in docs | 41 passed (with DB) |
+| case-law-explorer `feature/cross-dataset-linking` | R0.3 evaluation set, R1.2a identifiers, R2.1–R2.9 extractors, link loader, late binding, weekly wiring behind `LINK_EXTRACTION_ENABLED` / `CASE_IDENTIFIER_ENABLED` (default off), R2.8 label fix | 453 passed (with DB) |
+| citations-api `feature/active-dataset-config` | R7.1 shared dataset allowlist on every endpoint; defaults reproduce today's responses | 45 passed |
+| case-law-explorer `fix/lido-sqlite-lookup`, `fix/update-citation-details-call` | R0.4 diagnostic, R0.6 fail-fast + optional pool | 10 / 28 passed |
+| cjeu-migration `feature/case-identifier-backfill` | `migration/sql/65_backfill_case_identifier.py` (dry run by default) | local only |
+
+Evaluation set (excerpts): ECtHR text 20 TP / 0 FP / 0 FN / 16 TN; Cellar referrals 8 / 0 / 0 / 10. No real Rechtspraak text was available: every RS precision figure needs a db-dev sample before any data reaches production. Deploy order: [LINKING_DESIGN.md](LINKING_DESIGN.md), "Deploy order".
 
 The Rechtspraak (RS), CJEU and ECtHR collections are each well linked
 internally, but the links between them, the links to legislation outside
