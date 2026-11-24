@@ -4,7 +4,7 @@ Last updated 2026-11-24 (after independent review; status below).
 
 ## Status (2026-11-24, night)
 
-Ready for pull requests (four independent review rounds; no blocking findings left), waiting for the open-PR cap and the owner's go-ahead. Nothing is deployed and nothing has run against db-dev or production.
+Ready for pull requests (seven independent review rounds, the last a verification pass over every branch on 2026-11-24 night: no blocking findings left), waiting for the open-PR cap and the owner's go-ahead. Nothing is deployed and nothing has run against db-dev or production.
 
 | Branch | Contents | Tests (targeted) |
 |---|---|---|
