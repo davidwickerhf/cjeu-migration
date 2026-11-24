@@ -6,7 +6,8 @@ Last updated 2026-11-24 (after independent review; status below).
 
 - Phase 1 design: [LINKING_DESIGN.md](LINKING_DESIGN.md) v2, after two independent reviews (design, then the SQL). Migrations are `0009`/`0010` (two `0008` files already exist), on caselaw-coolify `feature/cross-dataset-link-schema`, tested on a fresh build; not deployed.
 - Shared linking code (identifiers, JSONL link artifact, insert-only link loader, resolver): case-law-explorer `feature/cross-dataset-linking`.
-- In progress on branches stacked on it: R1.2a (`case_identifier`), R2.1, R2.2 + R2.6, R2.3–R2.5.
+- R1.2a built: case-law-explorer `feature/case-identifier-population` (identifier loader, weekly loaders maintain `case_identifier` behind `CASE_IDENTIFIER_ENABLED`, default off) and cjeu-migration `feature/case-identifier-backfill` (`migration/sql/65_backfill_case_identifier.py`, dry run by default, db-dev first). Found: no weekly code writes `echr_document_appno` or `rs_document.replaces_identifier`, so new cases lacked those identifiers.
+- In progress on branches stacked on the shared code: R2.1, R2.2 + R2.6, R2.3–R2.5.
 - Phase 2 data stays in db-dev until a count/API guard and R7.1 are deployed with the owner's go-ahead (design, "Order of work").
 - No new pull requests while the open-PR cap is reached.
 
