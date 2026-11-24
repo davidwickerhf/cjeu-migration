@@ -443,3 +443,14 @@ the resolved rows that have an unresolved twin first. Not changed in `0009`.
   the lookups and the archive (`configure-promoter-role.sh`). To do before
   deploying: check in production that none of the new table names exist, and
   measure `0010` on db-dev.
+
+## Deploy order (from the implementation, 2026-11-24)
+
+Each step needs the owner's go-ahead; none is done.
+
+1. caselaw-coolify `0009`/`0010` (`feature/cross-dataset-link-schema`), applied to db-dev and production outside ETL windows, after checking the new table names don't exist and timing `0010` on db-dev.
+2. case-law-explorer `feature/cross-dataset-linking` (extractors, link loader, identifier loader, DAG wiring), with every flag off: `CASE_IDENTIFIER_ENABLED`, `LINK_EXTRACTION_ENABLED`.
+3. caselaw-coolify promoter (`feature/promoter-link-artifacts`). It must be deployed before `LINK_EXTRACTION_ENABLED` is turned on, or the old promoter's citation check fails on batches whose db-dev counts include link rows. Batches without link files are handled exactly as before.
+4. R1.2a backfill on db-dev (dry run, then write), verify, then `CASE_IDENTIFIER_ENABLED=true`.
+5. Count/API guard and R7.1 (gated, with the before/after report).
+6. `LINK_EXTRACTION_ENABLED=true` on db-dev; historical link backfill on db-dev; precision samples and evaluation on real data; then promotion/replay to production with expected counts shown first.
