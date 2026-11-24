@@ -4,7 +4,7 @@ Last updated 2026-11-24 (after independent review; status below).
 
 ## Status (2026-11-24, evening)
 
-- Phase 1 design: [LINKING_DESIGN.md](LINKING_DESIGN.md) v2, after independent review (a second round on the SQL is in progress). Migrations are `0009`/`0010` (two `0008` files already exist), on caselaw-coolify `feature/cross-dataset-link-schema`, tested on a fresh build; not deployed.
+- Phase 1 design: [LINKING_DESIGN.md](LINKING_DESIGN.md) v2, after two independent reviews (design, then the SQL). Migrations are `0009`/`0010` (two `0008` files already exist), on caselaw-coolify `feature/cross-dataset-link-schema`, tested on a fresh build; not deployed.
 - Shared linking code (identifiers, JSONL link artifact, insert-only link loader, resolver): case-law-explorer `feature/cross-dataset-linking`.
 - In progress on branches stacked on it: R1.2a (`case_identifier`), R2.1, R2.2 + R2.6, R2.3–R2.5.
 - Phase 2 data stays in db-dev until a count/API guard and R7.1 are deployed with the owner's go-ahead (design, "Order of work").
