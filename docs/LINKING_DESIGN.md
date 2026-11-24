@@ -241,17 +241,15 @@ CREATE TABLE citation_source_dataset (
 );
 ```
 
-`citation_relation_type` is seeded with the existing types (`cites`, `cited_by`,
-`joins`, `subject_to_appeal`, `reexamined_by`, `is_about_concept`,
-`referred_for_preliminary_ruling`, `interprets_judgement`,
-`logical_successor_of`, the RS formal-relation values read from production
-before the file is written, never guessed) and the new ones
-(`preliminary_reference`, `national_follow_up`, `opinion_of`, `appeal_of`,
-`earlier_instance`, and `cites_in_domestic_law` for D4 if the owner picks that
-option). `citation_source_dataset` is seeded with every dataset present in
-production (`SELECT DISTINCT source_dataset`), all `counted = true` and
-`active_in_api = true`, so that step 3 of "Order of work" changes no number;
-new datasets start `false`. Nothing reads either table until step 3.
+`citation_relation_type` is seeded only with types whose meaning is known
+(Cellar types, `cites`, `replaced_by` as an identity relation, and the new
+procedural types, none of which count as citations). `citation_source_dataset`
+starts empty. The count and API guard (step 3) registers every dataset and
+relation type present in production, read from production when it ships, with
+today's datasets `counted` and `active_in_api`, so it changes no number; new
+datasets start as neither. Seeding from `case_citation` inside `0010` was
+dropped: two more full scans under its lock, and an empty db-dev would get
+different rows than production. Nothing reads either table until step 3.
 
 ### Phase 4 and 5 tables (created now, filled later)
 
@@ -355,8 +353,8 @@ REVOKE ALL ON FUNCTION refresh_case_citation_counts(bigint[]) FROM PUBLIC;
 Recomputes `cites_count` (distinct targets) and `cited_by_count` (distinct citing
 cases) for the given cases (driven from `unnest(p_case_ids)`, or all `cases` when
 NULL, so cases left with no counted edge are set to 0), from resolved rows only,
-excluding self-loops, relation types with `counted = false` and datasets with
-`counted = false`; upserts `case_citation_counts`; returns rows changed. Granted
+excluding self-loops, relation types with `counted = false` and datasets not
+registered as counted (fail closed); upserts `case_citation_counts`; returns rows changed. Granted
 to the promoter in `configure-promoter-role.sh` when it is switched on (step 5).
 
 ## `0010_case_citation_link_indexes.sql` (caselaw-coolify)
@@ -427,3 +425,21 @@ the resolved rows that have an unresolved twin first. Not changed in `0009`.
   proper stays a separate gated change. Not adopted: making
   `trg_cases_preserve_citation_raw` delete duplicates (a change to existing
   behaviour for a rare manual operation; documented instead).
+
+- **v2 → SQL, 2026-11-24, second independent review (Gemini 4 Neon)** of the
+  written `0009`/`0010`. 3 blocking, 6 should-fix, 3 suggestions; all re-checked
+  on PostgreSQL 18. Adopted: `refresh_case_citation_counts` qualified every
+  table and put `pg_temp` last (a caller with EXECUTE could otherwise shadow
+  tables with temporary ones and zero the counts; reproduced, then confirmed
+  fixed); separate full and targeted paths without full scans of
+  `case_citation_counts`, writing only changed rows, `work_mem` 64MB; datasets
+  fail closed; no seeding from `case_citation` in `0010` (wrongly classified
+  `replaced_by` as a counted citation, two extra scans, db-dev/production
+  divergence); `replaced_by` seeded as identity; `interprets_judgement` and
+  `national_follow_up` not counted; `0009` takes the `case_citation` lock last;
+  offset checks, `md5` key for long references, `language` in the authority key,
+  dataset/filter indexes on outcome and status, `active_in_api` on relation
+  types, `maintenance_work_mem` for `0010`; the promoter loses INSERT/UPDATE on
+  the lookups and the archive (`configure-promoter-role.sh`). To do before
+  deploying: check in production that none of the new table names exist, and
+  measure `0010` on db-dev.
