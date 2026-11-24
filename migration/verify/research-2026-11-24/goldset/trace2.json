@@ -1,0 +1,314 @@
+[
+ {
+  "group": "Referred by",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:NL:RVS:2017:1098",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Decided after the ruling",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:NL:RVS:2020:423",
+  "edges": [
+   "<- cites/rs_body_cite"
+  ],
+  "other_mentions_cjeu": {
+   "ecli": [
+    "EU:C:2019:189"
+   ],
+   "name": [
+    "Tjebbes"
+   ],
+   "date": [
+    "12 maart 2019"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Applies the ruling",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:NL:HR:2020:593",
+  "edges": [
+   "<- cites/rs_body_cite"
+  ],
+  "other_mentions_cjeu": {
+   "ecli": [
+    "EU:C:2019:189"
+   ],
+   "caseno": [
+    "C-221/17"
+   ],
+   "name": [
+    "Tjebbes"
+   ],
+   "date": [
+    "12 maart 2019"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Applies the ruling",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:NL:HR:2022:637",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:CE:ECHR:2020:0625JUD005227316",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "ecli": [
+    "EU:C:2019:189"
+   ],
+   "caseno": [
+    "C-221/17"
+   ],
+   "name": [
+    "Tjebbes"
+   ],
+   "date": [
+    "12 March 2019",
+    "12 mars 2019"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:CE:ECHR:2016:0621JUD007613612",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:CE:ECHR:2017:0207DEC004238713",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2019:189",
+  "other": "ECLI:CE:ECHR:2020:1222JUD004393618",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Referred by",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2012:BW3078",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Referred by",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2012:BW3077",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Referred by",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2012:BW3076",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Decided after the ruling",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2013:2423",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "caseno": [
+    "C-199/12"
+   ],
+   "name": [
+    "X, Y en Z"
+   ],
+   "date": [
+    "7 november 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Decided after the ruling",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2013:2424",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "caseno": [
+    "C-199/12"
+   ],
+   "name": [
+    "X, Y en Z"
+   ],
+   "date": [
+    "7 november 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Decided after the ruling",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2013:2422",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "caseno": [
+    "C-199/12",
+    "C-201/12"
+   ],
+   "name": [
+    "X, Y en Z"
+   ],
+   "date": [
+    "7 november 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Applies the ruling",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2015:2170",
+  "edges": [
+   "<- cites/rs_body_cite"
+  ],
+  "other_mentions_cjeu": {
+   "ecli": [
+    "EU:C:2013:720"
+   ],
+   "caseno": [
+    "C-199/12",
+    "C-201/12"
+   ],
+   "name": [
+    "X, Y en Z"
+   ],
+   "date": [
+    "7 november 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Applies the ruling",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:NL:RVS:2015:4062",
+  "edges": [
+   "<- cites/rs_body_cite"
+  ],
+  "other_mentions_cjeu": {
+   "ecli": [
+    "EU:C:2013:720"
+   ],
+   "caseno": [
+    "C-199/12",
+    "C-201/12"
+   ],
+   "name": [
+    "X, Y en Z"
+   ],
+   "date": [
+    "7 november 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:CE:ECHR:2014:0626JUD007139812",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "caseno": [
+    "C-199/12",
+    "C-200/12",
+    "C-201/12"
+   ],
+   "name": [
+    "X, Y and Z",
+    "X, Y et Z"
+   ],
+   "date": [
+    "7 november 2013",
+    "7 November 2013",
+    "7 novembre 2013"
+   ]
+  },
+  "cjeu_mentions_other": {
+   "name": [
+    "M.E."
+   ]
+  }
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:CE:ECHR:2017:1219DEC002141717",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "caseno": [
+    "C-199/12",
+    "C 199/12"
+   ],
+   "name": [
+    "X, Y et Z"
+   ],
+   "date": [
+    "7 novembre 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:CE:ECHR:2020:1117JUD000088919",
+  "edges": [],
+  "other_mentions_cjeu": {
+   "caseno": [
+    "C-199/12",
+    "C-200/12",
+    "C-201/12"
+   ],
+   "name": [
+    "X, Y and Z",
+    "X, Y et Z"
+   ],
+   "date": [
+    "7 November 2013",
+    "7 novembre 2013"
+   ]
+  },
+  "cjeu_mentions_other": {}
+ },
+ {
+  "group": "Strasbourg case law on the same question",
+  "cjeu": "ECLI:EU:C:2013:720",
+  "other": "ECLI:CE:ECHR:2004:0622DEC001734103",
+  "edges": [],
+  "other_mentions_cjeu": {},
+  "cjeu_mentions_other": {
+   "name": [
+    "F."
+   ]
+  }
+ }
+]
