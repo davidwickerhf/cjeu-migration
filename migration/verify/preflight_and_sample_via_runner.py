@@ -63,6 +63,7 @@ LEGACY_SEEDED_IN_0015 = {
     "rs_legacy_ddb",
     "rs_formal_relation",
     "rs_lido_sqlite",
+    "rs_replaces",
     "echr_edge",
     "cellar_sparql",
 }
