@@ -447,3 +447,244 @@ def test_step3_ag_opinions_and_context_runner_backfills():
         assert out_res["inserted"] == 1
     finally:
         srv.close()
+
+
+def test_step3_text_links_modes_and_resolved_only():
+    mod = _load_module(
+        "backfill_links_via_runner",
+        REPO_ROOT / "migration" / "sql" / "66_backfill_links_via_runner.py",
+    )
+    writes: list[tuple[str, list]] = []
+
+    def handle(path, payload):
+        sql = payload["sql"]
+        if path == "/execute":
+            writes.append((sql, payload["params"]))
+            return 200, {"ok": True, "row_count": len(payload["params"][0]), "rows": []}
+        if "SELECT min(id) AS lo, max(id) AS hi FROM cases" in sql:
+            return 200, {"ok": True, "rows": [{"lo": 1, "hi": 30}]}
+        if "AND ct.source = 'RECHTSPRAAK'" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {
+                        "id": 10,
+                        "ecli": "ECLI:NL:RVS:2020:423",
+                        "celex_id": None,
+                        "item_id": None,
+                        "date_decision": "2020-02-12",
+                        "sources": ["RS"],
+                        "language": "nl",
+                        "fulltext": (
+                            "Zie Hof van Justitie 12 maart 2019, zaak C-221/17, ECLI:EU:C:2019:189, "
+                            "en ECLI:EU:C:2099:999999 en EHRM nr. 30979/96."
+                        ),
+                        "summary": None,
+                    }
+                ],
+            }
+        if "AND ct.source = 'HUDOC'" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {
+                        "id": 20,
+                        "ecli": "ECLI:CE:ECHR:2021:0511JUD001234519",
+                        "celex_id": None,
+                        "item_id": "001-209999",
+                        "date_decision": "2021-05-11",
+                        "sources": ["ECHR"],
+                        "language": "en",
+                        "fulltext": (
+                            "THE LAW\n"
+                            "The Court notes Case C-221/17 (ECLI:EU:C:2019:189) and ECLI:NL:RVS:2020:423.\n"
+                        ),
+                        "summary": None,
+                    }
+                ],
+            }
+        if "WHERE 'CJEU' = ANY(sources)" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {
+                        "id": 30,
+                        "ecli": "ECLI:EU:C:2019:189",
+                        "celex_id": "62017CJ0221",
+                        "item_id": None,
+                        "date_decision": "2019-03-12",
+                        "sources": ["CJEU"],
+                    }
+                ],
+            }
+        if "FROM case_text t" in sql and "CELLAR_ITEM" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {
+                        "case_id": 30,
+                        "language": "en",
+                        "source": "CELLAR_ITEM",
+                        "fulltext": "See ECtHR, 27 June 2000, Frydlender v. France, Application no. 30979/96.",
+                    }
+                ],
+            }
+        if "WHERE c.ecli = ANY" in sql:
+            wanted = set(payload["params"][0])
+            rows = []
+            if "ECLI:EU:C:2019:189" in wanted:
+                rows.append(
+                    {
+                        "value": "ECLI:EU:C:2019:189",
+                        "via_identifier": 0,
+                        "id": 30,
+                        "ecli": "ECLI:EU:C:2019:189",
+                        "celex_id": "62017CJ0221",
+                        "item_id": None,
+                        "date_decision": "2019-03-12",
+                        "sources": ["CJEU"],
+                    }
+                )
+            if "ECLI:NL:RVS:2020:423" in wanted:
+                rows.append(
+                    {
+                        "value": "ECLI:NL:RVS:2020:423",
+                        "via_identifier": 0,
+                        "id": 10,
+                        "ecli": "ECLI:NL:RVS:2020:423",
+                        "celex_id": None,
+                        "item_id": None,
+                        "date_decision": "2020-02-12",
+                        "sources": ["RS"],
+                    }
+                )
+            return 200, {"ok": True, "rows": rows}
+        if "FROM case_identifier ci" in sql:
+            scheme, vals = payload["params"]
+            rows = []
+            if scheme == "cjeu_case_number" and "C-221/17" in vals:
+                rows.append(
+                    {
+                        "value_normalized": "C-221/17",
+                        "value": "C-221/17",
+                        "id": 30,
+                        "ecli": "ECLI:EU:C:2019:189",
+                        "celex_id": "62017CJ0221",
+                        "item_id": None,
+                        "date_decision": "2019-03-12",
+                        "sources": ["CJEU"],
+                        "doctype": None,
+                        "doctype_branch": None,
+                    }
+                )
+            if scheme == "echr_appno" and "30979/96" in vals:
+                rows.append(
+                    {
+                        "value_normalized": "30979/96",
+                        "value": "30979/96",
+                        "id": 40,
+                        "ecli": "ECLI:CE:ECHR:2000:0627JUD003097996",
+                        "celex_id": None,
+                        "item_id": "001-58762",
+                        "date_decision": "2000-06-27",
+                        "sources": ["ECHR"],
+                        "doctype": "HEJUD",
+                        "doctype_branch": "GRANDCHAMBER",
+                    }
+                )
+            return 200, {"ok": True, "rows": rows}
+        return 200, {"ok": True, "rows": []}
+
+    srv = FakeRunnerServer("tok-secret", handle)
+    try:
+        cle = mod._load_cle(CLE_CHECKOUT)
+        rw = SqlRunnerClient(url=srv.url, token="tok-secret", read_only=False)
+
+        # rs_text with resolved_only=True skips unresolved ECLI:EU:C:2099:999999
+        rs_res = mod.run_rs_text(
+            rw, cle, from_id=0, to_id=None, page_size=50, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10, resolved_only=True,
+        )
+        assert rs_res["inserted_resolved"] == 2  # ECLI:EU:C:2019:189 + appno 30979/96
+        assert rs_res["inserted_unresolved_ecli"] == 0
+
+        # echr_text resolves both CJEU and NL ECLI
+        echr_res = mod.run_echr_text(
+            rw, cle, from_id=0, to_id=None, page_size=50, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10, resolved_only=False,
+        )
+        assert echr_res["inserted_resolved"] == 2
+
+        # cjeu_text resolves ECtHR appno 30979/96 via echr_kind('HEJUD') == 'judgment'
+        cjeu_res = mod.run_cjeu_text(
+            rw, cle, from_id=0, to_id=None, page_size=50, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10, resolved_only=False,
+        )
+        assert cjeu_res["inserted_resolved"] == 1
+    finally:
+        srv.close()
+
+
+def test_step3_eu_law_authorities_and_dictum_modes():
+    mod = _load_module(
+        "backfill_context_via_runner",
+        REPO_ROOT / "migration" / "sql" / "67_backfill_context_via_runner.py",
+    )
+
+    def handle(path, payload):
+        sql = payload["sql"]
+        if path == "/execute":
+            return 200, {"ok": True, "row_count": len(payload["params"][0]), "rows": []}
+        if "FROM legislation" in sql and "scheme IN" in sql:
+            return 200, {"ok": True, "rows": [{"id": 500, "scheme": "celex", "identifier": "32011L0095"}]}
+        if "FROM legislation_alias" in sql or "FROM legal_provision" in sql:
+            return 200, {"ok": True, "rows": []}
+        if "SELECT min(id) AS lo, max(id) AS hi FROM cases" in sql:
+            return 200, {"ok": True, "rows": [{"lo": 10, "hi": 10}]}
+        if "FROM cases c" in sql and "JOIN case_text ct" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {
+                        "id": 10,
+                        "ecli": "ECLI:NL:RVS:2020:423",
+                        "celex_id": None,
+                        "item_id": None,
+                        "date_decision": "2020-02-12",
+                        "language": "nl",
+                        "fulltext": (
+                            "Gelet op Richtlijn 2011/95/EU en Kamerstukken II 2015/16, 34 356, nr. 3.\n"
+                            "Beslissing\n"
+                            "De Afdeling bestuursrechtspraak van de Raad van State:\n"
+                            "verklaart het hoger beroep ongegrond."
+                        ),
+                        "summary": None,
+                    }
+                ],
+            }
+        return 200, {"ok": True, "rows": []}
+
+    srv = FakeRunnerServer("tok-secret", handle)
+    try:
+        cle = mod._load_cle(CLE_CHECKOUT)
+        rw = SqlRunnerClient(url=srv.url, token="tok-secret", read_only=False)
+        law_res = mod.run_eu_law_text(
+            rw, cle, corpus="rs", from_id=0, to_id=None, page_size=50, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10,
+        )
+        assert law_res["inserted_resolved"] >= 1
+
+        auth_res = mod.run_authorities(
+            rw, cle, corpus="rs", from_id=0, to_id=None, page_size=50, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10,
+        )
+        assert auth_res["docs_inserted"] >= 1
+        assert auth_res["refs_inserted"] >= 1
+
+        dic_res = mod.run_rs_dictum(
+            rw, cle, from_id=0, to_id=None, page_size=50, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10,
+        )
+        assert dic_res["inserted"] == 1
+    finally:
+        srv.close()
