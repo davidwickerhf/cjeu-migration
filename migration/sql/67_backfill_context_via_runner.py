@@ -496,14 +496,17 @@ def run_authorities(
     corpus_tag = "RS" if corpus == "rs" else "ECHR"
     groups = auth_mod.scan_groups()
 
-    bounds = client.query_rows(
-        "SELECT min(id) AS lo, max(id) AS hi FROM cases WHERE %s = ANY(sources)",
-        params=[corpus_tag],
-    )[0]
+    if corpus == "echr":
+        bounds = client.query_rows("SELECT min(case_id) AS lo, max(case_id) AS hi FROM echr_document")[0]
+    else:
+        bounds = client.query_rows(
+            "SELECT min(id) AS lo, max(id) AS hi FROM cases WHERE %s = ANY(sources)",
+            params=[corpus_tag],
+        )[0]
     if bounds["lo"] is None:
         return {"mode": f"{corpus}_authorities", "scanned": 0}
     hi = to_id if to_id is not None else int(bounds["hi"])
-    cursor_id = max(0, from_id - 1) if from_id > 0 else 0
+    cursor_id = max(int(bounds["lo"]) - 1, from_id - 1) if from_id > 0 else int(bounds["lo"]) - 1
 
     stats: Counter[str] = Counter()
     scanned = 0
@@ -515,23 +518,46 @@ def run_authorities(
         lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
         if lim <= 0:
             break
-        rows = client.query_rows(
-            """
-            SELECT c.id, c.ecli, c.celex_id, c.item_id, ct.language, ct.fulltext, ct.summary
-              FROM cases c
-              JOIN case_text ct ON ct.case_id = c.id AND ct.source = %s
-             WHERE %s = ANY(c.sources)
-               AND c.id > %s AND c.id <= %s
-               AND (ct.fulltext IS NOT NULL OR ct.summary IS NOT NULL)
-             ORDER BY c.id
-             LIMIT %s
-            """,
-            params=[text_source, corpus_tag, cursor_id, hi, lim],
-        )
-        if not rows:
-            break
-        scanned += len(rows)
-        cursor_id = int(rows[-1]["id"])
+        if corpus == "echr":
+            id_rows = client.query_rows(
+                "SELECT DISTINCT case_id FROM echr_document WHERE case_id > %s AND case_id <= %s ORDER BY case_id LIMIT %s",
+                params=[cursor_id, hi, lim],
+            )
+            if not id_rows:
+                break
+            page_ids = [int(r["case_id"]) for r in id_rows]
+            batch_count = len(page_ids)
+            cursor_id = page_ids[-1]
+            rows = client.query_rows(
+                """
+                SELECT c.id, c.ecli, c.celex_id, c.item_id, ct.language, ct.fulltext, ct.summary
+                  FROM cases c
+                  JOIN case_text ct ON ct.case_id = c.id AND ct.source = %s
+                 WHERE c.id = ANY(%s::bigint[])
+                   AND (ct.fulltext IS NOT NULL OR ct.summary IS NOT NULL)
+                 ORDER BY c.id
+                """,
+                params=[text_source, page_ids],
+            )
+        else:
+            rows = client.query_rows(
+                """
+                SELECT c.id, c.ecli, c.celex_id, c.item_id, ct.language, ct.fulltext, ct.summary
+                  FROM cases c
+                  JOIN case_text ct ON ct.case_id = c.id AND ct.source = %s
+                 WHERE %s = ANY(c.sources)
+                   AND c.id > %s AND c.id <= %s
+                   AND (ct.fulltext IS NOT NULL OR ct.summary IS NOT NULL)
+                 ORDER BY c.id
+                 LIMIT %s
+                """,
+                params=[text_source, corpus_tag, cursor_id, hi, lim],
+            )
+            if not rows:
+                break
+            batch_count = len(rows)
+            cursor_id = int(rows[-1]["id"])
+        scanned += batch_count
 
         docs_dedup: dict[tuple[str, str, str], tuple] = {}
         ref_rows: list[tuple] = []
@@ -581,13 +607,13 @@ def run_authorities(
                 chunk_size=chunk_size, dry_run=dry_run,
             )
 
-        if scanned % 1000 < len(rows):
+        if scanned % 1000 < batch_count:
             print(
                 f"[{corpus}_authorities] scanned={scanned} last_id={cursor_id} docs={ins_docs} refs={ins_refs}",
                 file=sys.stderr,
                 flush=True,
             )
-        if len(rows) < lim:
+        if batch_count < lim:
             break
 
     return {
