@@ -1069,50 +1069,59 @@ def run_cellar_referrals(
 
     def fetch_dates(dates: set[dt.date]) -> None:
         missing = sorted(d for d in dates if d not in date_cache)
-        # Fetch 2 dates per query so busy court days never exceed sql-runner's 1000-row cap.
-        for i in range(0, len(missing), 2):
-            batch_dates = missing[i : i + 2]
-            iso_dates = [d.isoformat() for d in batch_dates]
-            rows = client.query_rows(
-                """
-                SELECT c.id, c.ecli, r.date_decision, r.instance, r.zaaknummer,
-                       r.language, r.date_published, r.replaces_identifier
-                  FROM rs_document r
-                  JOIN cases c ON c.id = r.case_id
-                 WHERE r.date_decision = ANY(%s::date[])
-                   AND c.ecli IS NOT NULL
-                   AND (r.instance = ANY(%s::text[]) OR r.instance LIKE 'Gerechtshof%%'
-                        OR r.instance LIKE 'Rechtbank%%' OR r.instance LIKE 'Kantongerecht%%')
-                """,
-                params=[iso_dates, list(ref_mod.NATIONAL_INSTANCES)],
-            )
-            for d in batch_dates:
-                date_cache[d] = []
-            for r in rows:
-                dec = _parse_date(r.get("date_decision"))
-                if dec is None:
-                    continue
-                zk_vars: set[str] = set()
-                for z in loader_mod.split_zaaknummers(r.get("zaaknummer")):
-                    zk_vars.update(id_mod.zaaknummer_variants(z))
-                ljn_vals: set[str] = set()
-                for ljn in loader_mod.split_ljns(r.get("replaces_identifier")):
-                    norm = id_mod.normalize_ljn(ljn)
-                    if norm:
-                        ljn_vals.add(norm)
-                date_cache.setdefault(dec, []).append(
-                    ref_mod.RsCandidate(
-                        ecli=r["ecli"],
-                        decided=dec,
-                        instance=r.get("instance"),
-                        zaaknummer=r.get("zaaknummer"),
-                        language=r.get("language"),
-                        published=_parse_date(r.get("date_published")),
-                        identifiers=tuple(sorted(zk_vars)),
-                        ljns=tuple(sorted(ljn_vals)),
-                    )
+        # Fetch 1 date at a time with keyset pagination on r.case_id so busy Dutch court
+        # days (>1000 decisions, e.g. Wednesday Raad van State) never clip at sql-runner's 1000-row cap.
+        for d in missing:
+            date_cache[d] = []
+            iso = d.isoformat()
+            last_rs_id = 0
+            while True:
+                rows = client.query_rows(
+                    """
+                    SELECT c.id, c.ecli, r.date_decision, r.instance, r.zaaknummer,
+                           r.language, r.date_published, r.replaces_identifier
+                      FROM rs_document r
+                      JOIN cases c ON c.id = r.case_id
+                     WHERE r.date_decision = %s::date
+                       AND r.case_id > %s
+                       AND c.ecli IS NOT NULL
+                       AND (r.instance = ANY(%s::text[]) OR r.instance LIKE 'Gerechtshof%%'
+                            OR r.instance LIKE 'Rechtbank%%' OR r.instance LIKE 'Kantongerecht%%')
+                     ORDER BY r.case_id
+                     LIMIT 900
+                    """,
+                    params=[iso, last_rs_id, list(ref_mod.NATIONAL_INSTANCES)],
                 )
-                lookup._case_key_cache[("ecli", r["ecli"])] = (int(r["id"]), ["RS"])
+                if not rows:
+                    break
+                last_rs_id = int(rows[-1]["id"])
+                for r in rows:
+                    dec = _parse_date(r.get("date_decision"))
+                    if dec is None:
+                        continue
+                    zk_vars: set[str] = set()
+                    for z in loader_mod.split_zaaknummers(r.get("zaaknummer")):
+                        zk_vars.update(id_mod.zaaknummer_variants(z))
+                    ljn_vals: set[str] = set()
+                    for ljn in loader_mod.split_ljns(r.get("replaces_identifier")):
+                        norm = id_mod.normalize_ljn(ljn)
+                        if norm:
+                            ljn_vals.add(norm)
+                    date_cache[d].append(
+                        ref_mod.RsCandidate(
+                            ecli=r["ecli"],
+                            decided=dec,
+                            instance=r.get("instance"),
+                            zaaknummer=r.get("zaaknummer"),
+                            language=r.get("language"),
+                            published=_parse_date(r.get("date_published")),
+                            identifiers=tuple(sorted(zk_vars)),
+                            ljns=tuple(sorted(ljn_vals)),
+                        )
+                    )
+                    lookup._case_key_cache[("ecli", r["ecli"])] = (int(r["id"]), ["RS"])
+                if len(rows) < 900:
+                    break
 
     while True:
         lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
