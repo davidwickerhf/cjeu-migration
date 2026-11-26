@@ -400,7 +400,7 @@ def test_step3_ag_opinions_and_context_runner_backfills():
             return 200, {"ok": True, "row_count": len(payload["params"][0]), "rows": []}
         if "celex_id ~ '^6[0-9]{4}CC'" in sql:
             return 200, {"ok": True, "rows": [{"id": 100, "celex_id": "62017CC0221"}]}
-        if "SELECT id, celex_id" in sql:
+        if "SELECT case_id AS id, celex_id" in sql:
             return 200, {
                 "ok": True,
                 "rows": [

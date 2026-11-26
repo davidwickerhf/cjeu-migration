@@ -238,7 +238,7 @@ def run_ecli_sql(
         next_id = min(cursor_id + step_size, hi)
         if dry_run:
             if explain_sql and not explained:
-                client.explain(INSERT_CASES_ECLI_RANGE_SQL, params=[cursor_id, next_id])
+                client.query(f"EXPLAIN {INSERT_CASES_ECLI_RANGE_SQL}", params=[cursor_id, next_id])
                 explained = True
             cnt = client.query_rows(
                 """
@@ -352,29 +352,38 @@ def run_targeted_corpus(
                 break
 
     elif corpus == "echr":
-        bounds = client.query_rows("SELECT max(id) AS hi FROM echr_document_appno WHERE source = 'appno'")[0]
+        bounds = client.query_rows("SELECT max(case_id) AS hi FROM echr_document")[0]
         hi = to_id if to_id is not None else int(bounds["hi"] or 0)
         while cursor_id < hi:
             lim = min(page_size, max_cases - scanned) if max_cases is not None else page_size
             if lim <= 0:
                 break
-            rows = client.query_rows(
+            case_rows = client.query_rows(
                 """
-                SELECT a.id, ed.case_id, a.appno, c.case_number
-                  FROM echr_document_appno a
-                  JOIN echr_document ed ON ed.item_id = a.item_id
-                  JOIN cases c ON c.id = ed.case_id
-                 WHERE a.source = 'appno'
-                   AND a.id > %s AND a.id <= %s
-                 ORDER BY a.id
+                SELECT DISTINCT case_id
+                  FROM echr_document
+                 WHERE case_id > %s AND case_id <= %s
+                 ORDER BY case_id
                  LIMIT %s
                 """,
                 params=[cursor_id, hi, lim],
             )
-            if not rows:
+            if not case_rows:
                 break
-            scanned += len(rows)
-            cursor_id = int(rows[-1]["id"])
+            page_ids = [int(r["case_id"]) for r in case_rows]
+            scanned += len(page_ids)
+            cursor_id = page_ids[-1]
+            rows = client.query_rows(
+                """
+                SELECT ed.case_id, a.appno, c.case_number
+                  FROM echr_document ed
+                  JOIN echr_document_appno a ON a.item_id = ed.item_id
+                  JOIN cases c ON c.id = ed.case_id
+                 WHERE ed.case_id = ANY(%s::bigint[])
+                   AND a.source = 'appno'
+                """,
+                params=[page_ids],
+            )
             raw = []
             for r in rows:
                 cid = int(r["case_id"])
@@ -392,9 +401,9 @@ def run_targeted_corpus(
                     explain_first=(dry_run and explain_sql and not explained),
                 )
                 explained = True
-            if scanned % 20000 < len(rows):
-                print(f"[echr] scanned={scanned} last_appno_id={cursor_id} inserted={rows_inserted}", file=sys.stderr, flush=True)
-            if len(rows) < lim:
+            if scanned % 10000 < len(page_ids):
+                print(f"[echr] scanned={scanned} last_case_id={cursor_id} inserted={rows_inserted}", file=sys.stderr, flush=True)
+            if len(page_ids) < lim:
                 break
 
     elif corpus in ("rs_replaces", "rs_zaaknummer"):

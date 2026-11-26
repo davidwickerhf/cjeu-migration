@@ -548,10 +548,10 @@ def run_ag_opinions(
     while True:
         rows = client.query_rows(
             """
-            SELECT id, celex_id
-              FROM cases
-             WHERE celex_id IS NOT NULL AND id > %s
-             ORDER BY id LIMIT 900
+            SELECT case_id AS id, celex_id
+              FROM cjeu_document
+             WHERE celex_id IS NOT NULL AND case_id > %s
+             ORDER BY case_id LIMIT 900
             """,
             params=[last_id],
         )
@@ -573,11 +573,11 @@ def run_ag_opinions(
             break
         rows = client.query_rows(
             """
-            SELECT id, celex_id
-              FROM cases
+            SELECT case_id AS id, celex_id
+              FROM cjeu_document
              WHERE celex_id ~ '^6[0-9]{4}CC'
-               AND id > %s
-             ORDER BY id LIMIT %s
+               AND case_id > %s
+             ORDER BY case_id LIMIT %s
             """,
             params=[last_id, lim],
         )

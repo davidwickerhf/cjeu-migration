@@ -48,20 +48,20 @@ SELECT
     u.enacted_date, u.enacted_year, u.eli, u.source_dataset, u.extractor_version
   FROM unnest(
       %s::text[], %s::text[], %s::text[], %s::text[], %s::text[],
-      %s::date[], %s::int[], %s::text[], %s::text[], %s::text[]
+      %s::date[], %s::smallint[], %s::text[], %s::text[], %s::text[]
   ) AS u(
       scheme, identifier, jurisdiction_code, document_type, title,
       enacted_date, enacted_year, eli, source_dataset, extractor_version
   )
-  JOIN jurisdiction j ON j.code = u.jurisdiction_code
+  JOIN jurisdiction j ON j.iso_code = u.jurisdiction_code
 ON CONFLICT (scheme, identifier)
 WHERE scheme IN ('celex', 'coe_treaty', 'un_treaty')
 DO NOTHING
 """
 
 INSERT_ALIASES_SQL = """
-INSERT INTO legislation_alias (legislation_id, alias)
-SELECT l.id, u.alias
+INSERT INTO legislation_alias (legislation_id, alias, source)
+SELECT l.id, u.alias, 'curated'
   FROM unnest(%s::text[], %s::text[], %s::text[]) AS u(scheme, identifier, alias)
   JOIN legislation l ON l.scheme = u.scheme AND l.identifier = u.identifier
 ON CONFLICT (legislation_id, alias) DO NOTHING
