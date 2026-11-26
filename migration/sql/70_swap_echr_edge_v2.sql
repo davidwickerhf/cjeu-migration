@@ -1,7 +1,7 @@
 -- R6.1 ECtHR edge rebuild: 1-transaction atomic swap (echr_edge -> echr_edge_v2).
 --
 -- DO NOT RUN until:
---   1. cle_v2.echr_edge_v2_staging has been built and verified with build_version = 'r6.1-v3'.
+--   1. cle_v2.echr_edge_v2_staging has been built and verified with build_version = 'r6.1-v4'.
 --   2. The stratified >= 300-row drop gate & kept-edge precision audit have passed
 --      (see migration/verify/r6_1_echr_edge_v2_gate.md).
 --   3. The owner has explicitly approved the swap.
@@ -39,7 +39,7 @@ SELECT
     cc.relation_type, cc.source_dataset, cc.weight, cc.context_segment_id, cc.is_cross_jurisdiction,
     cc.extractor_at, cc.extractor_version, cc.match_method, cc.confidence,
     cc.target_ref_raw, cc.target_ref_scheme,
-    'R6.1 echr_edge rebuild', 'r6.1-v3'
+    'R6.1 echr_edge rebuild', 'r6.1-v4'
   FROM cle_v2.case_citation cc
   JOIN scl_sources ss ON ss.case_id = cc.source_case_id
  WHERE cc.source_dataset = 'echr_edge'
@@ -79,7 +79,7 @@ SELECT DISTINCT ON (sc.id, tc.id)
   JOIN cle_v2.cases tc
     ON (st.target_ecli IS NOT NULL AND tc.ecli = st.target_ecli)
     OR (st.target_ecli IS NULL AND st.target_item_id IS NOT NULL AND tc.item_id = st.target_item_id)
- WHERE st.build_version = 'r6.1-v3'
+ WHERE st.build_version = 'r6.1-v4'
    AND sc.id <> tc.id
  ORDER BY sc.id, tc.id, st.id
 ON CONFLICT DO NOTHING;
@@ -90,7 +90,7 @@ DELETE FROM cle_v2.case_citation cc
    AND EXISTS (
        SELECT 1
          FROM cle_v2.case_citation_archive a
-        WHERE a.archive_batch = 'r6.1-v3'
+        WHERE a.archive_batch = 'r6.1-v4'
           AND a.id = cc.id
    );
 
@@ -105,9 +105,9 @@ UPDATE cle_v2.citation_source_dataset
 -- 5. Refresh derived citation counts across all touched ECHR cases.
 SELECT cle_v2.refresh_case_citation_counts(ARRAY(
     SELECT DISTINCT cid FROM (
-        SELECT source_case_id AS cid FROM cle_v2.case_citation_archive WHERE archive_batch = 'r6.1-v3'
+        SELECT source_case_id AS cid FROM cle_v2.case_citation_archive WHERE archive_batch = 'r6.1-v4'
         UNION
-        SELECT target_case_id FROM cle_v2.case_citation_archive WHERE archive_batch = 'r6.1-v3' AND target_case_id IS NOT NULL
+        SELECT target_case_id FROM cle_v2.case_citation_archive WHERE archive_batch = 'r6.1-v4' AND target_case_id IS NOT NULL
         UNION
         SELECT source_case_id FROM cle_v2.case_citation WHERE source_dataset = 'echr_edge_v2'
         UNION
@@ -135,7 +135,7 @@ COMMIT;
 --     extractor_at, extractor_version, match_method, confidence,
 --     target_ref_raw, target_ref_scheme
 --   FROM cle_v2.case_citation_archive
---  WHERE archive_batch = 'r6.1-v3'
+--  WHERE archive_batch = 'r6.1-v4'
 -- ON CONFLICT DO NOTHING;
 -- DELETE FROM cle_v2.case_citation WHERE source_dataset = 'echr_edge_v2';
 -- UPDATE cle_v2.citation_source_dataset SET active_in_api = false, counted = false WHERE code = 'echr_edge_v2';

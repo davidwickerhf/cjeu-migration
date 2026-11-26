@@ -56,7 +56,7 @@ sys.path.insert(0, str(ROOT / "migration" / "sql"))
 
 from sql_runner_client import SqlRunnerClient  # noqa: E402
 
-DEFAULT_BUILD_VERSION = "r6.1-v3"
+DEFAULT_BUILD_VERSION = "r6.1-v4"
 
 # Application number pattern: 1-6 digits / 2 digits (not preceded/followed by digit or slash).
 APPNO_RE = re.compile(r"(?<![0-9/])(\d{1,6})/(\d{2})(?![0-9/])")
@@ -90,8 +90,9 @@ _AFTER_CITATION_TAIL_SPLIT_RE = re.compile(
     r"|\b\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December"
     r"|janvier|f[eé]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[eé]cembre)\s+(?:19|20)\d{2}"
     r"|\b\d{1,2}\.\d{1,2}\.(?:19|20)\d{2}"
-    r"|\)\s*,\s*and)"
-    r"(?:\s*[:.,]\s*|\s*)(?=(?-i:[A-ZÀ-Ý])[^\n;]{1,80}\s+(?:v\.|c\.)\s+)",
+    r"|\b\d{1,6}/\d{2}"
+    r"|\)\s*,\s*(?:and|et))"
+    r"(?:\s*,\s*(?:(?:and|et)\s+)?|\s*[:.]\s*|\s*)(?=(?-i:[A-ZÀ-Ý])[^\n;]{1,80}\s+(?:v\.|c\.)\s+)",
     re.IGNORECASE,
 )
 _SUBSPLIT_RE = re.compile(
@@ -1195,6 +1196,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Build cle_v2.echr_edge_v2_staging and run R6.1 gate audit.")
     parser.add_argument("--build-version", default=DEFAULT_BUILD_VERSION)
     parser.add_argument("--write", action="store_true", help="Write staged rows to cle_v2.echr_edge_v2_staging")
+    parser.add_argument(
+        "--allow-append",
+        action="store_true",
+        help="Allow appending to an existing build_version (default: refuse non-empty build_version so staging matches audit 1:1)",
+    )
     parser.add_argument("--batch-size", type=int, default=3000)
     parser.add_argument(
         "--audit-report",
@@ -1237,12 +1243,36 @@ def main(argv: Optional[list[str]] = None) -> int:
     if dry_run:
         print("[build] DRY_RUN=1: skipping INSERT into cle_v2.echr_edge_v2_staging.", flush=True)
     else:
+        existing = int(
+            client.query_rows(
+                "SELECT COUNT(*) AS n FROM echr_edge_v2_staging WHERE build_version = %s",
+                [args.build_version],
+            )[0]["n"]
+        )
+        if existing > 0 and not args.allow_append:
+            raise RuntimeError(
+                f"cle_v2.echr_edge_v2_staging already has {existing:,} rows for "
+                f"build_version={args.build_version!r}. Use a new --build-version so "
+                "the persisted staging snapshot matches the gate audit 1:1 "
+                "(or pass --allow-append to resume an interrupted write)."
+            )
         written = insert_staging_edges(
             client, v2_edges, build_version=args.build_version, batch_size=args.batch_size
         )
+        persisted = int(
+            client.query_rows(
+                "SELECT COUNT(*) AS n FROM echr_edge_v2_staging WHERE build_version = %s",
+                [args.build_version],
+            )[0]["n"]
+        )
+        if persisted != len(v2_edges):
+            raise RuntimeError(
+                f"Persisted staging count ({persisted:,}) != computed edge count ({len(v2_edges):,}) "
+                f"for build_version={args.build_version!r}"
+            )
         print(
             f"[build] Inserted {written:,} new rows into cle_v2.echr_edge_v2_staging "
-            f"(build_version={args.build_version!r}).",
+            f"(build_version={args.build_version!r}, persisted={persisted:,}).",
             flush=True,
         )
 

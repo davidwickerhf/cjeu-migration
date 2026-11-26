@@ -215,6 +215,15 @@ def test_split_scl_handles_missing_semicolons():
     )
     assert len(mod.split_scl(s7)) == 3
 
+    s8 = "Rablat c. France (déc.), n° 49285/99, Ottomani c. France (déc.), n° 49857/99"
+    assert len(mod.split_scl(s8)) == 2
+
+    s9 = (
+        "Kömürcü c. Turquie (déc.), no 77432/01, 28 novembre 2002, et "
+        "Yildiz et Tas c. Turquie (déc.), no 77641/01, 13 mars 2003"
+    )
+    assert len(mod.split_scl(s9)) == 2
+
 
 def test_ecli_primary_appno_breaks_companion_case_tie():
     t_uk = _cand(1, "ECLI:CE:ECHR:1999:1216JUD002472494", "1999-12-16", kind="judgment", branch="GRANDCHAMBER")
