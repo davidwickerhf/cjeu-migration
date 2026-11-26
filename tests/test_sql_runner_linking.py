@@ -342,3 +342,108 @@ def test_step3_case_identifier_runner_backfill():
         assert (3, "echr_appno", "30979/96") in triples
     finally:
         srv.close()
+
+
+def test_step3_links_runner_enforces_dark_guard():
+    mod = _load_module(
+        "backfill_links_via_runner",
+        REPO_ROOT / "migration" / "sql" / "66_backfill_links_via_runner.py",
+    )
+
+    def handle_missing_0015(path, payload):
+        if "schema_migrations" in payload["sql"]:
+            return 200, {"ok": True, "rows": [{"ok": False}]}
+        return 200, {"ok": True, "rows": []}
+
+    srv = FakeRunnerServer("tok-secret", handle_missing_0015)
+    try:
+        client = SqlRunnerClient(url=srv.url, token="tok-secret", read_only=False)
+        with pytest.raises(RuntimeError, match="0015_citation_count_guard"):
+            mod.assert_dark_guard(client, ("cjeu_ag_link",))
+    finally:
+        srv.close()
+
+    def handle_counted_dataset(path, payload):
+        if "schema_migrations" in payload["sql"]:
+            return 200, {"ok": True, "rows": [{"ok": True}]}
+        if "citation_source_dataset" in payload["sql"]:
+            return 200, {
+                "ok": True,
+                "rows": [{"code": "cjeu_ag_link", "counted": True, "active_in_api": False}],
+            }
+        return 200, {"ok": True, "rows": []}
+
+    srv2 = FakeRunnerServer("tok-secret", handle_counted_dataset)
+    try:
+        client = SqlRunnerClient(url=srv2.url, token="tok-secret", read_only=False)
+        with pytest.raises(RuntimeError, match="NOT dark"):
+            mod.assert_dark_guard(client, ("cjeu_ag_link",))
+    finally:
+        srv2.close()
+
+
+def test_step3_ag_opinions_and_context_runner_backfills():
+    links_mod = _load_module(
+        "backfill_links_via_runner",
+        REPO_ROOT / "migration" / "sql" / "66_backfill_links_via_runner.py",
+    )
+    ctx_mod = _load_module(
+        "backfill_context_via_runner",
+        REPO_ROOT / "migration" / "sql" / "67_backfill_context_via_runner.py",
+    )
+    writes: list[tuple[str, list]] = []
+
+    def handle(path, payload):
+        sql = payload["sql"]
+        if path == "/execute":
+            writes.append((sql, payload["params"]))
+            return 200, {"ok": True, "row_count": len(payload["params"][0]), "rows": []}
+        if "celex_id ~ '^6[0-9]{4}CC'" in sql:
+            return 200, {"ok": True, "rows": [{"id": 100, "celex_id": "62017CC0221"}]}
+        if "SELECT id, celex_id" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {"id": 100, "celex_id": "62017CC0221"},
+                    {"id": 101, "celex_id": "62017CJ0221"},
+                ],
+            }
+        if "SELECT max(case_id) AS hi FROM cjeu_document" in sql:
+            return 200, {"ok": True, "rows": [{"hi": 101}]}
+        if "FROM cjeu_document" in sql:
+            return 200, {
+                "ok": True,
+                "rows": [
+                    {
+                        "case_id": 101,
+                        "celex_id": "62017CJ0221",
+                        "proc_type": "Action for annulment - unfounded",
+                    }
+                ],
+            }
+        return 200, {"ok": True, "rows": []}
+
+    srv = FakeRunnerServer("tok-secret", handle)
+    try:
+        cle_links = links_mod._load_cle(CLE_CHECKOUT)
+        rw = SqlRunnerClient(url=srv.url, token="tok-secret", read_only=False)
+        ag_res = links_mod.run_ag_opinions(
+            rw, cle_links, dry_run=False, chunk_size=100, explain_sql=False, max_cases=10
+        )
+        assert ag_res["inserted_resolved"] == 1
+
+        cle_ctx = ctx_mod._load_cle(CLE_CHECKOUT)
+        leg_res = ctx_mod.run_eu_legislation(
+            rw, cle_ctx, dry_run=False, chunk_size=100, explain_sql=False
+        )
+        assert leg_res["acts_prepared"] == 63
+        assert leg_res["acts_inserted"] == 63
+        assert leg_res["aliases_inserted"] >= 100
+
+        out_res = ctx_mod.run_cjeu_outcomes(
+            rw, cle_ctx, from_id=0, to_id=None, page_size=100, chunk_size=100,
+            dry_run=False, explain_sql=False, max_cases=10,
+        )
+        assert out_res["inserted"] == 1
+    finally:
+        srv.close()
