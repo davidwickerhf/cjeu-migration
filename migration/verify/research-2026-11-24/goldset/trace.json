@@ -1,0 +1,1245 @@
+{
+ "docs": {
+  "ECLI:EU:C:2019:189": {
+   "id": "ECLI:EU:C:2019:189",
+   "lane": "eu",
+   "court": "EU Court of Justice",
+   "name": "Tjebbes and Others",
+   "short": "Tjebbes",
+   "date": "2019-03-12",
+   "ecli": "ECLI:EU:C:2019:189",
+   "celex": "62017CJ0221",
+   "caseno": "C-221/17",
+   "appno": "",
+   "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:62017CJ0221",
+   "summary": "EU law allows a Member State to provide for loss of nationality by operation of law, as long as authorities and courts can examine, case by case, whether the consequences of losing EU citizenship are proportionate and, if not, restore nationality retroactively.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2017:1098": {
+   "id": "ECLI:NL:RVS:2017:1098",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 19 April 2017 · referral",
+   "short": "RvS 2017",
+   "date": "2017-04-19",
+   "ecli": "ECLI:NL:RVS:2017:1098",
+   "celex": "",
+   "caseno": "201504577/1/A3, 201507057/1/A3, 201508588/1/A3 en 201601993/1/A3",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2017:1098",
+   "summary": "The Council of State, hearing appeals by four women whose passport applications were refused because they had lost Dutch nationality, asks the CJEU whether that automatic loss is compatible with EU citizenship rules.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2020:423": {
+   "id": "ECLI:NL:RVS:2020:423",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 12 February 2020 · final judgment after the ruling",
+   "short": "RvS 2020",
+   "date": "2020-02-12",
+   "ecli": "ECLI:NL:RVS:2020:423",
+   "celex": "",
+   "caseno": "201504577/2/A3, 201507057/2/A3, 201508588/2/A3, 201601993/2/A3, 201604943/1/A3 en 201608752/1/A3",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2020:423",
+   "summary": "After Tjebbes, the Council of State upholds the appeals, annuls the passport decisions and tells the Foreign Minister how to carry out the individual EU-law proportionality test (para. 11.2), ordering new decisions.",
+   "aliases": []
+  },
+  "ECLI:NL:HR:2020:593": {
+   "id": "ECLI:NL:HR:2020:593",
+   "lane": "nl",
+   "court": "Hoge Raad",
+   "name": "Hoge Raad, 3 April 2020 · applies the ruling",
+   "short": "HR 2020",
+   "date": "2020-04-03",
+   "ecli": "ECLI:NL:HR:2020:593",
+   "celex": "",
+   "caseno": "19/02010",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:HR:2020:593",
+   "summary": "The Supreme Court holds that the Tjebbes proportionality test also applies in civil proceedings to establish Dutch nationality (art. 17 RWN), quashes the Hague District Court's decision and sends the case back.",
+   "aliases": []
+  },
+  "ECLI:NL:HR:2022:637": {
+   "id": "ECLI:NL:HR:2022:637",
+   "lane": "nl",
+   "court": "Hoge Raad",
+   "name": "Hoge Raad, 22 April 2022 · applies the ruling",
+   "short": "HR 2022",
+   "date": "2022-04-22",
+   "ecli": "ECLI:NL:HR:2022:637",
+   "celex": "",
+   "caseno": "21/02501",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:HR:2022:637",
+   "summary": "Follow-up to HR 2020:593: the Supreme Court dismisses a cassation appeal on the Tjebbes proportionality test with summary reasons (art. 81 RO); the reference to C-221/17 is in the official case summary and AG conclusion ECLI:NL:PHR:2021:1196, not in the short decision text.",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2020:0625JUD005227316": {
+   "id": "ECLI:CE:ECHR:2020:0625JUD005227316",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "Ghoumid and Others v. France",
+   "short": "Ghoumid and Others",
+   "date": "2020-06-25",
+   "ecli": "ECLI:CE:ECHR:2020:0625JUD005227316",
+   "celex": "",
+   "caseno": "",
+   "appno": "52273/16; 52285/16; 52290/16; 52294/16; 52302/16",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-203534",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2016:0621JUD007613612": {
+   "id": "ECLI:CE:ECHR:2016:0621JUD007613612",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "Ramadan v. Malta",
+   "short": "Ramadan",
+   "date": "2016-06-21",
+   "ecli": "ECLI:CE:ECHR:2016:0621JUD007613612",
+   "celex": "",
+   "caseno": "",
+   "appno": "76136/12",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-163820",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2017:0207DEC004238713": {
+   "id": "ECLI:CE:ECHR:2017:0207DEC004238713",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "K2 v. the United Kingdom",
+   "short": "K2",
+   "date": "2017-02-07",
+   "ecli": "ECLI:CE:ECHR:2017:0207DEC004238713",
+   "celex": "",
+   "caseno": "",
+   "appno": "42387/13",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-172143",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2020:1222JUD004393618": {
+   "id": "ECLI:CE:ECHR:2020:1222JUD004393618",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "Usmanov v. Russia",
+   "short": "Usmanov",
+   "date": "2020-12-22",
+   "ecli": "ECLI:CE:ECHR:2020:1222JUD004393618",
+   "celex": "",
+   "caseno": "",
+   "appno": "43936/18",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-206716",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:EU:C:2013:720": {
+   "id": "ECLI:EU:C:2013:720",
+   "lane": "eu",
+   "court": "EU Court of Justice",
+   "name": "X, Y and Z",
+   "short": "X, Y and Z",
+   "date": "2013-11-07",
+   "ecli": "ECLI:EU:C:2013:720",
+   "celex": "62012CJ0199",
+   "caseno": "C-199/12, C-200/12, C-201/12 (joined)",
+   "appno": "",
+   "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:62012CJ0199",
+   "summary": "Gay people can form a 'particular social group'; criminalising homosexual acts is not persecution in itself, but prison sentences that are actually applied are; and asylum seekers cannot be expected to hide their sexual orientation or be discreet to avoid persecution.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2012:BW3078": {
+   "id": "ECLI:NL:RVS:2012:BW3078",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 18 April 2012 · referral in C-199/12 (X, Sierra Leone)",
+   "short": "RvS 2012 (X)",
+   "date": "2012-04-18",
+   "ecli": "ECLI:NL:RVS:2012:BW3078",
+   "celex": "",
+   "caseno": "201012342/1/T1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2012:BW3078",
+   "summary": "In the Minister's appeal concerning X from Sierra Leone, the Council of State asks the CJEU whether gay asylum seekers form a particular social group, which acts count as persecution, and whether they can be expected to be discreet.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2012:BW3077": {
+   "id": "ECLI:NL:RVS:2012:BW3077",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 18 April 2012 · referral in C-200/12 (Y)",
+   "short": "RvS 2012 (Y)",
+   "date": "2012-04-18",
+   "ecli": "ECLI:NL:RVS:2012:BW3077",
+   "celex": "",
+   "caseno": "201106615/1/T1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2012:BW3077",
+   "summary": "Referral of the questions in Y's case; same case number as the final judgment ECLI:NL:RVS:2013:2424.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2012:BW3076": {
+   "id": "ECLI:NL:RVS:2012:BW3076",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 18 April 2012 · referral in C-201/12 (Z, Senegal)",
+   "short": "RvS 2012 (Z)",
+   "date": "2012-04-18",
+   "ecli": "ECLI:NL:RVS:2012:BW3076",
+   "celex": "",
+   "caseno": "201109928/T1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2012:BW3076",
+   "summary": "Referral of the questions in Z's case (Senegal); same case number as the final judgment ECLI:NL:RVS:2013:2422.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2013:2423": {
+   "id": "ECLI:NL:RVS:2013:2423",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 18 December 2013 · final judgment after the ruling",
+   "short": "RvS 2013 (X)",
+   "date": "2013-12-18",
+   "ecli": "ECLI:NL:RVS:2013:2423",
+   "celex": "",
+   "caseno": "201012342/1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2013:2423",
+   "summary": "After the CJEU ruling, the Council of State dismisses the Minister's appeal in X's case (Sierra Leone) and upholds the lower court's judgment.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2013:2424": {
+   "id": "ECLI:NL:RVS:2013:2424",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 18 December 2013 · final judgment after the ruling",
+   "short": "RvS 2013 (Y)",
+   "date": "2013-12-18",
+   "ecli": "ECLI:NL:RVS:2013:2424",
+   "celex": "",
+   "caseno": "201106615/1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2013:2424",
+   "summary": "After the CJEU ruling, the Council of State dismisses the Minister's appeal in Y's case (Uganda) and upholds the lower court's judgment.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2013:2422": {
+   "id": "ECLI:NL:RVS:2013:2422",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 18 December 2013 · final judgment after the ruling",
+   "short": "RvS 2013 (Z)",
+   "date": "2013-12-18",
+   "ecli": "ECLI:NL:RVS:2013:2422",
+   "celex": "",
+   "caseno": "201109928/1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2013:2422",
+   "summary": "After the CJEU ruling, the Council of State upholds Z's appeal (Senegal), annuls the lower court's judgment and the Minister's refusal, and sets out how the actual enforcement of criminal laws against gay people must be investigated.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2015:2170": {
+   "id": "ECLI:NL:RVS:2015:2170",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 8 July 2015 · applies the ruling",
+   "short": "RvS 2015 (A, B, C)",
+   "date": "2015-07-08",
+   "ecli": "ECLI:NL:RVS:2015:2170",
+   "celex": "",
+   "caseno": "201208550/1/V2, 201110141/1/V2 en 201210441/1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2015:2170",
+   "summary": "Final judgment after the follow-up CJEU reference A, B and C on assessing the credibility of a declared sexual orientation; it quotes the CJEU's reliance on X, Y and Z and upholds the asylum seekers' appeals.",
+   "aliases": []
+  },
+  "ECLI:NL:RVS:2015:4062": {
+   "id": "ECLI:NL:RVS:2015:4062",
+   "lane": "nl",
+   "court": "Raad van State",
+   "name": "Raad van State, 24 December 2015 · applies the ruling",
+   "short": "RvS 2015 (Morocco)",
+   "date": "2015-12-24",
+   "ecli": "ECLI:NL:RVS:2015:4062",
+   "celex": "",
+   "caseno": "201409974/1/V2",
+   "appno": "",
+   "url": "https://uitspraken.rechtspraak.nl/details?id=ECLI:NL:RVS:2015:4062",
+   "summary": "Applying X, Y and Z (para. 2.1), the Council of State holds that the authorities must examine how Morocco's criminal ban on homosexual acts works in practice, and must not ask whether the applicant could avoid persecution by being discreet; the lower court's judgment is upheld.",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2014:0626JUD007139812": {
+   "id": "ECLI:CE:ECHR:2014:0626JUD007139812",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "M.E. v. Sweden",
+   "short": "M.E.",
+   "date": "2014-06-26",
+   "ecli": "ECLI:CE:ECHR:2014:0626JUD007139812",
+   "celex": "",
+   "caseno": "",
+   "appno": "71398/12",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-145018",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2017:1219DEC002141717": {
+   "id": "ECLI:CE:ECHR:2017:1219DEC002141717",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "I.K. v. Switzerland",
+   "short": "I.K.",
+   "date": "2017-12-19",
+   "ecli": "ECLI:CE:ECHR:2017:1219DEC002141717",
+   "celex": "",
+   "caseno": "",
+   "appno": "21417/17",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-180412",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2020:1117JUD000088919": {
+   "id": "ECLI:CE:ECHR:2020:1117JUD000088919",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "B and C v. Switzerland",
+   "short": "B and C",
+   "date": "2020-11-17",
+   "ecli": "ECLI:CE:ECHR:2020:1117JUD000088919",
+   "celex": "",
+   "caseno": "",
+   "appno": "889/19; 43987/16",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-206153",
+   "summary": "",
+   "aliases": []
+  },
+  "ECLI:CE:ECHR:2004:0622DEC001734103": {
+   "id": "ECLI:CE:ECHR:2004:0622DEC001734103",
+   "lane": "echr",
+   "court": "European Court of Human Rights",
+   "name": "F. v. the United Kingdom",
+   "short": "F.",
+   "date": "2004-06-22",
+   "ecli": "ECLI:CE:ECHR:2004:0622DEC001734103",
+   "celex": "",
+   "caseno": "",
+   "appno": "17341/03",
+   "url": "https://hudoc.echr.coe.int/eng?i=001-24020",
+   "summary": "",
+   "aliases": []
+  }
+ },
+ "links": [
+  {
+   "group": "Referred by",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:NL:RVS:2017:1098",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:63793"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Decided after the ruling",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:NL:RVS:2020:423",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [
+    "<- cites/rs_body_cite"
+   ],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:47123"
+    ],
+    "mentions": {
+     "ECLI:EU:C:2019:189": 1,
+     "EU:C:2019:189": 1
+    }
+   }
+  },
+  {
+   "group": "Applies the ruling",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:NL:HR:2020:593",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [
+    "<- cites/rs_body_cite"
+   ],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:20618"
+    ],
+    "mentions": {
+     "ECLI:EU:C:2019:189": 1,
+     "EU:C:2019:189": 1,
+     "C-221/17": 1
+    }
+   }
+  },
+  {
+   "group": "Applies the ruling",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:NL:HR:2022:637",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:1850"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:CE:ECHR:2020:0625JUD005227316",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:10065",
+     "HUDOC:63891",
+     "HUDOC:65375",
+     "HUDOC:7788",
+     "HUDOC:9729"
+    ],
+    "mentions": {
+     "EU:C:2019:189": 2,
+     "C-221/17": 2
+    }
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:CE:ECHR:2016:0621JUD007613612",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:3677",
+     "HUDOC:10559",
+     "HUDOC:127818",
+     "HUDOC:113201",
+     "HUDOC:69",
+     "HUDOC:3302",
+     "HUDOC:4288"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:CE:ECHR:2017:0207DEC004238713",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:5675",
+     "HUDOC:44480",
+     "HUDOC:24560"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2019:189",
+   "to": "ECLI:CE:ECHR:2020:1222JUD004393618",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:36081",
+     "CELLAR_ITEM:30009",
+     "CELLAR_ITEM:34168",
+     "CELLAR_ITEM:34022",
+     "CELLAR_ITEM:36230",
+     "CELLAR_ITEM:36032",
+     "CELLAR_ITEM:35483",
+     "CELLAR_ITEM:31664",
+     "CELLAR_ITEM:34606",
+     "CELLAR_ITEM:35441",
+     "CELLAR_ITEM:31235",
+     "CELLAR_ITEM:31554",
+     "CELLAR_ITEM:34231",
+     "CELLAR_ITEM:36532",
+     "CELLAR_ITEM:31452",
+     "CELLAR_ITEM:39551",
+     "CELLAR_ITEM:34447",
+     "CELLAR_ITEM:30364",
+     "CELLAR_ITEM:36044",
+     "CELLAR_ITEM:31951",
+     "CELLAR_ITEM:34389",
+     "CELLAR_ITEM:35380",
+     "CELLAR_ITEM:35928"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:70874",
+     "HUDOC:70724"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Referred by",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2012:BW3078",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:30078"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Referred by",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2012:BW3077",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:30415"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Referred by",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2012:BW3076",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:30541"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Decided after the ruling",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2013:2423",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:30577"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Decided after the ruling",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2013:2424",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:30318"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Decided after the ruling",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2013:2422",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:31594"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Applies the ruling",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2015:2170",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [
+    "<- cites/rs_body_cite"
+   ],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:35196"
+    ],
+    "mentions": {
+     "ECLI:EU:C:2013:720": 1,
+     "EU:C:2013:720": 1
+    }
+   }
+  },
+  {
+   "group": "Applies the ruling",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:NL:RVS:2015:4062",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [
+    "<- cites/rs_body_cite"
+   ],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "RECHTSPRAAK:8535"
+    ],
+    "mentions": {
+     "ECLI:EU:C:2013:720": 1,
+     "EU:C:2013:720": 1
+    }
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:CE:ECHR:2014:0626JUD007139812",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:10358",
+     "HUDOC:13153",
+     "HUDOC:91633",
+     "HUDOC:101383",
+     "HUDOC:2707",
+     "HUDOC:89622",
+     "HUDOC:5254"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:CE:ECHR:2017:1219DEC002141717",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:28476"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:CE:ECHR:2020:1117JUD000088919",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:6717",
+     "HUDOC:13104",
+     "HUDOC:77138",
+     "HUDOC:90775",
+     "HUDOC:6259",
+     "HUDOC:6070"
+    ],
+    "mentions": {}
+   }
+  },
+  {
+   "group": "Strasbourg case law on the same question",
+   "from": "ECLI:EU:C:2013:720",
+   "to": "ECLI:CE:ECHR:2004:0622DEC001734103",
+   "from_in_db": true,
+   "to_in_db": true,
+   "edges": [],
+   "unresolved_raw": [],
+   "a_text": {
+    "texts": [
+     "CELLAR_ITEM:41554",
+     "CELLAR_ITEM:34288",
+     "CELLAR_ITEM:41888",
+     "CELLAR_ITEM:40173",
+     "CELLAR_ITEM:38654",
+     "CELLAR_ITEM:36090",
+     "CELLAR_ITEM:39971",
+     "CELLAR_ITEM:38958",
+     "CELLAR_ITEM:37600",
+     "CELLAR_ITEM:42811",
+     "CELLAR_ITEM:40887",
+     "CELLAR_ITEM:38602",
+     "CELLAR_ITEM:41714",
+     "CELLAR_ITEM:36138",
+     "CELLAR_ITEM:36060",
+     "CELLAR_ITEM:40853",
+     "CELLAR_ITEM:39288",
+     "CELLAR_ITEM:44172",
+     "CELLAR_ITEM:36319",
+     "CELLAR_ITEM:35539",
+     "CELLAR_ITEM:42451",
+     "CELLAR_ITEM:41843",
+     "CELLAR_ITEM:40725"
+    ],
+    "mentions": {}
+   },
+   "b_text": {
+    "texts": [
+     "HUDOC:32908",
+     "HUDOC:3662"
+    ],
+    "mentions": {}
+   }
+  }
+ ]
+}
