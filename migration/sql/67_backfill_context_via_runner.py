@@ -151,6 +151,19 @@ ON CONFLICT (case_id, scope, COALESCE(article, ''), outcome, source_dataset)
 DO NOTHING
 """
 
+INSERT_STATUS_SQL = """
+INSERT INTO case_status (
+    case_id, status, status_date, related_case_id, raw_value, source_dataset, extractor_version
+)
+SELECT *
+  FROM unnest(
+      %s::bigint[], %s::text[], %s::date[], %s::bigint[],
+      %s::text[], %s::text[], %s::text[]
+  )
+ON CONFLICT (case_id, status, COALESCE(status_date, '-infinity'::date), source_dataset)
+DO NOTHING
+"""
+
 
 def _parse_date(val: Any) -> dt.date | None:
     if not val:
@@ -167,10 +180,11 @@ def _load_cle(cle_checkout: Path):
     dags_dir = str(cle_checkout / "airflow" / "dags")
     if dags_dir not in sys.path:
         sys.path.insert(0, dags_dir)
-    from data_extraction.case_context import cjeu_outcomes, common, echr_outcomes, rs_dictum
+    from data_extraction.case_context import case_status, cjeu_outcomes, common, echr_outcomes, rs_dictum
     from data_extraction.linking import (
         artifact,
         authority_text,
+        cellar_law_refs,
         echr_eu_law,
         eu_law_text,
         rs_eu_law,
@@ -182,10 +196,12 @@ def _load_cle(cle_checkout: Path):
         "artifact": artifact,
         "text_common": text_common,
         "legislation_loader": legislation_loader,
+        "cellar_law_refs": cellar_law_refs,
         "eu_law_text": eu_law_text,
         "rs_eu_law": rs_eu_law,
         "echr_eu_law": echr_eu_law,
         "authority_text": authority_text,
+        "case_status": case_status,
         "cjeu_outcomes": cjeu_outcomes,
         "echr_outcomes": echr_outcomes,
         "rs_dictum": rs_dictum,
@@ -826,12 +842,264 @@ def run_rs_dictum(
     }
 
 
+def run_cellar_law_refs(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+    max_cases: int | None,
+) -> dict[str, Any]:
+    mod = cle["cellar_law_refs"]
+    art = cle["artifact"]
+    leg_map, prov_map = _load_eu_legislation_lookup(client)
+
+    stats: Counter[str] = Counter()
+    last_cid = 0
+    scanned = 0
+    ins_res = 0
+    ins_unres = 0
+    explained = False
+
+    while True:
+        lim = 900 if max_cases is None else min(900, max_cases - scanned)
+        if lim <= 0:
+            break
+        rows = client.query_rows(
+            """
+            SELECT cc.id, cc.source_case_id, c.ecli, c.celex_id, c.item_id, cc.target_celex_raw
+              FROM case_citation cc
+              JOIN cases c ON c.id = cc.source_case_id
+             WHERE cc.source_dataset = 'cellar_sparql'
+               AND cc.relation_type = 'cites'
+               AND cc.target_case_id IS NULL
+               AND cc.target_celex_raw IS NOT NULL
+               AND cc.source_case_id IS NOT NULL
+               AND cc.id > %s
+             ORDER BY cc.id
+             LIMIT %s
+            """,
+            params=[last_cid, lim],
+        )
+        if not rows:
+            break
+        scanned += len(rows)
+        last_cid = int(rows[-1]["id"])
+
+        res_rows: list[tuple] = []
+        unres_rows: list[tuple] = []
+        for r in rows:
+            cid = int(r["source_case_id"])
+            src = art.CaseKey(
+                ecli=r.get("ecli") or None,
+                celex=r.get("celex_id") or None,
+                item_id=r.get("item_id") or None,
+            )
+            if not (src.ecli or src.celex or src.item_id):
+                continue
+            rec = mod.record_for(src, r["target_celex_raw"], stats)
+            if rec is None:
+                continue
+            leg_id = leg_map.get((rec.target.scheme, rec.target.identifier))
+            if leg_id is None:
+                for alt in rec.target.alternatives or ():
+                    leg_id = leg_map.get((rec.target.scheme, alt))
+                    if leg_id is not None:
+                        break
+            prov_id = prov_map.get((leg_id, rec.article.lower())) if (leg_id is not None and rec.article) else None
+            row = (
+                cid, leg_id, prov_id, rec.raw_scheme, rec.raw_resource, rec.raw_subdivision,
+                rec.raw_reference, rec.role, rec.source_dataset,
+                rec.extractor_version, rec.match_method, rec.confidence,
+            )
+            if leg_id is not None or prov_id is not None:
+                res_rows.append(row)
+                stats["resolved"] += 1
+            else:
+                unres_rows.append(row)
+                stats["unresolved"] += 1
+
+        if res_rows:
+            ins_res += client.execute_unnest_chunks(
+                INSERT_LAW_REF_RESOLVED_SQL, list(zip(*res_rows)),
+                chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
+            )
+            explained = True
+        if unres_rows:
+            ins_unres += client.execute_unnest_chunks(
+                INSERT_LAW_REF_UNRESOLVED_SQL, list(zip(*unres_rows)),
+                chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
+            )
+            explained = True
+        if scanned % 20000 < len(rows):
+            print(f"[cellar_law_refs] scanned={scanned} res={ins_res} unres={ins_unres}", file=sys.stderr, flush=True)
+        if len(rows) < lim:
+            break
+
+    return {
+        "mode": "cellar_law_refs",
+        "scanned": scanned,
+        "inserted_resolved": ins_res,
+        "inserted_unresolved": ins_unres,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
+def run_cjeu_status(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+) -> dict[str, Any]:
+    mod = cle["case_status"]
+    stats: Counter[str] = Counter()
+    rows = client.query_rows(
+        """
+        SELECT a.id AS a_id, a.ecli AS a_ecli, COALESCE(ad.celex_id, a.celex_id) AS a_celex,
+               a.date_decision AS a_date, ad.proc_type,
+               u.id AS u_id, u.ecli AS u_ecli, COALESCE(ud.celex_id, u.celex_id) AS u_celex
+          FROM case_citation cc
+          JOIN cases a ON a.id = CASE WHEN cc.relation_type = 'appeal_of' THEN cc.source_case_id ELSE cc.target_case_id END
+          JOIN cjeu_document ad ON ad.case_id = a.id
+          JOIN cases u ON u.id = CASE WHEN cc.relation_type = 'appeal_of' THEN cc.target_case_id ELSE cc.source_case_id END
+          LEFT JOIN cjeu_document ud ON ud.case_id = u.id
+         WHERE cc.target_case_id IS NOT NULL
+           AND cc.source_case_id <> cc.target_case_id
+           AND (
+                 (cc.relation_type = 'appeal_of' AND cc.source_dataset = 'cellar_relation_resolved')
+              OR (cc.relation_type = 'subject_to_appeal' AND cc.source_dataset = 'cellar_sparql')
+           )
+           AND ad.proc_type ILIKE '%%successful%%'
+        """
+    )
+    batch_dedup: dict[tuple, tuple] = {}
+    for r in rows:
+        stats["appeal_links"] += 1
+        rec = mod.appeal_status(
+            (r.get("a_ecli"), r.get("a_celex"), _parse_date(r.get("a_date")), r.get("proc_type")),
+            (r.get("u_ecli"), r.get("u_celex")),
+            stats,
+        )
+        if rec is None:
+            continue
+        key = (int(r["u_id"]), rec.status, rec.status_date, rec.source_dataset)
+        batch_dedup.setdefault(
+            key,
+            (
+                int(r["u_id"]), rec.status, rec.status_date, int(r["a_id"]),
+                rec.raw_value, rec.source_dataset, rec.extractor_version,
+            ),
+        )
+    inserted = 0
+    if batch_dedup:
+        inserted = client.execute_unnest_chunks(
+            INSERT_STATUS_SQL, list(zip(*batch_dedup.values())),
+            chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql),
+        )
+    return {
+        "mode": "cjeu_status",
+        "scanned": len(rows),
+        "prepared": len(batch_dedup),
+        "inserted": inserted,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
+def run_echr_status(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    from_id: int,
+    to_id: int | None,
+    page_size: int,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+    max_cases: int | None,
+) -> dict[str, Any]:
+    mod = cle["case_status"]
+    bounds = client.query_rows("SELECT min(case_id) AS lo, max(case_id) AS hi FROM echr_document")[0]
+    if bounds["lo"] is None:
+        return {"mode": "echr_status", "scanned": 0}
+    hi = to_id if to_id is not None else int(bounds["hi"])
+    cursor_id = max(int(bounds["lo"]) - 1, from_id - 1) if from_id > 0 else int(bounds["lo"]) - 1
+
+    stats: Counter[str] = Counter()
+    scanned = 0
+    inserted = 0
+    explained = False
+
+    while True:
+        lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
+        if lim <= 0:
+            break
+        id_rows = client.query_rows(
+            "SELECT DISTINCT case_id FROM echr_document WHERE case_id > %s AND case_id <= %s ORDER BY case_id LIMIT %s",
+            params=[cursor_id, hi, lim],
+        )
+        if not id_rows:
+            break
+        page_ids = [int(r["case_id"]) for r in id_rows]
+        scanned += len(page_ids)
+        cursor_id = page_ids[-1]
+
+        drows = client.query_rows(
+            """
+            SELECT c.id, c.ecli, c.item_id AS case_item, d.item_id, d.doctype, d.doctype_branch,
+                   d.docname, COALESCE((d.judgement_date AT TIME ZONE 'UTC')::date, c.date_decision) AS decided,
+                   d.conclusion
+              FROM cases c
+              JOIN echr_document d ON d.case_id = c.id
+             WHERE c.id = ANY(%s::bigint[])
+            """,
+            params=[page_ids],
+        )
+        batch_dedup: dict[tuple, tuple] = {}
+        for r in drows:
+            doc = mod.EchrDocument(
+                int(r["id"]), r.get("ecli"), r.get("case_item"), r["item_id"],
+                r.get("doctype"), r.get("doctype_branch"), r.get("docname"),
+                _parse_date(r.get("decided")), r.get("conclusion"),
+            )
+            for rec in mod.own_statuses(doc, stats):
+                key = (doc.case_id, rec.status, rec.status_date, rec.source_dataset)
+                batch_dedup.setdefault(
+                    key,
+                    (
+                        doc.case_id, rec.status, rec.status_date, None,
+                        rec.raw_value, rec.source_dataset, rec.extractor_version,
+                    ),
+                )
+        if batch_dedup:
+            inserted += client.execute_unnest_chunks(
+                INSERT_STATUS_SQL, list(zip(*batch_dedup.values())),
+                chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
+            )
+            explained = True
+        if scanned % 20000 < len(page_ids):
+            print(f"[echr_status] scanned={scanned} last_id={cursor_id} inserted={inserted}", file=sys.stderr, flush=True)
+        if len(page_ids) < lim:
+            break
+
+    return {
+        "mode": "echr_status",
+        "last_id_scanned": cursor_id,
+        "scanned": scanned,
+        "inserted": inserted,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
         choices=(
             "eu_legislation",
+            "cellar_law_refs",
             "rs_eu_law",
             "echr_eu_law",
             "rs_authorities",
@@ -839,6 +1107,8 @@ def main(argv: list[str] | None = None) -> int:
             "cjeu_outcomes",
             "echr_outcomes",
             "rs_dictum",
+            "cjeu_status",
+            "echr_status",
         ),
         required=True,
     )
@@ -859,6 +1129,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "eu_legislation":
         summary = run_eu_legislation(
             client, cle, dry_run=dry_run, chunk_size=args.chunk_size, explain_sql=args.explain
+        )
+    elif args.mode == "cellar_law_refs":
+        summary = run_cellar_law_refs(
+            client, cle, chunk_size=args.chunk_size, dry_run=dry_run,
+            explain_sql=args.explain, max_cases=args.max_cases,
         )
     elif args.mode in ("rs_eu_law", "echr_eu_law"):
         summary = run_eu_law_text(
@@ -882,6 +1157,16 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.mode == "echr_outcomes":
         summary = run_echr_outcomes(
+            client, cle, from_id=args.from_id, to_id=args.to_id,
+            page_size=args.page_size, chunk_size=args.chunk_size,
+            dry_run=dry_run, explain_sql=args.explain, max_cases=args.max_cases,
+        )
+    elif args.mode == "cjeu_status":
+        summary = run_cjeu_status(
+            client, cle, chunk_size=args.chunk_size, dry_run=dry_run, explain_sql=args.explain,
+        )
+    elif args.mode == "echr_status":
+        summary = run_echr_status(
             client, cle, from_id=args.from_id, to_id=args.to_id,
             page_size=args.page_size, chunk_size=args.chunk_size,
             dry_run=dry_run, explain_sql=args.explain, max_cases=args.max_cases,
