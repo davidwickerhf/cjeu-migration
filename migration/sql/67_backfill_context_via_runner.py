@@ -184,6 +184,7 @@ def _load_cle(cle_checkout: Path):
     from data_extraction.linking import (
         artifact,
         authority_text,
+        cellar_authority,
         cellar_law_refs,
         echr_eu_law,
         eu_law_text,
@@ -196,6 +197,7 @@ def _load_cle(cle_checkout: Path):
         "artifact": artifact,
         "text_common": text_common,
         "legislation_loader": legislation_loader,
+        "cellar_authority": cellar_authority,
         "cellar_law_refs": cellar_law_refs,
         "eu_law_text": eu_law_text,
         "rs_eu_law": rs_eu_law,
@@ -1119,6 +1121,387 @@ def run_echr_status(
     }
 
 
+def run_echr_gc_referrals(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+) -> dict[str, Any]:
+    """Second pass of R5.2 ECtHR status: Chamber judgments referred to the Grand Chamber."""
+    mod = cle["case_status"]
+    gc_rows = client.query_rows(
+        """
+        SELECT c.id, c.ecli, c.item_id AS case_item, d.item_id, d.doctype, d.doctype_branch,
+               d.docname, COALESCE((d.judgement_date AT TIME ZONE 'UTC')::date, c.date_decision) AS decided,
+               d.conclusion
+          FROM cases c
+          JOIN echr_document d ON d.case_id = c.id
+         WHERE d.doctype ~* 'JUD'
+           AND (
+                upper(regexp_replace(COALESCE(d.doctype_branch, ''), '[^A-Za-z]', '', 'g')) = 'GRANDCHAMBER'
+             OR d.docname ~* '[\\[(]\\s*GC\\s*[\\])]'
+           )
+         ORDER BY d.judgement_date NULLS LAST, d.item_id
+         LIMIT 950
+        """
+    )
+    grand = []
+    for r in gc_rows:
+        doc = mod.EchrDocument(
+            int(r["id"]), r.get("ecli"), r.get("case_item"), r["item_id"],
+            r.get("doctype"), r.get("doctype_branch"), r.get("docname"),
+            _parse_date(r.get("decided")), r.get("conclusion"),
+        )
+        if doc.is_judgment and doc.formation == "grand_chamber" and not mod._NOT_MERITS_DOCNAME.search(doc.docname or ""):
+            grand.append(doc)
+
+    stats: Counter[str] = Counter()
+    batch_dedup: dict[tuple, tuple] = {}
+    referred_cases: set[int] = set()
+
+    for i in range(0, len(grand), 60):
+        chunk = grand[i : i + 60]
+        gc_items = [d.item_id for d in chunk]
+        other_rows = client.query_rows(
+            """
+            SELECT DISTINCT c.id, c.ecli, c.item_id AS case_item, d.item_id, d.doctype, d.doctype_branch,
+                   d.docname, COALESCE((d.judgement_date AT TIME ZONE 'UTC')::date, c.date_decision) AS decided,
+                   d.conclusion
+              FROM echr_document_appno g
+              JOIN echr_document_appno o ON o.appno = g.appno AND o.source = 'appno' AND o.item_id <> g.item_id
+              JOIN echr_document d ON d.item_id = o.item_id
+              JOIN cases c ON c.id = d.case_id
+             WHERE g.item_id = ANY(%s::text[]) AND g.source = 'appno' AND d.doctype ~* 'JUD'
+             LIMIT 950
+            """,
+            params=[gc_items],
+        )
+        others = [
+            mod.EchrDocument(
+                int(r["id"]), r.get("ecli"), r.get("case_item"), r["item_id"],
+                r.get("doctype"), r.get("doctype_branch"), r.get("docname"),
+                _parse_date(r.get("decided")), r.get("conclusion"),
+            )
+            for r in other_rows
+        ]
+        all_items = sorted(set(gc_items) | {d.item_id for d in others})
+        appnos: dict[str, list[str]] = {}
+        for j in range(0, len(all_items), 150):
+            arows = client.query_rows(
+                "SELECT item_id, appno FROM echr_document_appno WHERE item_id = ANY(%s::text[]) AND source = 'appno' LIMIT 950",
+                params=[all_items[j : j + 150]],
+            )
+            for ar in arows:
+                appnos.setdefault(ar["item_id"], []).append(ar["appno"])
+        by_case_key = {d.key: d.case_id for d in others if d.key is not None}
+        for gc in chunk:
+            for rec in mod.referral_statuses(gc, others, appnos):
+                ch_id = by_case_key.get(rec.case)
+                if ch_id is None or ch_id in referred_cases:
+                    continue
+                referred_cases.add(ch_id)
+                stats["referred_to_grand_chamber"] += 1
+                key = (ch_id, rec.status, rec.status_date, rec.source_dataset)
+                batch_dedup.setdefault(
+                    key,
+                    (
+                        ch_id, rec.status, rec.status_date, gc.case_id,
+                        rec.raw_value, rec.source_dataset, rec.extractor_version,
+                    ),
+                )
+
+    inserted = 0
+    if batch_dedup:
+        inserted = client.execute_unnest_chunks(
+            INSERT_STATUS_SQL, list(zip(*batch_dedup.values())),
+            chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql),
+        )
+    return {
+        "mode": "echr_gc_referrals",
+        "grand_chamber_merits": len(grand),
+        "prepared": len(batch_dedup),
+        "inserted": inserted,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
+def run_cjeu_status_sparql(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+) -> dict[str, Any]:
+    """Query Cellar SPARQL for all fd_100 procedure types on linked CJEU appeals.
+
+    Because cjeu_document.proc_type stores only a single procedure label (often
+    'Action for annulment'), querying all fd_100 triples recovers 'Appeal - successful'
+    (PVOI=OB) and 'Appeal against penalty - successful' (SANC=OB) for case_status
+    ('overturned'), plus missing appeal outcomes for case_outcome.
+    """
+    import urllib.parse
+    import urllib.request
+
+    mod = cle["case_status"]
+    out_mod = cle["cjeu_outcomes"]
+    endpoint = "https://publications.europa.eu/webapi/rdf/sparql"
+
+    # Fetch all resolved appeal_of links (paginated cleanly)
+    appeal_links: list[dict[str, Any]] = []
+    last_cc_id = 0
+    while True:
+        rows = client.query_rows(
+            """
+            SELECT cc.id, a.id AS a_id, a.ecli AS a_ecli, COALESCE(ad.celex_id, a.celex_id) AS a_celex,
+                   a.date_decision AS a_date, u.id AS u_id, u.ecli AS u_ecli,
+                   COALESCE(ud.celex_id, u.celex_id) AS u_celex
+              FROM case_citation cc
+              JOIN cases a ON a.id = cc.source_case_id
+              LEFT JOIN cjeu_document ad ON ad.case_id = a.id
+              JOIN cases u ON u.id = cc.target_case_id
+              LEFT JOIN cjeu_document ud ON ud.case_id = u.id
+             WHERE cc.source_dataset = 'cellar_relation_resolved'
+               AND cc.relation_type = 'appeal_of'
+               AND cc.target_case_id IS NOT NULL
+               AND cc.id > %s
+             ORDER BY cc.id
+             LIMIT 900
+            """,
+            params=[last_cc_id],
+        )
+        if not rows:
+            break
+        appeal_links.extend(rows)
+        last_cc_id = int(rows[-1]["id"])
+        if len(rows) < 900:
+            break
+
+    celexes = sorted({r["a_celex"] for r in appeal_links if r.get("a_celex")})
+    code_to_label = {
+        "PVOI%3DOB": ("Appeal - successful", "successful", True),
+        "SANC%3DOB": ("Appeal against penalty - successful", "successful", True),
+        "PVOI%3DRF": ("Appeal - unfounded", "unfounded", False),
+        "SANC%3DRF": ("Appeal against penalty - unfounded", "unfounded", False),
+        "PVOI%3DRI": ("Appeal - inadmissible", "inadmissible", False),
+        "SANC%3DRI": ("Appeal against penalty - inadmissible", "inadmissible", False),
+        "PVOI%3DNL": ("Appeal - decision unnecessary", "decision_unnecessary", False),
+    }
+    celex_procs: dict[str, set[str]] = {}
+    for i in range(0, len(celexes), 120):
+        chunk = celexes[i : i + 120]
+        vals = " ".join(f'"{x}"^^xsd:string' for x in chunk)
+        q = f"""
+PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+SELECT ?celex ?proc WHERE {{
+  VALUES ?celex {{ {vals} }}
+  ?w cdm:resource_legal_id_celex ?celex ;
+     cdm:case-law_has_type_procedure_concept_type_procedure ?proc .
+}}
+"""
+        req = urllib.request.Request(
+            endpoint,
+            data=urllib.parse.urlencode({"query": q}).encode(),
+            headers={"Accept": "application/sparql-results+json"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+        for b in data.get("results", {}).get("bindings", []):
+            cx = b["celex"]["value"]
+            code = b["proc"]["value"].split("/")[-1]
+            if code in code_to_label:
+                celex_procs.setdefault(cx, set()).add(code)
+
+    stats: Counter[str] = Counter()
+    status_dedup: dict[tuple, tuple] = {}
+    outcome_dedup: dict[tuple, tuple] = {}
+
+    for r in appeal_links:
+        cx = r.get("a_celex")
+        codes = celex_procs.get(cx, set()) if cx else set()
+        for code in sorted(codes):
+            label, outcome, is_overturned = code_to_label[code]
+            stats[f"code:{code}"] += 1
+            okey = (int(r["a_id"]), "overall", "", outcome, out_mod.SOURCE_DATASET)
+            outcome_dedup.setdefault(
+                okey,
+                (
+                    int(r["a_id"]), "overall", None, outcome,
+                    label, out_mod.SOURCE_DATASET, out_mod.EXTRACTOR_VERSION,
+                ),
+            )
+            if is_overturned:
+                sdate = _parse_date(r.get("a_date"))
+                skey = (int(r["u_id"]), "overturned", sdate, mod.CJEU_DATASET)
+                status_dedup.setdefault(
+                    skey,
+                    (
+                        int(r["u_id"]), "overturned", sdate, int(r["a_id"]),
+                        label, mod.CJEU_DATASET, mod.EXTRACTOR_VERSION,
+                    ),
+                )
+
+    ins_status = 0
+    ins_outcome = 0
+    if status_dedup:
+        ins_status = client.execute_unnest_chunks(
+            INSERT_STATUS_SQL, list(zip(*status_dedup.values())),
+            chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql),
+        )
+    if outcome_dedup:
+        ins_outcome = client.execute_unnest_chunks(
+            INSERT_OUTCOMES_SQL, list(zip(*outcome_dedup.values())),
+            chunk_size=chunk_size, dry_run=dry_run,
+        )
+    return {
+        "mode": "cjeu_status_sparql",
+        "appeal_links_scanned": len(appeal_links),
+        "unique_appeal_celexes": len(celexes),
+        "status_prepared": len(status_dedup),
+        "status_inserted": ins_status,
+        "outcomes_prepared": len(outcome_dedup),
+        "outcomes_inserted": ins_outcome,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
+def run_cellar_authority(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    from_id: int,
+    to_id: int | None,
+    page_size: int,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+    max_cases: int | None,
+) -> dict[str, Any]:
+    """Backfill R4.3 Cellar cited authorities (sector 5/8/E + national_judgement_xml literature)."""
+    mod = cle["cellar_authority"]
+    art = cle["artifact"]
+    bounds = client.query_rows("SELECT min(case_id) AS lo, max(case_id) AS hi FROM cjeu_document")[0]
+    if bounds["lo"] is None:
+        return {"mode": "cellar_authority", "scanned": 0}
+    hi = to_id if to_id is not None else int(bounds["hi"])
+    cursor_id = max(int(bounds["lo"]) - 1, from_id - 1) if from_id > 0 else int(bounds["lo"]) - 1
+
+    stats: Counter[str] = Counter()
+    scanned = 0
+    ins_docs = 0
+    ins_refs = 0
+    explained = False
+
+    while True:
+        lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
+        if lim <= 0:
+            break
+        docs = client.query_rows(
+            """
+            SELECT c.id, c.ecli, COALESCE(d.celex_id, c.celex_id) AS celex_id,
+                   c.item_id, d.national_judgement_xml
+              FROM cjeu_document d
+              JOIN cases c ON c.id = d.case_id
+             WHERE d.case_id > %s AND d.case_id <= %s
+             ORDER BY d.case_id
+             LIMIT %s
+            """,
+            params=[cursor_id, hi, lim],
+        )
+        if not docs:
+            break
+        page_ids = [int(r["id"]) for r in docs]
+        scanned += len(page_ids)
+        cursor_id = page_ids[-1]
+
+        # Fetch unresolved cellar_sparql citations for these CJEU cases (in sub-batches if needed)
+        targets_by_case: dict[int, list[tuple[str, str]]] = {}
+        for j in range(0, len(page_ids), 80):
+            sub_ids = page_ids[j : j + 80]
+            crows = client.query_rows(
+                """
+                SELECT source_case_id, target_celex_raw, relation_type
+                  FROM case_citation
+                 WHERE source_case_id = ANY(%s::bigint[])
+                   AND source_dataset = 'cellar_sparql'
+                   AND target_case_id IS NULL
+                   AND target_celex_raw IS NOT NULL
+                   AND relation_type IN ('cites', 'cited_by')
+                 LIMIT 950
+                """,
+                params=[sub_ids],
+            )
+            for cr in crows:
+                targets_by_case.setdefault(int(cr["source_case_id"]), []).append(
+                    (cr["target_celex_raw"], cr["relation_type"])
+                )
+
+        docs_dedup: dict[tuple[str, str, str], tuple] = {}
+        ref_rows: list[tuple] = []
+        for r in docs:
+            cid = int(r["id"])
+            key = art.CaseKey(
+                ecli=r.get("ecli") or None,
+                celex=r.get("celex_id") or None,
+                item_id=r.get("item_id") or None,
+            )
+            if not (key.ecli or key.celex or key.item_id):
+                continue
+            recs = []
+            if cid in targets_by_case:
+                recs.extend(mod.citation_records(key, targets_by_case[cid], stats, decisions=False))
+            if r.get("national_judgement_xml"):
+                recs.extend(mod.notice_records(key, r["national_judgement_xml"], stats))
+            for rec in recs:
+                doc = rec.authority
+                if doc.identifier:
+                    dkey = (doc.kind, doc.identifier_scheme or "", doc.identifier)
+                    docs_dedup.setdefault(
+                        dkey,
+                        (
+                            doc.kind, doc.identifier_scheme, doc.identifier,
+                            doc.title, doc.issuer, doc.date, doc.url,
+                        ),
+                    )
+                m = rec.mention
+                ref_rows.append(
+                    (
+                        cid, doc.kind, doc.identifier_scheme, doc.identifier,
+                        rec.raw_reference, rec.pinpoint, m.text_field, m.language,
+                        m.char_start, m.char_end, m.context,
+                        rec.source_dataset, rec.extractor_version, rec.match_method, rec.confidence,
+                    )
+                )
+
+        if docs_dedup:
+            ins_docs += client.execute_unnest_chunks(
+                INSERT_AUTHORITY_DOCS_SQL, list(zip(*docs_dedup.values())),
+                chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
+            )
+            explained = True
+        if ref_rows:
+            ins_refs += client.execute_unnest_chunks(
+                INSERT_AUTHORITY_REFS_SQL, list(zip(*ref_rows)),
+                chunk_size=chunk_size, dry_run=dry_run,
+            )
+        if scanned % 10000 < len(page_ids):
+            print(f"[cellar_authority] scanned={scanned} last_id={cursor_id} docs={ins_docs} refs={ins_refs}", file=sys.stderr, flush=True)
+        if len(page_ids) < lim:
+            break
+
+    return {
+        "mode": "cellar_authority",
+        "last_id_scanned": cursor_id,
+        "scanned": scanned,
+        "docs_inserted": ins_docs,
+        "refs_inserted": ins_refs,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1130,11 +1513,14 @@ def main(argv: list[str] | None = None) -> int:
             "echr_eu_law",
             "rs_authorities",
             "echr_authorities",
+            "cellar_authority",
             "cjeu_outcomes",
             "echr_outcomes",
             "rs_dictum",
             "cjeu_status",
+            "cjeu_status_sparql",
             "echr_status",
+            "echr_gc_referrals",
         ),
         required=True,
     )
@@ -1175,6 +1561,12 @@ def main(argv: list[str] | None = None) -> int:
             page_size=args.page_size, chunk_size=args.chunk_size,
             dry_run=dry_run, explain_sql=args.explain, max_cases=args.max_cases,
         )
+    elif args.mode == "cellar_authority":
+        summary = run_cellar_authority(
+            client, cle, from_id=args.from_id, to_id=args.to_id,
+            page_size=args.page_size, chunk_size=args.chunk_size,
+            dry_run=dry_run, explain_sql=args.explain, max_cases=args.max_cases,
+        )
     elif args.mode == "cjeu_outcomes":
         summary = run_cjeu_outcomes(
             client, cle, from_id=args.from_id, to_id=args.to_id,
@@ -1191,11 +1583,19 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_cjeu_status(
             client, cle, chunk_size=args.chunk_size, dry_run=dry_run, explain_sql=args.explain,
         )
+    elif args.mode == "cjeu_status_sparql":
+        summary = run_cjeu_status_sparql(
+            client, cle, chunk_size=args.chunk_size, dry_run=dry_run, explain_sql=args.explain,
+        )
     elif args.mode == "echr_status":
         summary = run_echr_status(
             client, cle, from_id=args.from_id, to_id=args.to_id,
             page_size=args.page_size, chunk_size=args.chunk_size,
             dry_run=dry_run, explain_sql=args.explain, max_cases=args.max_cases,
+        )
+    elif args.mode == "echr_gc_referrals":
+        summary = run_echr_gc_referrals(
+            client, cle, chunk_size=args.chunk_size, dry_run=dry_run, explain_sql=args.explain,
         )
     else:
         summary = run_rs_dictum(
