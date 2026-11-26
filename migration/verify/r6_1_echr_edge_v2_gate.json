@@ -1,0 +1,4914 @@
+{
+  "build_version": "r6.1-v3",
+  "legacy_total_resolved": 428440,
+  "v2_total_staged": 157972,
+  "kept": 155445,
+  "dropped": 272995,
+  "dropped_with_scl": 269068,
+  "dropped_source_no_scl": 3927,
+  "added": 2527,
+  "before_network": {
+    "sources": 19129,
+    "targets": 44003,
+    "edges": 428440,
+    "mean_out_deg": 22.4,
+    "p50_out_deg": 7.0,
+    "p90_out_deg": 36.0,
+    "p99_out_deg": 91.0,
+    "max_out_deg": 15597,
+    "gt_100_cases": 151,
+    "gt_300_cases": 54,
+    "gt_300_edges": 164177
+  },
+  "after_network": {
+    "sources": 19304,
+    "targets": 18832,
+    "edges": 157972,
+    "mean_out_deg": 8.18,
+    "p50_out_deg": 4.0,
+    "p90_out_deg": 21.0,
+    "p99_out_deg": 51.0,
+    "max_out_deg": 205,
+    "gt_100_cases": 14,
+    "gt_300_cases": 0,
+    "gt_300_edges": 0
+  },
+  "drop_reasons": {
+    "non_owner_appno_fanout": 162214,
+    "wrong_doctype_decision_without_dec_cue": 78718,
+    "extra_judgment_for_same_appno": 17837,
+    "wrong_doctype_judgment_for_dec_cue": 4136,
+    "source_no_scl": 3927,
+    "future_target_date": 3045,
+    "extra_decision_for_same_appno": 2887,
+    "unmatched_with_owner_appno_in_scl": 173,
+    "self_loop": 54,
+    "communicated_target": 4
+  },
+  "v2_rule_counts": {
+    "scl_judgment": 103914,
+    "scl_decision_cue": 25850,
+    "scl_judgment_year": 13103,
+    "scl_judgment_exact_date": 8806,
+    "scl_decision_cue_exact_date": 2660,
+    "scl_decision_no_judgment": 1554,
+    "scl_judgment_year_gc_principal_ecli_appno": 408,
+    "scl_decision_cue_year": 299,
+    "scl_judgment_year_principal_ecli_appno": 285,
+    "scl_judgment_exact_date_year_principal_ecli_appno": 260,
+    "scl_decision_cue_year_principal_earliest": 126,
+    "scl_judgment_year_principal": 110,
+    "scl_decision_cue_principal_earliest": 99,
+    "scl_decision_no_judgment_exact_date": 72,
+    "scl_judgment_gc_just_satisfaction": 54,
+    "scl_decision_cue_exact_date_year_principal_earliest": 51,
+    "scl_judgment_principal": 48,
+    "scl_judgment_gc": 45,
+    "scl_decision_no_judgment_principal_earliest": 39,
+    "scl_judgment_principal_earliest": 34,
+    "scl_judgment_exact_date_year_gc_principal_ecli_appno": 34,
+    "scl_judgment_year_gc_principal": 34,
+    "scl_judgment_principal_ecli_appno": 15,
+    "scl_decision_cue_exact_date_year_principal_ecli_appno": 13,
+    "scl_judgment_exact_date_year_principal_earliest": 13,
+    "scl_decision_no_judgment_year": 12,
+    "scl_judgment_gc_principal": 8,
+    "scl_judgment_year_earliest": 6,
+    "scl_decision_no_judgment_exact_date_year_principal_earliest": 4,
+    "scl_decision_cue_principal_ecli_appno": 3,
+    "scl_decision_no_judgment_year_principal_earliest": 3,
+    "scl_judgment_just_satisfaction": 2,
+    "scl_judgment_year_gc_principal_earliest": 2,
+    "scl_judgment_year_principal_earliest": 2,
+    "scl_decision_no_judgment_principal_ecli_appno_earliest": 1,
+    "scl_judgment_gc_principal_ecli_appno": 1,
+    "scl_judgment_earliest": 1,
+    "scl_decision_no_judgment_exact_date_year_principal_ecli_appno": 1
+  },
+  "top_explosions_before_after": [
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "legacy_out_deg": 15597,
+      "v2_out_deg": 205,
+      "dropped": 15392
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "legacy_out_deg": 9091,
+      "v2_out_deg": 30,
+      "dropped": 9061
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "legacy_out_deg": 7330,
+      "v2_out_deg": 79,
+      "dropped": 7251
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "legacy_out_deg": 7313,
+      "v2_out_deg": 92,
+      "dropped": 7221
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001558710",
+      "source_date": "2025-12-11",
+      "legacy_out_deg": 6908,
+      "v2_out_deg": 33,
+      "dropped": 6875
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "legacy_out_deg": 6690,
+      "v2_out_deg": 41,
+      "dropped": 6649
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1215JUD001691521",
+      "source_date": "2025-12-15",
+      "legacy_out_deg": 6653,
+      "v2_out_deg": 71,
+      "dropped": 6582
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1127JUD004305022",
+      "source_date": "2025-11-27",
+      "legacy_out_deg": 6243,
+      "v2_out_deg": 36,
+      "dropped": 6207
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "legacy_out_deg": 6186,
+      "v2_out_deg": 24,
+      "dropped": 6162
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "legacy_out_deg": 4777,
+      "v2_out_deg": 43,
+      "dropped": 4734
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000603021",
+      "source_date": "2025-11-13",
+      "legacy_out_deg": 4207,
+      "v2_out_deg": 25,
+      "dropped": 4182
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003270719",
+      "source_date": "2026-01-15",
+      "legacy_out_deg": 3916,
+      "v2_out_deg": 32,
+      "dropped": 3884
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD003470121",
+      "source_date": "2025-12-16",
+      "legacy_out_deg": 3732,
+      "v2_out_deg": 27,
+      "dropped": 3705
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD004656919",
+      "source_date": "2025-12-11",
+      "legacy_out_deg": 3300,
+      "v2_out_deg": 20,
+      "dropped": 3280
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD001968921",
+      "source_date": "2025-11-13",
+      "legacy_out_deg": 3031,
+      "v2_out_deg": 26,
+      "dropped": 3005
+    }
+  ],
+  "drop_sample_count": 320,
+  "keep_sample_count": 60,
+  "added_sample_count": 30,
+  "sampled_drops": [
+    {
+      "reason": "communicated_target",
+      "source_ecli": "ECLI:CE:ECHR:2026:1022JUD000868314",
+      "source_date": "2026-10-22",
+      "target_ecli": null,
+      "target_date": null,
+      "target_kind": "communicated",
+      "target_owner_appnos": [
+        "4184/15",
+        "4317/15",
+        "4323/15"
+      ],
+      "evidence": "target is communicated case (None)"
+    },
+    {
+      "reason": "communicated_target",
+      "source_ecli": "ECLI:CE:ECHR:2026:0723JUD001534520",
+      "source_date": "2026-07-23",
+      "target_ecli": null,
+      "target_date": null,
+      "target_kind": "communicated",
+      "target_owner_appnos": [
+        "56710/13",
+        "56727/13",
+        "57412/13"
+      ],
+      "evidence": "target is communicated case (None)"
+    },
+    {
+      "reason": "communicated_target",
+      "source_ecli": "ECLI:CE:ECHR:2026:0625JUD000047421",
+      "source_date": "2026-06-25",
+      "target_ecli": null,
+      "target_date": null,
+      "target_kind": "communicated",
+      "target_owner_appnos": [
+        "54795/21"
+      ],
+      "evidence": "target is communicated case (None)"
+    },
+    {
+      "reason": "communicated_target",
+      "source_ecli": "ECLI:CE:ECHR:2026:0825JUD000217024",
+      "source_date": "2026-08-25",
+      "target_ecli": null,
+      "target_date": null,
+      "target_kind": "communicated",
+      "target_owner_appnos": [
+        "19699/18"
+      ],
+      "evidence": "target is communicated case (None)"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:0119DEC001944302",
+      "source_date": "2006-01-19",
+      "target_ecli": "ECLI:CE:ECHR:2000:0427DEC004939299",
+      "target_date": "2000-04-27",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "49392/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0918DEC004939299 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:0427DEC004939299; scl='Debbasch c. France (déc.), no 49392/99, 18 septembre 2001'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:0522DEC000803505",
+      "source_date": "2006-05-22",
+      "target_ecli": "ECLI:CE:ECHR:1998:1027DEC003952198",
+      "target_date": "1998-10-27",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "39521/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:1005DEC003952198 (scl_decision_cue_year) over ECLI:CE:ECHR:1998:1027DEC003952198; scl='González Marín c. Espagne (déc.), no 39521/98, CEDH 1999-VII'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2020:0707JUD000529414",
+      "source_date": "2020-07-07",
+      "target_ecli": "ECLI:CE:ECHR:1996:0228DEC002331394",
+      "target_date": "1996-02-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "23313/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1995:0518DEC002331394 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:1996:0228DEC002331394; scl='Erbs v. France, no. 23313/94, Commission decision of 18 May 1995'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2005:0217JUD005627100",
+      "source_date": "2005-02-17",
+      "target_ecli": "ECLI:CE:ECHR:1998:0304DEC003109396",
+      "target_date": "1998-03-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31093/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1997:0226DEC003109396 (scl_decision_cue_principal_earliest) over ECLI:CE:ECHR:1998:0304DEC003109396; scl='Schlader v. Austria (Dec.), no. 31093/96, 7 March 2000'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2019:0827JUD003263109",
+      "source_date": "2019-08-27",
+      "target_ecli": "ECLI:CE:ECHR:2008:0104DEC004552004",
+      "target_date": "2008-01-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "45520/04"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2014:1125DEC004552004 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2008:0104DEC004552004; scl='Larionovs and Tess v. Latvia (dec.), nos. 45520/04 and 19363/05, § 172, 25 November 2014'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2019:0124JUD007657713",
+      "source_date": "2019-01-24",
+      "target_ecli": "ECLI:CE:ECHR:2000:0829DEC004423498",
+      "target_date": "2000-08-29",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "44234/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0124DEC004423498 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:0829DEC004423498; scl='Uçak v. the United Kingdom (dec.), no 44234/98, 24 January 2002'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:0202DEC005146699",
+      "source_date": "2006-02-02",
+      "target_ecli": "ECLI:CE:ECHR:2003:1007DEC007175201",
+      "target_date": "2003-10-07",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "71752/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0114DEC007175201 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2003:1007DEC007175201; scl='Quiles Gonzalez c. Espagne (déc.), no 71752/01, 14 janvier 2003'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2002:0903DEC006760301",
+      "source_date": "2002-09-03",
+      "target_ecli": "ECLI:CE:ECHR:2000:0302DEC004542499",
+      "target_date": "2000-03-02",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "45424/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:1212DEC004542499 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:0302DEC004542499; scl='Truhli c. Croatie (déc.), n° 45424/99, 12.12.2000, non publiée'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2007:0412JUD006377800",
+      "source_date": "2007-04-12",
+      "target_ecli": "ECLI:CE:ECHR:1996:1021DEC002922195",
+      "target_date": "1996-10-21",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "29221/95",
+        "29222/95",
+        "29223/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1998:0629DEC002922195 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:1996:1021DEC002922195; scl='Stankov and United Macedonian Organisation “Ilinden” v. Bulgaria, nos. 29221/95 and 29225/95, Commission decision of 29 June 1998, unreported'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:0711DEC001805906",
+      "source_date": "2006-07-11",
+      "target_ecli": "ECLI:CE:ECHR:1998:0414DEC003141496",
+      "target_date": "1998-04-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31414/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0112DEC003141496 (scl_decision_cue_year) over ECLI:CE:ECHR:1998:0414DEC003141496; scl='Karassev v. Finland (dec.), no. 31414/96, ECHR 1999 II'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2005:0628DEC001382802",
+      "source_date": "2005-06-28",
+      "target_ecli": "ECLI:CE:ECHR:2002:0611DEC003866597",
+      "target_date": "2002-06-11",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "38665/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0601DEC003866597 (scl_decision_cue_principal_earliest) over ECLI:CE:ECHR:2002:0611DEC003866597; scl='Bukowski v. Poland (dec.), no. 38665/97, 11 June 2001'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2013:0219JUD003828509",
+      "source_date": "2013-02-19",
+      "target_ecli": "ECLI:CE:ECHR:1998:0414DEC002752695",
+      "target_date": "1998-04-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "27526/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0425DEC002752695 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:1998:0414DEC002752695; scl='Günaydin v.  Turkey (dec.), no 27526/95, 25 April 2002'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2003:0513DEC005186699",
+      "source_date": "2003-05-13",
+      "target_ecli": "ECLI:CE:ECHR:2000:1019DEC004371698",
+      "target_date": "2000-10-19",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "43716/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:1008DEC004371698 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:1019DEC004371698; scl='Susini et autres c. France (déc.), n° 43716/98, 8.10.2002, non publiée'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2012:0911DEC002000709",
+      "source_date": "2012-09-11",
+      "target_ecli": "ECLI:CE:ECHR:1999:0202DEC003735797",
+      "target_date": "1999-02-02",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37357/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1998:0701DEC003735797 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:1999:0202DEC003735797; scl='Pedro Garcia Sanchez c. Espagne, no 37357/97, décision de la Commission du 1er juillet 1998, non publiée'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2021:0518JUD004892416",
+      "source_date": "2021-05-18",
+      "target_ecli": "ECLI:CE:ECHR:1997:0528DEC002632395",
+      "target_date": "1997-05-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "26323/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0601DEC002632395 (scl_decision_cue_year) over ECLI:CE:ECHR:1997:0528DEC002632395; scl='Kiiskinen v. Finland (dec.), no 26323/95, ECHR 1999 V'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2014:0904JUD000014010",
+      "source_date": "2014-09-04",
+      "target_ecli": "ECLI:CE:ECHR:2000:1214DEC004419098",
+      "target_date": "2000-12-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "44190/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0703DEC004419098 (scl_decision_cue_year) over ECLI:CE:ECHR:2000:1214DEC004419098; scl='Nivette v. France (dec.), no 44190/98, ECHR 2001-VII'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2007:0220JUD006571501",
+      "source_date": "2007-02-20",
+      "target_ecli": "ECLI:CE:ECHR:2000:0314DEC003970698",
+      "target_date": "2000-03-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "39706/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:1107DEC003970698 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:0314DEC003970698; scl='Tahsin Ipek v. Turkey (dec.), no. 39706/98, 7 November 2000'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:1130JUD003237402",
+      "source_date": "2006-11-30",
+      "target_ecli": "ECLI:CE:ECHR:2003:1216DEC002943902",
+      "target_date": "2003-12-16",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "29439/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:1126DEC002943902 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2003:1216DEC002943902; scl='Sokur v. Ukraine (dec.), no. 29439/02, 26 November 2002'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2025:0304JUD007500017",
+      "source_date": "2025-03-04",
+      "target_ecli": "ECLI:CE:ECHR:2024:0118DEC000213423",
+      "target_date": "2024-01-18",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "2134/23"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2023:0606DEC000213423 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2024:0118DEC000213423; scl='Pivkina and Others v. Russia (dec.), nos. 2134/23 and 6 others, § 46, 6 June 2023'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:1005JUD002951004",
+      "source_date": "2006-10-05",
+      "target_ecli": "ECLI:CE:ECHR:2003:0304DEC004005798",
+      "target_date": "2003-03-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "40057/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0518DEC004005798 (scl_decision_cue_year) over ECLI:CE:ECHR:2003:0304DEC004005798; scl='Des Fours Walderode v. the Czech Republic (dec.), no. 40057/98, ECHR 2004-V'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:1010JUD006912901",
+      "source_date": "2006-10-10",
+      "target_ecli": "ECLI:CE:ECHR:2001:1016DEC004209698",
+      "target_date": "2001-10-16",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "42096/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0304DEC004209698 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2001:1016DEC004209698; scl='Skawinska v. Poland (dec.), no. 42096/98, 4 March 2003'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2004:1118DEC004546699",
+      "source_date": "2004-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2000:0302DEC004407098",
+      "target_date": "2000-03-02",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "44070/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0705DEC004407098 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:0302DEC004407098; scl='Beljanski c. France (déc.), n° 44070/98, 5 juillet 2001'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2011:0127JUD004222402",
+      "source_date": "2011-01-27",
+      "target_ecli": "ECLI:CE:ECHR:2005:0512DEC001489904",
+      "target_date": "2005-05-12",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "14899/04"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2009:0108DEC001489904 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2005:0512DEC001489904; scl='Babkin v. Russia (dec.), no. 14899/04, 8 January 2009'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2001:0906DEC002633795",
+      "source_date": "2001-09-06",
+      "target_ecli": "ECLI:CE:ECHR:2000:0404DEC002518294",
+      "target_date": "2000-04-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "25182/94",
+        "26956/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1995:1024DEC002518294 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2000:0404DEC002518294; scl='Comm. Eur. D.H.  Nos 25182/94, 26956/95, déc. 24.10.95, non publiée'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2014:1125DEC004552004",
+      "source_date": "2014-11-25",
+      "target_ecli": "ECLI:CE:ECHR:2011:0215DEC003849405",
+      "target_date": "2011-02-15",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "38494/05"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2013:0924DEC003849405 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2011:0215DEC003849405; scl='Ignats v. Latvia (dec.), no. 38494/05, § 114, 24 September 2013'"
+    },
+    {
+      "reason": "extra_decision_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2005:0510DEC001935402",
+      "source_date": "2005-05-10",
+      "target_ecli": "ECLI:CE:ECHR:2001:0619DEC005783600",
+      "target_date": "2001-06-19",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "57836/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0130DEC005783600 (scl_decision_cue_exact_date) over ECLI:CE:ECHR:2001:0619DEC005783600; scl='Mellors v. the United Kingdom (dec.), no. 57836/00, 30 January 2003'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2009:0423JUD001437003",
+      "source_date": "2009-04-23",
+      "target_ecli": "ECLI:CE:ECHR:2001:1011JUD003094396",
+      "target_date": "2001-10-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "30943/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0708JUD003094396 (scl_judgment_year) over ECLI:CE:ECHR:2001:1011JUD003094396 (date=2001-10-11, branch=None, sec=None); scl='Sahin v. Germany [GC],  no. 30943/96, § 105, ECHR 2003-VIII'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2020:1013JUD002814310",
+      "source_date": "2020-10-13",
+      "target_ecli": "ECLI:CE:ECHR:2012:0828JUD001715311",
+      "target_date": "2012-08-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "17153/11",
+        "17157/11",
+        "17160/11"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2014:0325JUD001715311 (scl_judgment_exact_date) over ECLI:CE:ECHR:2012:0828JUD001715311 (date=2012-08-28, branch=None, sec=None); scl='Vučković and Others v. Serbia (preliminary objection) [GC], nos. 17153/11 and 29 others, §§ 69-77, 25 March 2014'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2021:1123JUD004044417",
+      "source_date": "2021-11-23",
+      "target_ecli": "ECLI:CE:ECHR:2017:0214JUD003648007",
+      "target_date": "2017-02-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36480/07"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2018:1211JUD003648007 (scl_judgment_exact_date) over ECLI:CE:ECHR:2017:0214JUD003648007 (date=2017-02-14, branch=None, sec=None); scl='Lekić v. Slovenia [GC], no 36480/07, § 64, 11 December 2018'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2016:0426JUD001992013",
+      "source_date": "2016-04-26",
+      "target_ecli": "ECLI:CE:ECHR:2001:0731JUD004134098",
+      "target_date": "2001-07-31",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41340/98",
+        "41342/98",
+        "41343/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0213JUD004134098 (scl_judgment_year) over ECLI:CE:ECHR:2001:0731JUD004134098 (date=2001-07-31, branch=None, sec=None); scl='Refah Partisi (the Welfare Party) and Others v. Turkey [GC], nos. 41340/98, 41342/98, 41343/98 and 41344/98, ECHR 2003 II'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2025:1023JUD001680321",
+      "source_date": "2025-10-23",
+      "target_ecli": "ECLI:CE:ECHR:2017:0214JUD003648007",
+      "target_date": "2017-02-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36480/07"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2018:1211JUD003648007 (scl_judgment_exact_date) over ECLI:CE:ECHR:2017:0214JUD003648007 (date=2017-02-14, branch=None, sec=None); scl='Lekić v. Slovenia [GC], no. 36480/07, § 65, 11 December 2018'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2021:0121JUD001536714",
+      "source_date": "2021-01-21",
+      "target_ecli": "ECLI:CE:ECHR:2019:0529JUD001517213",
+      "target_date": "2019-05-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "15172/13"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2014:0522JUD001517213 (scl_judgment_exact_date) over ECLI:CE:ECHR:2019:0529JUD001517213 (date=2019-05-29, branch=GRANDCHAMBER, sec=None); scl='Ilgar Mammadov v. Azerbaijan, no. 15172/13, § 102, 22 May 2014'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2016:0614JUD003521409",
+      "source_date": "2016-06-14",
+      "target_ecli": "ECLI:CE:ECHR:2006:1212JUD001337805",
+      "target_date": "2006-12-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "13378/05"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2008:0429JUD001337805 (scl_judgment_year) over ECLI:CE:ECHR:2006:1212JUD001337805 (date=2006-12-12, branch=None, sec=None); scl='Burden v. the United Kingdom [GC], no. 13378/05, §§ 60-63, ECHR 2008'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2005:1117JUD006363200",
+      "source_date": "2005-11-17",
+      "target_ecli": "ECLI:CE:ECHR:2001:0123JUD002834295",
+      "target_date": "2001-01-23",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "28342/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:1028JUD002834295 (scl_judgment_year) over ECLI:CE:ECHR:2001:0123JUD002834295 (date=2001-01-23, branch=GRANDCHAMBER, sec=just_satisfaction); scl='Brumarescu v. Romania [GC], no. 28342/95, § 77, ECHR 1999-VII'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2022:0621JUD001042519",
+      "source_date": "2022-06-21",
+      "target_ecli": "ECLI:CE:ECHR:2017:0202JUD001021112",
+      "target_date": "2017-02-02",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "10211/12",
+        "27505/14"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2018:1204JUD001021112 (scl_judgment_exact_date) over ECLI:CE:ECHR:2017:0202JUD001021112 (date=2017-02-02, branch=None, sec=None); scl='Ilnseher v. Germany [GC], nos. 10211/12 and 27505/14, 4 December 2018'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2018:0118JUD004815111",
+      "source_date": "2018-01-18",
+      "target_ecli": "ECLI:CE:ECHR:2006:1121JUD003450397",
+      "target_date": "2006-11-21",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "34503/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2008:1112JUD003450397 (scl_judgment_year) over ECLI:CE:ECHR:2006:1121JUD003450397 (date=2006-11-21, branch=None, sec=None); scl='Demir and Baykara v. Turkey [GC], no 34503/97, §§ 85 and 86, ECHR 2008'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2005:0715JUD006324200",
+      "source_date": "2005-07-15",
+      "target_ecli": "ECLI:CE:ECHR:2003:1211JUD002463894",
+      "target_date": "2003-12-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "24638/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0530JUD002463894 (scl_judgment_year) over ECLI:CE:ECHR:2003:1211JUD002463894 (date=2003-12-11, branch=None, sec=just_satisfaction); scl='Carbonara and Ventura v. Italy, no. 24638/94, ECHR 2000-VI, §§ 61 and 62'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2012:0626JUD002682806",
+      "source_date": "2012-06-26",
+      "target_ecli": "ECLI:CE:ECHR:2007:0322JUD000163803",
+      "target_date": "2007-03-22",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "1638/03"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2008:0623JUD000163803 (scl_judgment_year) over ECLI:CE:ECHR:2007:0322JUD000163803 (date=2007-03-22, branch=None, sec=None); scl='Maslov v. Austria [GC], no. 1638/03, § 100, ECHR 2008'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2023:1003JUD003927215",
+      "source_date": "2023-10-03",
+      "target_ecli": "ECLI:CE:ECHR:2021:0112JUD003634516",
+      "target_date": "2021-01-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36345/16"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2023:0309JUD003634516 (scl_judgment_exact_date) over ECLI:CE:ECHR:2021:0112JUD003634516 (date=2021-01-12, branch=None, sec=None); scl='L.B. v. Hungary [GC], no 36345/16, § 149, 9 March 2023'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2020:0213JUD000867515",
+      "source_date": "2020-02-13",
+      "target_ecli": "ECLI:CE:ECHR:2017:0404JUD003692507",
+      "target_date": "2017-04-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36925/07"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2019:0129JUD003692507 (scl_judgment_exact_date) over ECLI:CE:ECHR:2017:0404JUD003692507 (date=2017-04-04, branch=None, sec=None); scl='Güzelyurtlu and Others v. Cyprus and Turkey [GC], no. 36925/07, 29 January 2019'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2012:1019JUD004337004",
+      "source_date": "2012-10-19",
+      "target_ecli": "ECLI:CE:ECHR:2004:0629JUD004477498",
+      "target_date": "2004-06-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "44774/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:1110JUD004477498 (scl_judgment_year) over ECLI:CE:ECHR:2004:0629JUD004477498 (date=2004-06-29, branch=None, sec=None); scl='Leyla Sahin v. Turkey [GC], no. 44774/98, §§ 134 and 136, ECHR 2005-XI'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2010:1007JUD001277303",
+      "source_date": "2010-10-07",
+      "target_ecli": "ECLI:CE:ECHR:2002:0618JUD004893999",
+      "target_date": "2002-06-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "48939/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:1130JUD004893999 (scl_judgment_year) over ECLI:CE:ECHR:2002:0618JUD004893999 (date=2002-06-18, branch=None, sec=None); scl='Öneryildiz v. Turkey [GC], no. 48939/99, ECHR 2004-XII'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2010:1102JUD004172306",
+      "source_date": "2010-11-02",
+      "target_ecli": "ECLI:CE:ECHR:2007:0322JUD000163803",
+      "target_date": "2007-03-22",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "1638/03"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2008:0623JUD000163803 (scl_judgment_exact_date) over ECLI:CE:ECHR:2007:0322JUD000163803 (date=2007-03-22, branch=None, sec=None); scl='Maslov v. Austria [GC], no. 1638/03, 23 June 2008'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2014:0325JUD001715311",
+      "source_date": "2014-03-25",
+      "target_ecli": "ECLI:CE:ECHR:2004:1110JUD005658100",
+      "target_date": "2004-11-10",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "56581/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:0301JUD005658100 (scl_judgment_year) over ECLI:CE:ECHR:2004:1110JUD005658100 (date=2004-11-10, branch=None, sec=None); scl='Sejdovic v. Italy [GC], no. 56581/00, § 46, ECHR 2006 II'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2020:0505DEC000359918",
+      "source_date": "2020-05-05",
+      "target_ecli": "ECLI:CE:ECHR:2017:0404JUD003692507",
+      "target_date": "2017-04-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36925/07"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2019:0129JUD003692507 (scl_judgment_exact_date) over ECLI:CE:ECHR:2017:0404JUD003692507 (date=2017-04-04, branch=None, sec=None); scl='Güzelyurtlu and Others v. Cyprus and Turkey [GC], no. 36925/07, 29 January 2019'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2023:1121DEC002524020",
+      "source_date": "2023-11-21",
+      "target_ecli": "ECLI:CE:ECHR:2018:1120JUD001430517",
+      "target_date": "2018-11-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "14305/17"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2020:1222JUD001430517 (scl_judgment_exact_date) over ECLI:CE:ECHR:2018:1120JUD001430517 (date=2018-11-20, branch=None, sec=None); scl='Selahatti Demirtaş v. Turkey (no. 2) [GC], no. 14305/17, § 421, 22 December 2020'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2020:0204JUD008074917",
+      "source_date": "2020-02-04",
+      "target_ecli": "ECLI:CE:ECHR:2016:0628JUD002276812",
+      "target_date": "2016-06-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "22768/12"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2018:0320JUD003768510 (scl_judgment_exact_date) over ECLI:CE:ECHR:2016:0628JUD002276812 (date=2016-06-28, branch=None, sec=None); scl='Radomilja and Others v. Croatia [GC], nos. 37685/10 and 22768/12, §§ 114 and 126, 20 March 2018'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2022:0111JUD007887313",
+      "source_date": "2022-01-11",
+      "target_ecli": "ECLI:CE:ECHR:2014:0527JUD002026112",
+      "target_date": "2014-05-27",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "20261/12"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2016:0623JUD002026112 (scl_judgment_exact_date) over ECLI:CE:ECHR:2014:0527JUD002026112 (date=2014-05-27, branch=None, sec=None); scl='Baka v. Hungary [GC], no. 20261/12, § 159, 23 June 2016'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2023:0706JUD002118119",
+      "source_date": "2023-07-06",
+      "target_ecli": "ECLI:CE:ECHR:2018:0206JUD002172211",
+      "target_date": "2018-02-06",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "21722/11"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2013:0109JUD002172211 (scl_judgment_year) over ECLI:CE:ECHR:2018:0206JUD002172211 (date=2018-02-06, branch=None, sec=striking_out); scl='Oleksandr Volkov v. Ukraine, no. 21722/11, ECHR 2013'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2022:1122JUD004439415",
+      "source_date": "2022-11-22",
+      "target_ecli": "ECLI:CE:ECHR:2013:1121JUD002338009",
+      "target_date": "2013-11-21",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "23380/09"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2015:0928JUD002338009 (scl_judgment_year) over ECLI:CE:ECHR:2013:1121JUD002338009 (date=2013-11-21, branch=None, sec=None); scl='Bouyid v. Belgium [GC], no. 23380/09, §§ 83-85, ECHR 2015'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2008:0724JUD003545004",
+      "source_date": "2008-07-24",
+      "target_ecli": "ECLI:CE:ECHR:2001:0725JUD004889899",
+      "target_date": "2001-07-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "48898/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0506JUD004889899 (scl_judgment_year) over ECLI:CE:ECHR:2001:0725JUD004889899 (date=2001-07-25, branch=None, sec=None); scl='Perna v. Italy [GC], no. 48898/99, § 29, ECHR 2003-V'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2023:0119JUD003266719",
+      "source_date": "2023-01-19",
+      "target_ecli": "ECLI:CE:ECHR:2005:1011JUD007304901",
+      "target_date": "2005-10-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "73049/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2007:0111JUD007304901 (scl_judgment_year) over ECLI:CE:ECHR:2005:1011JUD007304901 (date=2005-10-11, branch=None, sec=None); scl='Anheuser-Busch Inc. v. Portugal [GC], no. 73049/01, § 65, ECHR 2007-I'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2025:1028JUD003406821",
+      "source_date": "2025-10-28",
+      "target_ecli": "ECLI:CE:ECHR:2016:0628JUD002276812",
+      "target_date": "2016-06-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "22768/12"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2018:0320JUD003768510 (scl_judgment_exact_date) over ECLI:CE:ECHR:2016:0628JUD002276812 (date=2016-06-28, branch=None, sec=None); scl='Radomilja and Others v. Croatia [GC], nos. 37685/10 and 22768/12, 20 March 2018'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2000:0919DEC003172596",
+      "source_date": "2000-09-19",
+      "target_ecli": "ECLI:CE:ECHR:2000:0404JUD003142396",
+      "target_date": "2000-04-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31423/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0325JUD003142396 (scl_judgment_exact_date) over ECLI:CE:ECHR:2000:0404JUD003142396 (date=2000-04-04, branch=GRANDCHAMBER, sec=just_satisfaction); scl='Papachelas v. Greece judgment [GC], no. 31423/96, § 30, ECHR 1999-II - (25.3.99)'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2024:1022JUD000176623",
+      "source_date": "2024-10-22",
+      "target_ecli": "ECLI:CE:ECHR:2022:0317JUD002482714",
+      "target_date": "2022-03-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "24827/14"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2023:0601JUD002482714 (scl_judgment_exact_date) over ECLI:CE:ECHR:2022:0317JUD002482714 (date=2022-03-17, branch=None, sec=None); scl='Fu Quan, s.r.o. v. the Czech Republic [GC], no. 24827/14, § 137, 1 June 2023'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2010:1109JUD002274603",
+      "source_date": "2010-11-09",
+      "target_ecli": "ECLI:CE:ECHR:2002:0618JUD004893999",
+      "target_date": "2002-06-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "48939/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:1130JUD004893999 (scl_judgment_year) over ECLI:CE:ECHR:2002:0618JUD004893999 (date=2002-06-18, branch=None, sec=None); scl='Öneryildiz v. Turkey [GC], no. 48939/99, § 147, ECHR 2004-XII'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2006:0124DEC006550001",
+      "source_date": "2006-01-24",
+      "target_ecli": "ECLI:CE:ECHR:2001:0426JUD003291196",
+      "target_date": "2001-04-26",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "32911/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0726JUD003291196 (scl_judgment_year) over ECLI:CE:ECHR:2001:0426JUD003291196 (date=2001-04-26, branch=None, sec=None); scl='Meftah and Others v. France [GC], nos. 32911/96, 35237/97 and 34595/97, §§ 41-44, ECHR 2002 VII'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2014:0916JUD004435713",
+      "target_date": "2014-09-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "44357/13"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2016:0517JUD004246113 (scl_judgment_exact_date) over ECLI:CE:ECHR:2014:0916JUD004435713 (date=2014-09-16, branch=None, sec=None); scl='Karácsony and Others v. Hungary [GC], nos. 42461/13 and 44357/13, § 141, 17 May 2016'"
+    },
+    {
+      "reason": "extra_judgment_for_same_appno",
+      "source_ecli": "ECLI:CE:ECHR:2013:1017JUD002682404",
+      "source_date": "2013-10-17",
+      "target_ecli": "ECLI:CE:ECHR:2004:0226JUD004357798",
+      "target_date": "2004-02-26",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "43577/98",
+        "43579/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:0706JUD004357798 (scl_judgment_year) over ECLI:CE:ECHR:2004:0226JUD004357798 (date=2004-02-26, branch=None, sec=None); scl='Nachova and Others v. Bulgaria [GC], nos. 43577/98 and 43579/98, ECHR 2005-VII'"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2025:1204JUD003632522",
+      "target_date": "2025-12-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36325/22"
+      ],
+      "evidence": "target 2025-12-04 > source 2025-11-04"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD001595623",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2025:1125JUD000010322",
+      "target_date": "2025-11-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "103/22"
+      ],
+      "evidence": "target 2025-11-25 > source 2025-11-06"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2000:1114DEC002493594",
+      "source_date": "2000-11-14",
+      "target_ecli": "ECLI:CE:ECHR:2001:0301JUD002770095",
+      "target_date": "2001-03-01",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "27700/95"
+      ],
+      "evidence": "target 2001-03-01 > source 2000-11-14"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2008:0104DEC002380006",
+      "source_date": "2008-01-04",
+      "target_ecli": "ECLI:CE:ECHR:2009:0409JUD007146301",
+      "target_date": "2009-04-09",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "71463/01"
+      ],
+      "evidence": "target 2009-04-09 > source 2008-01-04"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD007739614",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2025:1202DEC003147823",
+      "target_date": "2025-12-02",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31478/23"
+      ],
+      "evidence": "target 2025-12-02 > source 2025-11-13"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2005:0712JUD004285398",
+      "source_date": "2005-07-12",
+      "target_ecli": "ECLI:CE:ECHR:2006:0713JUD000880302",
+      "target_date": "2006-07-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "8803/02",
+        "8804/02",
+        "8805/02"
+      ],
+      "evidence": "target 2006-07-13 > source 2005-07-12"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD003632522",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2025:1216JUD004353722",
+      "target_date": "2025-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "43537/22"
+      ],
+      "evidence": "target 2025-12-16 > source 2025-12-04"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002589323",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2025:1218JUD002117423",
+      "target_date": "2025-12-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "21174/23"
+      ],
+      "evidence": "target 2025-12-18 > source 2025-11-06"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1215JUD001691521",
+      "source_date": "2025-12-15",
+      "target_ecli": "ECLI:CE:ECHR:2025:1216JUD004353722",
+      "target_date": "2025-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "43537/22"
+      ],
+      "evidence": "target 2025-12-16 > source 2025-12-15"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2016:1213JUD005308013",
+      "source_date": "2016-12-13",
+      "target_ecli": "ECLI:CE:ECHR:2017:1212JUD004016706",
+      "target_date": "2017-12-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "40167/06"
+      ],
+      "evidence": "target 2017-12-12 > source 2016-12-13"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2001:0904DEC003859597",
+      "source_date": "2001-09-04",
+      "target_ecli": "ECLI:CE:ECHR:2014:0512JUD002578194",
+      "target_date": "2014-05-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "25781/94"
+      ],
+      "evidence": "target 2014-05-12 > source 2001-09-04"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2013:1024JUD005294310",
+      "source_date": "2013-10-24",
+      "target_ecli": "ECLI:CE:ECHR:2014:0325JUD007124301",
+      "target_date": "2014-03-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "71243/01"
+      ],
+      "evidence": "target 2014-03-25 > source 2013-10-24"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:1211JUD001558710",
+      "target_date": "2025-12-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "15587/10",
+        "18531/14",
+        "32536/10"
+      ],
+      "evidence": "target 2025-12-11 > source 2025-11-18"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2008:1209JUD007595101",
+      "source_date": "2008-12-09",
+      "target_ecli": "ECLI:CE:ECHR:2010:0615JUD001434005",
+      "target_date": "2010-06-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "14340/05"
+      ],
+      "evidence": "target 2010-06-15 > source 2008-12-09"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2025:1113DEC003621919",
+      "target_date": "2025-11-13",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "36219/19"
+      ],
+      "evidence": "target 2025-11-13 > source 2025-11-06"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2006:0330DEC000006102",
+      "source_date": "2006-03-30",
+      "target_ecli": "ECLI:CE:ECHR:2006:0713JUD000880302",
+      "target_date": "2006-07-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "8803/02",
+        "8804/02",
+        "8805/02"
+      ],
+      "evidence": "target 2006-07-13 > source 2006-03-30"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2006:1116JUD000016204",
+      "source_date": "2006-11-16",
+      "target_ecli": "ECLI:CE:ECHR:2007:1204JUD003681897",
+      "target_date": "2007-12-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36818/97"
+      ],
+      "evidence": "target 2007-12-04 > source 2006-11-16"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002323622",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2025:1120DEC000045920",
+      "target_date": "2025-11-20",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "459/20"
+      ],
+      "evidence": "target 2025-11-20 > source 2025-11-06"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2026:0113JUD000454521",
+      "target_date": "2026-01-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "4545/21"
+      ],
+      "evidence": "target 2026-01-13 > source 2025-12-16"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2001:0201DEC005534600",
+      "source_date": "2001-02-01",
+      "target_ecli": "ECLI:CE:ECHR:2001:0412DEC004839299",
+      "target_date": "2001-04-12",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "48392/99"
+      ],
+      "evidence": "target 2001-04-12 > source 2001-02-01"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2005:0405JUD005482500",
+      "source_date": "2005-04-05",
+      "target_ecli": "ECLI:CE:ECHR:2005:1004JUD006420000",
+      "target_date": "2005-10-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "64200/00"
+      ],
+      "evidence": "target 2005-10-04 > source 2005-04-05"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2005:1013DEC004093202",
+      "source_date": "2005-10-13",
+      "target_ecli": "ECLI:CE:ECHR:2005:1215JUD007790901",
+      "target_date": "2005-12-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "77909/01"
+      ],
+      "evidence": "target 2005-12-15 > source 2005-10-13"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2005:0113DEC004220802",
+      "source_date": "2005-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2006:0117DEC004257698",
+      "target_date": "2006-01-17",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "42576/98"
+      ],
+      "evidence": "target 2006-01-17 > source 2005-01-13"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2003:0313DEC007765001",
+      "source_date": "2003-03-13",
+      "target_ecli": "ECLI:CE:ECHR:2006:0713JUD005717500",
+      "target_date": "2006-07-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "57175/00"
+      ],
+      "evidence": "target 2006-07-13 > source 2003-03-13"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2006:0330JUD001030403",
+      "source_date": "2006-03-30",
+      "target_ecli": "ECLI:CE:ECHR:2007:0405JUD007190701",
+      "target_date": "2007-04-05",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "71907/01"
+      ],
+      "evidence": "target 2007-04-05 > source 2006-03-30"
+    },
+    {
+      "reason": "future_target_date",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:1216JUD000241221",
+      "target_date": "2025-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "2412/21"
+      ],
+      "evidence": "target 2025-12-16 > source 2025-11-18"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1127JUD006435619",
+      "source_date": "2025-11-27",
+      "target_ecli": "ECLI:CE:ECHR:2019:0409JUD002388716",
+      "target_date": "2019-04-09",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "23887/16"
+      ],
+      "evidence": "none of target owner appnos ['23887/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0106JUD000048924",
+      "source_date": "2026-01-06",
+      "target_ecli": "ECLI:CE:ECHR:2017:0314JUD000549111",
+      "target_date": "2017-03-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "5491/11"
+      ],
+      "evidence": "none of target owner appnos ['5491/11'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD004806119",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2023:0530DEC004735117",
+      "target_date": "2023-05-30",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "47351/17"
+      ],
+      "evidence": "none of target owner appnos ['47351/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003270719",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2020:0915DEC006062512",
+      "target_date": "2020-09-15",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "60625/12"
+      ],
+      "evidence": "none of target owner appnos ['60625/12'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD007739614",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2019:1203JUD004937913",
+      "target_date": "2019-12-03",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "49379/13"
+      ],
+      "evidence": "none of target owner appnos ['49379/13'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:0327JUD003033622",
+      "target_date": "2025-03-27",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "30336/22"
+      ],
+      "evidence": "none of target owner appnos ['30336/22'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2017:0216JUD001169106",
+      "target_date": "2017-02-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "11691/06"
+      ],
+      "evidence": "none of target owner appnos ['11691/06'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:0304JUD007500017",
+      "target_date": "2025-03-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "75000/17"
+      ],
+      "evidence": "none of target owner appnos ['75000/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD004060719",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2018:0628JUD002023511",
+      "target_date": "2018-06-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "20235/11"
+      ],
+      "evidence": "none of target owner appnos ['20235/11'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003499422",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2025:0116JUD003046423",
+      "target_date": "2025-01-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "30464/23",
+        "30598/23",
+        "31676/23"
+      ],
+      "evidence": "none of target owner appnos ['30464/23', '30598/23', '31676/23'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0106JUD000957023",
+      "source_date": "2026-01-06",
+      "target_ecli": "ECLI:CE:ECHR:2019:1217JUD000789615",
+      "target_date": "2019-12-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "48168/17",
+        "7896/15"
+      ],
+      "evidence": "none of target owner appnos ['48168/17', '7896/15'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1125JUD000239024",
+      "source_date": "2025-11-25",
+      "target_ecli": "ECLI:CE:ECHR:2010:1216JUD000996005",
+      "target_date": "2010-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "9960/05"
+      ],
+      "evidence": "none of target owner appnos ['9960/05'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001558710",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2014:0701DEC004571007",
+      "target_date": "2014-07-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "45710/07"
+      ],
+      "evidence": "none of target owner appnos ['45710/07'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD003632522",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2024:0711JUD003184220",
+      "target_date": "2024-07-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31842/20"
+      ],
+      "evidence": "none of target owner appnos ['31842/20'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2022:1122DEC004621616",
+      "target_date": "2022-11-22",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "46216/16"
+      ],
+      "evidence": "none of target owner appnos ['46216/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2012:0417JUD003192508",
+      "target_date": "2012-04-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31925/08"
+      ],
+      "evidence": "none of target owner appnos ['31925/08'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD003998722",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2011:1018JUD005378509",
+      "target_date": "2011-10-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "53785/09"
+      ],
+      "evidence": "none of target owner appnos ['53785/09'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2003:0717JUD005629800",
+      "target_date": "2003-07-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "56298/00"
+      ],
+      "evidence": "none of target owner appnos ['56298/00'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2021:0720JUD001288616",
+      "target_date": "2021-07-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "12886/16"
+      ],
+      "evidence": "none of target owner appnos ['12886/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1215JUD001691521",
+      "source_date": "2025-12-15",
+      "target_ecli": "ECLI:CE:ECHR:2020:1020JUD000968508",
+      "target_date": "2020-10-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "10460/09",
+        "1965/10",
+        "22572/08"
+      ],
+      "evidence": "none of target owner appnos ['10460/09', '1965/10', '22572/08'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD004060719",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2015:0421DEC003804412",
+      "target_date": "2015-04-21",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "38044/12",
+        "40958/12",
+        "50642/12"
+      ],
+      "evidence": "none of target owner appnos ['38044/12', '40958/12', '50642/12'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1215JUD001691521",
+      "source_date": "2025-12-15",
+      "target_ecli": "ECLI:CE:ECHR:2019:0723JUD002124317",
+      "target_date": "2019-07-23",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "21243/17"
+      ],
+      "evidence": "none of target owner appnos ['21243/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD002342121",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2012:1204DEC001273810",
+      "target_date": "2012-12-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "12738/10"
+      ],
+      "evidence": "none of target owner appnos ['12738/10'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2009:0625JUD004204606",
+      "target_date": "2009-06-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "42046/06"
+      ],
+      "evidence": "none of target owner appnos ['42046/06'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2008:0108JUD002425403",
+      "target_date": "2008-01-08",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "24254/03"
+      ],
+      "evidence": "none of target owner appnos ['24254/03'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001558710",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2024:0409JUD002018321",
+      "target_date": "2024-04-09",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "20183/21"
+      ],
+      "evidence": "none of target owner appnos ['20183/21'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003270719",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2022:0602JUD004921518",
+      "target_date": "2022-06-02",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "49215/18"
+      ],
+      "evidence": "none of target owner appnos ['49215/18'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003499422",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2021:1125DEC005756918",
+      "target_date": "2021-11-25",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "11890/19",
+        "12476/19",
+        "16350/19"
+      ],
+      "evidence": "none of target owner appnos ['11890/19', '12476/19', '16350/19'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD001595623",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2021:1019JUD006999717",
+      "target_date": "2021-10-19",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "69997/17"
+      ],
+      "evidence": "none of target owner appnos ['69997/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0106JUD000957023",
+      "source_date": "2026-01-06",
+      "target_ecli": "ECLI:CE:ECHR:2018:0116DEC001419106",
+      "target_date": "2018-01-16",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "14191/06"
+      ],
+      "evidence": "none of target owner appnos ['14191/06'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2008:1127DEC002790004",
+      "target_date": "2008-11-27",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "27900/04"
+      ],
+      "evidence": "none of target owner appnos ['27900/04'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000603021",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2023:1005JUD005327217",
+      "target_date": "2023-10-05",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "53272/17"
+      ],
+      "evidence": "none of target owner appnos ['53272/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001558710",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2023:0228DEC000474616",
+      "target_date": "2023-02-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "4746/16"
+      ],
+      "evidence": "none of target owner appnos ['4746/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD001968921",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2019:0108DEC003077714",
+      "target_date": "2019-01-08",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "30777/14"
+      ],
+      "evidence": "none of target owner appnos ['30777/14'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2010:0727JUD006527201",
+      "target_date": "2010-07-27",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "65272/01"
+      ],
+      "evidence": "none of target owner appnos ['65272/01'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1125JUD000239024",
+      "source_date": "2025-11-25",
+      "target_ecli": "ECLI:CE:ECHR:2023:1127JUD002188120",
+      "target_date": "2023-11-27",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "21881/20"
+      ],
+      "evidence": "none of target owner appnos ['21881/20'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2005:0210JUD002182402",
+      "target_date": "2005-02-10",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "21824/02"
+      ],
+      "evidence": "none of target owner appnos ['21824/02'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2010:0112DEC002743604",
+      "target_date": "2010-01-12",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "27436/04"
+      ],
+      "evidence": "none of target owner appnos ['27436/04'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000603021",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2021:0608DEC003633120",
+      "target_date": "2021-06-08",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "36331/20"
+      ],
+      "evidence": "none of target owner appnos ['36331/20'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD000995316",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2023:0620JUD003670516",
+      "target_date": "2023-06-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36705/16"
+      ],
+      "evidence": "none of target owner appnos ['36705/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD005980919",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2016:0524JUD003859010",
+      "target_date": "2016-05-24",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "38590/10"
+      ],
+      "evidence": "none of target owner appnos ['38590/10'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD001595623",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2012:0131JUD006122608",
+      "target_date": "2012-01-31",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "61226/08"
+      ],
+      "evidence": "none of target owner appnos ['61226/08'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2008:0708JUD003337405",
+      "target_date": "2008-07-08",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "33374/05"
+      ],
+      "evidence": "none of target owner appnos ['33374/05'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD001595623",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2016:1208JUD000794911",
+      "target_date": "2016-12-08",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "45522/13",
+        "7949/11"
+      ],
+      "evidence": "none of target owner appnos ['45522/13', '7949/11'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003499422",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2015:1013DEC002569008",
+      "target_date": "2015-10-13",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "25690/08"
+      ],
+      "evidence": "none of target owner appnos ['25690/08'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2019:0716JUD002247905",
+      "target_date": "2019-07-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "22479/05"
+      ],
+      "evidence": "none of target owner appnos ['22479/05'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2012:0515JUD003862305",
+      "target_date": "2012-05-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "38623/05"
+      ],
+      "evidence": "none of target owner appnos ['38623/05'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD000274621",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2012:0315JUD000414904",
+      "target_date": "2012-03-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41029/04",
+        "4149/04"
+      ],
+      "evidence": "none of target owner appnos ['41029/04', '4149/04'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2019:0423DEC007903712",
+      "target_date": "2019-04-23",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "79037/12"
+      ],
+      "evidence": "none of target owner appnos ['79037/12'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000603021",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2017:0627DEC003979317",
+      "target_date": "2017-06-27",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "39793/17"
+      ],
+      "evidence": "none of target owner appnos ['39793/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD000549717",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2023:0117JUD000896418",
+      "target_date": "2023-01-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "8964/18"
+      ],
+      "evidence": "none of target owner appnos ['8964/18'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005075617",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2014:0701JUD005692508",
+      "target_date": "2014-07-01",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "56925/08"
+      ],
+      "evidence": "none of target owner appnos ['56925/08'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0106JUD000048924",
+      "source_date": "2026-01-06",
+      "target_ecli": "ECLI:CE:ECHR:2023:0706JUD005458813",
+      "target_date": "2023-07-06",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "54588/13"
+      ],
+      "evidence": "none of target owner appnos ['54588/13'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2013:0716JUD002938503",
+      "target_date": "2013-07-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "29385/03"
+      ],
+      "evidence": "none of target owner appnos ['29385/03'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2010:0518DEC003126404",
+      "target_date": "2010-05-18",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31264/04"
+      ],
+      "evidence": "none of target owner appnos ['31264/04'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD003998722",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2021:1007JUD003888218",
+      "target_date": "2021-10-07",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "38882/18",
+        "50200/19"
+      ],
+      "evidence": "none of target owner appnos ['38882/18', '50200/19'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2022:1115JUD000382417",
+      "target_date": "2022-11-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "3824/17"
+      ],
+      "evidence": "none of target owner appnos ['3824/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD004353722",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2023:0328DEC005234716",
+      "target_date": "2023-03-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "22936/16",
+        "52347/16"
+      ],
+      "evidence": "none of target owner appnos ['22936/16', '52347/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1215JUD001691521",
+      "source_date": "2025-12-15",
+      "target_ecli": "ECLI:CE:ECHR:2024:1203DEC008471217",
+      "target_date": "2024-12-03",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "84712/17"
+      ],
+      "evidence": "none of target owner appnos ['84712/17'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD000549717",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2024:0220JUD000640621",
+      "target_date": "2024-02-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "6406/21"
+      ],
+      "evidence": "none of target owner appnos ['6406/21'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2006:0926JUD003112205",
+      "target_date": "2006-09-26",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31122/05"
+      ],
+      "evidence": "none of target owner appnos ['31122/05'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD000995316",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2017:1212JUD005324014",
+      "target_date": "2017-12-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "53240/14"
+      ],
+      "evidence": "none of target owner appnos ['53240/14'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2015:0611JUD003195311",
+      "target_date": "2015-06-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31953/11"
+      ],
+      "evidence": "none of target owner appnos ['31953/11'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD005302120",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2011:0510JUD002686605",
+      "target_date": "2011-05-10",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "26866/05"
+      ],
+      "evidence": "none of target owner appnos ['26866/05'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2019:0528JUD000175011",
+      "target_date": "2019-05-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "1750/11"
+      ],
+      "evidence": "none of target owner appnos ['1750/11'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2007:0301JUD003801503",
+      "target_date": "2007-03-01",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "38015/03"
+      ],
+      "evidence": "none of target owner appnos ['38015/03'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2020:0929DEC004921107",
+      "target_date": "2020-09-29",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "49211/07"
+      ],
+      "evidence": "none of target owner appnos ['49211/07'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD000908718",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2008:0724JUD001860303",
+      "target_date": "2008-07-24",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "18603/03"
+      ],
+      "evidence": "none of target owner appnos ['18603/03'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2017:0126JUD006080209",
+      "target_date": "2017-01-26",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "60802/09"
+      ],
+      "evidence": "none of target owner appnos ['60802/09'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2021:1019JUD004007213",
+      "target_date": "2021-10-19",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "40072/13"
+      ],
+      "evidence": "none of target owner appnos ['40072/13'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1215JUD001691521",
+      "source_date": "2025-12-15",
+      "target_ecli": "ECLI:CE:ECHR:2024:0111JUD004326721",
+      "target_date": "2024-01-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "43267/21",
+        "43272/21",
+        "43415/21"
+      ],
+      "evidence": "none of target owner appnos ['43267/21', '43272/21', '43415/21'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2016:1108DEC005651116",
+      "target_date": "2016-11-08",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "56511/16"
+      ],
+      "evidence": "none of target owner appnos ['56511/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD003632522",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2020:0505JUD007131413",
+      "target_date": "2020-05-05",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "68028/14",
+        "71314/13"
+      ],
+      "evidence": "none of target owner appnos ['68028/14', '71314/13'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002589323",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2019:0131JUD007810314",
+      "target_date": "2019-01-31",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "78103/14"
+      ],
+      "evidence": "none of target owner appnos ['78103/14'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1127JUD006435619",
+      "source_date": "2025-11-27",
+      "target_ecli": "ECLI:CE:ECHR:2017:0124JUD002535812",
+      "target_date": "2017-01-24",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "25358/12"
+      ],
+      "evidence": "none of target owner appnos ['25358/12'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2007:0329JUD004125002",
+      "target_date": "2007-03-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41250/02"
+      ],
+      "evidence": "none of target owner appnos ['41250/02'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2019:0917JUD001009410",
+      "target_date": "2019-09-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "10094/10"
+      ],
+      "evidence": "none of target owner appnos ['10094/10'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001558710",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2021:1014JUD002042215",
+      "target_date": "2021-10-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "20422/15"
+      ],
+      "evidence": "none of target owner appnos ['20422/15'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2025:0923DEC001639518",
+      "target_date": "2025-09-23",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "16395/18"
+      ],
+      "evidence": "none of target owner appnos ['16395/18'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD003998722",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2022:1013JUD000567321",
+      "target_date": "2022-10-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "20889/21",
+        "5673/21"
+      ],
+      "evidence": "none of target owner appnos ['20889/21', '5673/21'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2009:1201JUD004469806",
+      "target_date": "2009-12-01",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "11197/07",
+        "11711/07",
+        "13995/07"
+      ],
+      "evidence": "none of target owner appnos ['11197/07', '11711/07', '13995/07'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2008:1216JUD005847800",
+      "target_date": "2008-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "58478/00"
+      ],
+      "evidence": "none of target owner appnos ['58478/00'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD003763919",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2006:1128DEC007697301",
+      "target_date": "2006-11-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "76973/01"
+      ],
+      "evidence": "none of target owner appnos ['76973/01'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD003470121",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2021:0914JUD001391806",
+      "target_date": "2021-09-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "13918/06"
+      ],
+      "evidence": "none of target owner appnos ['13918/06'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003499422",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2022:0414JUD006069911",
+      "target_date": "2022-04-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "60699/11"
+      ],
+      "evidence": "none of target owner appnos ['60699/11'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1218JUD003381822",
+      "source_date": "2025-12-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:0211JUD006022016",
+      "target_date": "2025-02-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "60220/16"
+      ],
+      "evidence": "none of target owner appnos ['60220/16'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005300221",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2005:1129JUD003729603",
+      "target_date": "2005-11-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "37296/03"
+      ],
+      "evidence": "none of target owner appnos ['37296/03'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD003270719",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2014:0619JUD001244004",
+      "target_date": "2014-06-19",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "12440/04"
+      ],
+      "evidence": "none of target owner appnos ['12440/04'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2013:0122DEC003307110",
+      "target_date": "2013-01-22",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "33071/10"
+      ],
+      "evidence": "none of target owner appnos ['33071/10'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:1984:1204DEC001087884",
+      "source_date": "1984-12-04",
+      "target_ecli": "ECLI:CE:ECHR:1976:0308DEC000737476",
+      "target_date": "1976-03-08",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "7374/76"
+      ],
+      "evidence": "none of target owner appnos ['7374/76'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1209JUD001903521",
+      "source_date": "2025-12-09",
+      "target_ecli": "ECLI:CE:ECHR:2015:0120DEC005080710",
+      "target_date": "2015-01-20",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "50807/10"
+      ],
+      "evidence": "none of target owner appnos ['50807/10'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2016:0114JUD003095512",
+      "target_date": "2016-01-14",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "30955/12"
+      ],
+      "evidence": "none of target owner appnos ['30955/12'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1104JUD001798221",
+      "source_date": "2025-11-04",
+      "target_ecli": "ECLI:CE:ECHR:2023:0620JUD000218612",
+      "target_date": "2023-06-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "2186/12"
+      ],
+      "evidence": "none of target owner appnos ['2186/12'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2016:0322DEC000180715",
+      "target_date": "2016-03-22",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "1807/15"
+      ],
+      "evidence": "none of target owner appnos ['1807/15'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "non_owner_appno_fanout",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD003998722",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2024:1107DEC005382515",
+      "target_date": "2024-11-07",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "53825/15"
+      ],
+      "evidence": "none of target owner appnos ['53825/15'] appear in source scl (legacy joined extractedappno)"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2026:0108JUD002353814",
+      "target_date": "2026-01-08",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "23538/14",
+        "23554/14"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD004338817",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2026:0113JUD004338817",
+      "target_date": "2026-01-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "43388/17"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1218JUD003751420",
+      "source_date": "2025-12-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:1218JUD003751420",
+      "target_date": "2025-12-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "37514/20",
+        "37525/20",
+        "37533/20"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD000241221",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2025:1216JUD000241221",
+      "target_date": "2025-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "2412/21"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD005980919",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2026:0113JUD005980919",
+      "target_date": "2026-01-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "14407/20",
+        "17008/20",
+        "59809/19"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1209JUD001381022",
+      "source_date": "2025-12-09",
+      "target_ecli": "ECLI:CE:ECHR:2025:1209JUD001381022",
+      "target_date": "2025-12-09",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "13810/22"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD000353821",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2026:0113JUD000353821",
+      "target_date": "2026-01-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "3538/21"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002323622",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2025:1106JUD002323622",
+      "target_date": "2025-11-06",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "23236/22"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1118JUD005075617",
+      "source_date": "2025-11-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:1118JUD005075617",
+      "target_date": "2025-11-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "50756/17"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2025:1211JUD001318620",
+      "target_date": "2025-12-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "13186/20",
+        "16757/20",
+        "20129/21"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD001968921",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2025:1113JUD001968921",
+      "target_date": "2025-11-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "19689/21",
+        "42794/22"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1211JUD000908718",
+      "source_date": "2025-12-11",
+      "target_ecli": "ECLI:CE:ECHR:2025:1211JUD000908718",
+      "target_date": "2025-12-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "9087/18"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1127JUD004305022",
+      "source_date": "2025-11-27",
+      "target_ecli": "ECLI:CE:ECHR:2025:1127JUD004305022",
+      "target_date": "2025-11-27",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "43050/22"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0113JUD004806119",
+      "source_date": "2026-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2026:0113JUD004806119",
+      "target_date": "2026-01-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "48061/19"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0108JUD004060719",
+      "source_date": "2026-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2026:0108JUD004060719",
+      "target_date": "2026-01-08",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "34583/20",
+        "40607/19"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1218JUD003381822",
+      "source_date": "2025-12-18",
+      "target_ecli": "ECLI:CE:ECHR:2025:1218JUD003381822",
+      "target_date": "2025-12-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "33818/22"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2025:1113JUD000377217",
+      "target_date": "2025-11-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "3772/17"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0115JUD001327820",
+      "source_date": "2026-01-15",
+      "target_ecli": "ECLI:CE:ECHR:2026:0115JUD001327820",
+      "target_date": "2026-01-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "13278/20"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD002342121",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2025:1204JUD002342121",
+      "target_date": "2025-12-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "23421/21"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2026:0106JUD000048924",
+      "source_date": "2026-01-06",
+      "target_ecli": "ECLI:CE:ECHR:2026:0106JUD000048924",
+      "target_date": "2026-01-06",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "489/24"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1125JUD000239024",
+      "source_date": "2025-11-25",
+      "target_ecli": "ECLI:CE:ECHR:2025:1125JUD000239024",
+      "target_date": "2025-11-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "2390/24"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1113JUD003998722",
+      "source_date": "2025-11-13",
+      "target_ecli": "ECLI:CE:ECHR:2025:1113JUD003998722",
+      "target_date": "2025-11-13",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "39987/22"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1204JUD000549717",
+      "source_date": "2025-12-04",
+      "target_ecli": "ECLI:CE:ECHR:2025:1204JUD000549717",
+      "target_date": "2025-12-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "5497/17"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "source_date": "2025-12-16",
+      "target_ecli": "ECLI:CE:ECHR:2025:1216JUD001350520",
+      "target_date": "2025-12-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "11276/21",
+        "1186/21",
+        "1216/21"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "self_loop",
+      "source_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "source_date": "2025-11-06",
+      "target_ecli": "ECLI:CE:ECHR:2025:1106JUD002560820",
+      "target_date": "2025-11-06",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "25608/20",
+        "27250/20",
+        "46481/20"
+      ],
+      "evidence": "source_case_id == target_case_id"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2019:0312JUD005249708",
+      "source_date": "2019-03-12",
+      "target_ecli": "ECLI:CE:ECHR:2014:0325JUD004055906",
+      "target_date": "2014-03-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "40559/06"
+      ],
+      "evidence": "scl='Bayar v. Turkey (nos 1 to 8), nos. 39690/06, 40559/06, 48815/06, 2512/07, 55197/07, 55199/07, 55201/07 and 55202/07, §§ 34-35, 25 March 2014'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2002:0917DEC005218999",
+      "source_date": "2002-09-17",
+      "target_ecli": "ECLI:CE:ECHR:2002:0305DEC004928599",
+      "target_date": "2002-03-05",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "49285/99"
+      ],
+      "evidence": "scl='Rablat c. France (déc.), n° 49285/99, Ottomani c. France (déc.), n° 49857/99'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2006:0309JUD006682001",
+      "source_date": "2006-03-09",
+      "target_ecli": "ECLI:CE:ECHR:2005:1115JUD006717501",
+      "target_date": "2005-11-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "67175/01"
+      ],
+      "evidence": "scl='Reinprecht v. Austria, no. 67175/01, §§ 39 and 40, ECHR 2005-… Rokhlina v. Russia, no. 54071/00, § 60 and § 65, 7 April 2005'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2005:1025JUD006802901",
+      "source_date": "2005-10-25",
+      "target_ecli": "ECLI:CE:ECHR:1992:1209DEC001900691",
+      "target_date": "1992-12-09",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "19006/91"
+      ],
+      "evidence": "scl='Schouten and Meldrum v. Netherlands, (dec.), nos. 19005/91 and 19006/91, 9 December 1994'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:1998:1027DEC004037898",
+      "source_date": "1998-10-27",
+      "target_ecli": "ECLI:CE:ECHR:1998:0701DEC003774797",
+      "target_date": "1998-07-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37747/97"
+      ],
+      "evidence": "scl='No 37725/97 à 37747/97, déc. 1.7.98'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2001:1023DEC005693000",
+      "source_date": "2001-10-23",
+      "target_ecli": "ECLI:CE:ECHR:1996:1021DEC002834195",
+      "target_date": "1996-10-21",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "28341/95"
+      ],
+      "evidence": "scl='Arrêt Garcia Ruiz c. Espagne [GC], n° 30544/96, §§ 28-29, CEDH 1999-I - (21.1.99)Arrêt Rotaru c. Roumanie  [GC], n° 28341/95, § 46, CEDH 2000-V - (4.2.00)'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2012:0207JUD004066008",
+      "source_date": "2012-02-07",
+      "target_ecli": "ECLI:CE:ECHR:2003:0701DEC006691001",
+      "target_date": "2003-07-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "66910/01"
+      ],
+      "evidence": "scl='Société Prisma Presse v. France (dec.), nos. 66910/01 and 71612/01, 1er July 2003'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2005:0614JUD003955302",
+      "source_date": "2005-06-14",
+      "target_ecli": "ECLI:CE:ECHR:2005:0201JUD004227098",
+      "target_date": "2005-02-01",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "42270/98"
+      ],
+      "evidence": "scl='Frangy v. France, no. 42270/98, § 40, 1er February 2005García Ruiz v. Spain [GC], no. 30544/96, § 26, §§ 28-29, ECHR 1999-I'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2009:1208JUD000675805",
+      "source_date": "2009-12-08",
+      "target_ecli": "ECLI:CE:ECHR:2007:0731JUD004155198",
+      "target_date": "2007-07-31",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41551/98"
+      ],
+      "evidence": "scl='Karatepe and Others v. Turkey, nos. 33112/04, 36110/04, 40190/04, 41469/04, 41471/04 and 41551/98, § 20, 7 April 2009'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2009:1008JUD000823703",
+      "source_date": "2009-10-08",
+      "target_ecli": "ECLI:CE:ECHR:2003:0701DEC006691001",
+      "target_date": "2003-07-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "66910/01"
+      ],
+      "evidence": "scl='Société Prisma Presse v. France (dec.), nos. 66910/01 and 71612/01, 1 July 2003'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:1998:1027DEC004034198",
+      "source_date": "1998-10-27",
+      "target_ecli": "ECLI:CE:ECHR:1998:0701DEC003774797",
+      "target_date": "1998-07-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37747/97"
+      ],
+      "evidence": "scl='No 37725/97 à 37747/97, déc. 1.7.98'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2006:0601DEC000862803",
+      "source_date": "2006-06-01",
+      "target_ecli": "ECLI:CE:ECHR:2003:0313DEC007764101",
+      "target_date": "2003-03-13",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "77641/01"
+      ],
+      "evidence": "scl='Kömürcü c. Turquie (déc.), no 77432/01, 28 novembre 2002, et Yildiz et Tas c. Turquie (déc.), no 77641/01, 13 mars 2003'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2014:0304JUD000755209",
+      "source_date": "2014-03-04",
+      "target_ecli": "ECLI:CE:ECHR:2001:0607DEC005313499",
+      "target_date": "2001-06-07",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "53134/99"
+      ],
+      "evidence": "scl='Runkee and White v. the United Kingdom, nos. 42949/98 and 53134/99, § 35, 10 May 2007'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2002:0917DEC005218999",
+      "source_date": "2002-09-17",
+      "target_ecli": "ECLI:CE:ECHR:2001:0306DEC004928599",
+      "target_date": "2001-03-06",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "49285/99"
+      ],
+      "evidence": "scl='Rablat c. France (déc.), n° 49285/99, Ottomani c. France (déc.), n° 49857/99'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2009:0630DEC004356308",
+      "source_date": "2009-06-30",
+      "target_ecli": "ECLI:CE:ECHR:2008:1204JUD003164504",
+      "target_date": "2008-12-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31645/04"
+      ],
+      "evidence": "scl='Dogru et Kervanci c. France nos 31645/04 et 27058/05,§§ 17-22, 75, 76, 4 décembre 2008'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2003:0429JUD004953399",
+      "source_date": "2003-04-29",
+      "target_ecli": "ECLI:CE:ECHR:1997:0523DEC002544494",
+      "target_date": "1997-05-23",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "25444/94"
+      ],
+      "evidence": "scl='Décisions and Rapports 17, p. 180 Gentilhomme and Others v. France, nos 48205/99, 48207/99 and 48209/99, judgment of 14 May 2002, unreported Pélissier and Sassi v. France [GC], no '"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2002:0430DEC005342599",
+      "source_date": "2002-04-30",
+      "target_ecli": "ECLI:CE:ECHR:1999:0928DEC003635097",
+      "target_date": "1999-09-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "36350/97"
+      ],
+      "evidence": "scl='Arrêt Varipati c. Grèce, n° 38459/97, § 32 - (26.10.99) , Siegel c. France (déc.), n° 36350/97, 28.9.1999'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:1988:1012DEC001192186",
+      "source_date": "1988-10-12",
+      "target_ecli": "ECLI:CE:ECHR:1977:0516DEC000705075",
+      "target_date": "1977-05-16",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "7050/75"
+      ],
+      "evidence": "scl='No. 7050/75, Arrowsmith v. the United Kingdom, Comm. Rep. 12.10.78, D.R. 19 p. 5, paras. 69 et seq. No. 1103/61, Yearbook 5, pp. 168, 186'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2007:0111JUD005506600",
+      "source_date": "2007-01-11",
+      "target_ecli": "ECLI:CE:ECHR:1988:0310DEC001180285",
+      "target_date": "1988-03-10",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "11802/85"
+      ],
+      "evidence": "scl='Tête v. France, nos. 11123/84 and 11802/85, Commission decisions of 9 December 1987 and 10 March 1988'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2006:1221JUD005008799",
+      "source_date": "2006-12-21",
+      "target_ecli": "ECLI:CE:ECHR:2003:0312JUD004622199",
+      "target_date": "2003-03-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "46221/99"
+      ],
+      "evidence": "scl='Öcalan v. Turkey [GC], no. 46221/99, § 210 in fine, ECHR 2005-...Özdemir v. Turkey, no. 59659/00, § 26, §§ 35-36, 6 February 2003'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2010:0706JUD004345304",
+      "source_date": "2010-07-06",
+      "target_ecli": "ECLI:CE:ECHR:2006:1219JUD000047702",
+      "target_date": "2006-12-19",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "477/02"
+      ],
+      "evidence": "scl='Yildiz and Tas v. Turkey (nos. 1 à 4), nos. 77641/01, 77642/01, 477/02 and 3847/02, 19 December 2006'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2019:0312JUD005249708",
+      "source_date": "2019-03-12",
+      "target_ecli": "ECLI:CE:ECHR:2014:0325JUD000251207",
+      "target_date": "2014-03-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "2512/07"
+      ],
+      "evidence": "scl='Bayar v. Turkey (nos 1 to 8), nos. 39690/06, 40559/06, 48815/06, 2512/07, 55197/07, 55199/07, 55201/07 and 55202/07, §§ 34-35, 25 March 2014'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:1998:1027DEC004048798",
+      "source_date": "1998-10-27",
+      "target_ecli": "ECLI:CE:ECHR:1998:0701DEC003774797",
+      "target_date": "1998-07-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37747/97"
+      ],
+      "evidence": "scl='No 37725/97 à 37747/97, déc. 1.7.98'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2009:0630DEC001430808",
+      "source_date": "2009-06-30",
+      "target_ecli": "ECLI:CE:ECHR:2008:1204JUD003164504",
+      "target_date": "2008-12-04",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "31645/04"
+      ],
+      "evidence": "scl='Dogru et Kervanci c. France nos 31645/04 et 27058/05,§§ 17-22, 75, 76, 4 décembre 2008'"
+    },
+    {
+      "reason": "unmatched_with_owner_appno_in_scl",
+      "source_ecli": "ECLI:CE:ECHR:2020:0710JUD000031015",
+      "source_date": "2020-07-10",
+      "target_ecli": "ECLI:CE:ECHR:2019:0711JUD006110910",
+      "target_date": "2019-07-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "33773/18",
+        "61109/10"
+      ],
+      "evidence": "scl='Abdalov and Others v. Azerbaijan, nos. 28508/11 and 33773/18, § 108, 11 July 2019'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2003:1009JUD004770399",
+      "source_date": "2003-10-09",
+      "target_ecli": "ECLI:CE:ECHR:1998:0518DEC002277493",
+      "target_date": "1998-05-18",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "22774/93"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0728JUD002277493 (scl_judgment); scl='Immobiliare Saffi v. Italy [GC], no. 22774/93, §§ 18-35, 46-66, ECHR 1999-V'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2004:1014DEC004558499",
+      "source_date": "2004-10-14",
+      "target_ecli": "ECLI:CE:ECHR:2000:1212DEC003187196",
+      "target_date": "2000-12-12",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31871/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0708JUD003094396 (scl_judgment_year); scl='Sommerfeld c. Allemagne [GC], n° 31871/96, §§ 68, 70-73, CEDH 2003 VIII (extraits)'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2014:0612JUD001471704",
+      "source_date": "2014-06-12",
+      "target_ecli": "ECLI:CE:ECHR:2001:1211DEC004612999",
+      "target_date": "2001-12-11",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "46129/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:1112JUD004612999 (scl_judgment); scl='Zvolský and Zvolská v. the Czech Republic, no. 46129/99, § 67-68 and 72, ECHR 2002-IX'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2003:0304JUD002721595",
+      "source_date": "2003-03-04",
+      "target_ecli": "ECLI:CE:ECHR:1996:1014DEC002491994",
+      "target_date": "1996-10-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "24919/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0708JUD002491994 (scl_judgment); scl='Gerger v. Turkey [GC], no. 24919/94, § 50, 8 July 1999'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2000:0511DEC005041899",
+      "source_date": "2000-05-11",
+      "target_ecli": "ECLI:CE:ECHR:1997:0224DEC003054496",
+      "target_date": "1997-02-24",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "30544/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0121JUD003054496 (scl_judgment); scl='Arrêt Garcia Ruiz c. Espagne [GC], n° 30544/96, § 28, CEDH 1999-I - (21.1.99)'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2016:0607DEC002067215",
+      "source_date": "2016-06-07",
+      "target_ecli": "ECLI:CE:ECHR:2003:0923DEC003888502",
+      "target_date": "2003-09-23",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "38885/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:0726JUD003888502 (scl_judgment); scl='N. v. Finland, no.  38885/02, § 167, 26 July 2005'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0627JUD005104199",
+      "source_date": "2006-06-27",
+      "target_ecli": "ECLI:CE:ECHR:2001:1106DEC004015098",
+      "target_date": "2001-11-06",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "40150/98",
+        "40153/98",
+        "40160/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0213JUD004015398 (scl_judgment); scl='Çetin and Others v. Turkey, nos. 40153/98 and 40160/98, §§ 24-32, § 41, § 63, § 73, ECHR 2003-III'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2022:1206JUD003985914",
+      "source_date": "2022-12-06",
+      "target_ecli": "ECLI:CE:ECHR:2009:0129DEC001490204",
+      "target_date": "2009-01-29",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "14902/04"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2011:0920JUD001490204 (scl_judgment_exact_date); scl='OAO Neftyanaya Kompaniya Yukos v. Russia, no. 14902/04, § 443, 20 September 2011'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:0726JUD007173101",
+      "source_date": "2005-07-26",
+      "target_ecli": "ECLI:CE:ECHR:1998:0420DEC003021096",
+      "target_date": "1998-04-20",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "30210/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:1026JUD003021096 (scl_judgment); scl='Kudla v. Poland [GC], no. 30210/96, §§ 164, 168, ECHR 2000-XI'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2015:0528JUD004110710",
+      "source_date": "2015-05-28",
+      "target_ecli": "ECLI:CE:ECHR:2005:0111DEC004243502",
+      "target_date": "2005-01-11",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "42435/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:0919JUD004243502 (scl_judgment); scl='White v. Sweden, no. 42435/02, § 20, 19 September 2006'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2004:0311JUD004065398",
+      "source_date": "2004-03-11",
+      "target_ecli": "ECLI:CE:ECHR:1998:1030DEC003904297",
+      "target_date": "1998-10-30",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "39042/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0429JUD003904297 (scl_judgment); scl='Kuznetsov v. Ukraine, no. 39042/97, § 115, 29 April 2003'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2009:1203JUD001896703",
+      "source_date": "2009-12-03",
+      "target_ecli": "ECLI:CE:ECHR:2002:1219DEC003144396",
+      "target_date": "2002-12-19",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31443/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0622JUD003144396 (scl_judgment_year); scl='Broniowski v. Poland [GC], no. 31443/96, § 125, ECHR 2004-V'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2015:1013JUD003363106",
+      "source_date": "2015-10-13",
+      "target_ecli": "ECLI:CE:ECHR:2007:1011DEC003745202",
+      "target_date": "2007-10-11",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37452/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2011:0707JUD003745202 (scl_judgment); scl='Stummer v. Austria [GC], no. 37452/02, ECHR 2011'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2013:1021JUD004275009",
+      "source_date": "2013-10-21",
+      "target_ecli": "ECLI:CE:ECHR:1998:0310DEC003922198",
+      "target_date": "1998-03-10",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "39221/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0713JUD003922198 (scl_judgment); scl='Scozzari and Giunta v. Italy [GC], nos. 39221/98 and 41963/98, § 249, ECHR 2000-VIII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2014:0522JUD001517213",
+      "source_date": "2014-05-22",
+      "target_ecli": "ECLI:CE:ECHR:2000:0330DEC002778595",
+      "target_date": "2000-03-30",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "27785/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:1019JUD002778595 (scl_judgment); scl='Włoch v. Poland, no. 27785/95, § 108, ECHR 2000 XI'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0425JUD001980792",
+      "source_date": "2006-04-25",
+      "target_ecli": "ECLI:CE:ECHR:1999:0518DEC004148898",
+      "target_date": "1999-05-18",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "41488/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0518JUD004148898 (scl_judgment); scl='Velikova v. Bulgaria, no. 41488/98, § 68, ECHR 2000-VI'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0718JUD002614103",
+      "source_date": "2006-07-18",
+      "target_ecli": "ECLI:CE:ECHR:2004:0909DEC003597802",
+      "target_date": "2004-09-09",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "35978/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:0112JUD003597802 (scl_judgment); scl='Mihailova v. Bulgaria, no. 35978/02, § 80 and § 82, 12 January 2006'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:1006DEC002160402",
+      "source_date": "2005-10-06",
+      "target_ecli": "ECLI:CE:ECHR:2001:0619DEC005667900",
+      "target_date": "2001-06-19",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "56679/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0428JUD005667900 (scl_judgment_year); scl='Azinas v. Cyprus [GC], no. 56679/00, § 38, ECHR 2004 III'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2004:1125DEC002366002",
+      "source_date": "2004-11-25",
+      "target_ecli": "ECLI:CE:ECHR:2000:0106DEC004003198",
+      "target_date": "2000-01-06",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "40031/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0919JUD004003198 (scl_judgment); scl='Gnahoré v. France, no. 40031/98, §§ 51-52, ECHR 2000 IX'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0330JUD003245896",
+      "source_date": "2006-03-30",
+      "target_ecli": "ECLI:CE:ECHR:1996:1127DEC002571694",
+      "target_date": "1996-11-27",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "25716/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0121JUD002571694 (scl_judgment); scl='Janowski v. Poland [GC], no. 25716/94, § 33, ECHR 1999-I'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2022:0203JUD000146920",
+      "source_date": "2022-02-03",
+      "target_ecli": "ECLI:CE:ECHR:1998:0915DEC003922198",
+      "target_date": "1998-09-15",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "39221/98",
+        "41963/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0713JUD003922198 (scl_judgment); scl='Scozzari and Giunta v. Italy [GC], nos. 39221/98 and 41963/98, § 249, ECHR 2000-VIII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2015:0616JUD006456909",
+      "source_date": "2015-06-16",
+      "target_ecli": "ECLI:CE:ECHR:2005:0922DEC007233101",
+      "target_date": "2005-09-22",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "72331/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:1109JUD007233101 (scl_judgment); scl='Krone Verlags GmbH & Co. KG v. Austria (no. 4), no. 72331/01, § 32, 9 November 2006'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:1005JUD006987201",
+      "source_date": "2006-10-05",
+      "target_ecli": "ECLI:CE:ECHR:2003:0128DEC006719601",
+      "target_date": "2003-01-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "67196/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:1011JUD006719601 (scl_judgment); scl='Chirò v. Italy (no 4), no. 67196/01, 11 October 2005'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2001:0313DEC003317996",
+      "source_date": "2001-03-13",
+      "target_ecli": "ECLI:CE:ECHR:1998:0123DEC002572394",
+      "target_date": "1998-01-23",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "25723/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0615JUD002572394 (scl_judgment); scl='Arrêt Erdogdu c. Turquie, n° 25723/94, § 34, CEDH 2000-VI - (15.6.00)'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2023:1130JUD002422519",
+      "source_date": "2023-11-30",
+      "target_ecli": "ECLI:CE:ECHR:2011:1214DEC004016706",
+      "target_date": "2011-12-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "40167/06"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2015:0616JUD004016706 (scl_judgment_year); scl='Sargsyan v. Azerbaijan [GC], no. 40167/06, § 217, ECHR 2015'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2017:0620JUD001381209",
+      "source_date": "2017-06-20",
+      "target_ecli": "ECLI:CE:ECHR:2007:0906DEC000123405",
+      "target_date": "2007-09-06",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "1234/05"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2009:0115JUD000123405 (scl_judgment); scl='Reklos and Davourlis v. Greece, no. 1234/05, § 40, 15 January 2009'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2004:0914DEC007757501",
+      "source_date": "2004-09-14",
+      "target_ecli": "ECLI:CE:ECHR:1999:0504DEC003440697",
+      "target_date": "1999-05-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "34406/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0201JUD003440697 (scl_judgment); scl='Mazurek c. France, n° 34406/97, § 24, CEDH 2000 II'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2011:0607JUD000027705",
+      "source_date": "2011-06-07",
+      "target_ecli": "ECLI:CE:ECHR:2002:0129DEC003573197",
+      "target_date": "2002-01-29",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "35731/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:1217JUD003573197 (scl_judgment); scl='Venema v. the Netherlands, no. 35731/97, §§ 47-49, ECHR 2002-X'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2024:0604DEC004167820",
+      "source_date": "2024-06-04",
+      "target_ecli": "ECLI:CE:ECHR:2001:0201DEC004491298",
+      "target_date": "2001-02-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "44912/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0928JUD004491298 (scl_judgment_year); scl='Kopecký v. Slovakia [GC], no. 44912/98, § 35, ECHR 2004-IX'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2021:0223JUD006291517",
+      "source_date": "2021-02-23",
+      "target_ecli": "ECLI:CE:ECHR:2006:1005DEC007624001",
+      "target_date": "2006-10-05",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "76240/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2007:0628JUD007624001 (scl_judgment); scl='Wagner and J.M.W.L. v. Luxembourg, no 76240/01, §§ 89-90, 28 June 2007'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2017:0117JUD000603313",
+      "source_date": "2017-01-17",
+      "target_ecli": "ECLI:CE:ECHR:2006:0711DEC005570700",
+      "target_date": "2006-07-11",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "55707/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2009:0218JUD005570700 (scl_judgment); scl='Andrejeva v. Latvia [GC], no. 55707/00, § 87, ECHR 2009'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0504JUD004753399",
+      "source_date": "2006-05-04",
+      "target_ecli": "ECLI:CE:ECHR:2004:0115DEC004039598",
+      "target_date": "2004-01-15",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "40395/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:1110JUD004039598 (scl_judgment); scl='Canevi and Others v. Turkey, no. 40395/98, § 33, 10 November 2004'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2012:0731JUD002301604",
+      "source_date": "2012-07-31",
+      "target_ecli": "ECLI:CE:ECHR:1995:0220DEC002198693",
+      "target_date": "1995-02-20",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "21986/93"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0627JUD002198693 (scl_judgment); scl='Salman v. Turkey [GC], no. 21986/93, ECHR 2000-VII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2015:1015JUD002751008",
+      "source_date": "2015-10-15",
+      "target_ecli": "ECLI:CE:ECHR:2004:0909DEC005948900",
+      "target_date": "2004-09-09",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "59489/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:1020JUD005948900 (scl_judgment); scl='The United Macedonian Organisation Ilinden – PIRIN and Others v. Bulgaria,no 59489/00, § 61, 20 October 2005'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2023:0413JUD002594220",
+      "source_date": "2023-04-13",
+      "target_ecli": "ECLI:CE:ECHR:1999:0907DEC003234696",
+      "target_date": "1999-09-07",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "32346/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0919JUD003234696 (scl_judgment); scl='Glaser v. the United Kingdom, no. 32346/96, §§ 63 and 65, 19 September 2000'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2022:0510JUD004195514",
+      "source_date": "2022-05-10",
+      "target_ecli": "ECLI:CE:ECHR:2003:0306DEC005827800",
+      "target_date": "2003-03-06",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "58278/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:0316JUD005827800 (scl_judgment_year); scl='Ždanoka v. Latvia [GC], no 58278/00, § 134, ECHR 2006 IV'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2013:0305JUD004408410",
+      "source_date": "2013-03-05",
+      "target_ecli": "ECLI:CE:ECHR:2005:0301DEC005732500",
+      "target_date": "2005-03-01",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "57325/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2007:1113JUD005732500 (scl_judgment_year); scl='D.H. and Others v. the Czech Republic [GC], no 57325/00, §§ 177-181, ECHR 2007-IV'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2014:0626JUD002658707",
+      "source_date": "2014-06-26",
+      "target_ecli": "ECLI:CE:ECHR:2005:0308DEC007455201",
+      "target_date": "2005-03-08",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "74552/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:1205JUD007455201 (scl_judgment); scl='Oya Ataman v. Turkey, no. 74552/01, §§ 42-43, ECHR 2006 XIII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2011:0614JUD001977604",
+      "source_date": "2011-06-14",
+      "target_ecli": "ECLI:CE:ECHR:2000:0406DEC003296796",
+      "target_date": "2000-04-06",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "32967/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0117JUD003296796 (scl_judgment); scl='Calvelli and Ciglio v. Italy [GC], no. 32967/96, ECHR 2002-I'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2016:0705JUD004296904",
+      "source_date": "2016-07-05",
+      "target_ecli": "ECLI:CE:ECHR:1997:0910DEC002715495",
+      "target_date": "1997-09-10",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "27154/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0329JUD002715495 (scl_judgment); scl='D.N. v. Switzerland [GC], no 27154/95, § 42, ECHR 2001 III'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2003:0220JUD004432498",
+      "source_date": "2003-02-20",
+      "target_ecli": "ECLI:CE:ECHR:2000:0427DEC003759197",
+      "target_date": "2000-04-27",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37591/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0531JUD003759197 (scl_judgment); scl='Metzger v. Germany, judgment of 31 May 2001, no 37591/97, §§ 36 and 42'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:0906JUD004597299",
+      "source_date": "2005-09-06",
+      "target_ecli": "ECLI:CE:ECHR:1997:0702DEC003167996",
+      "target_date": "1997-07-02",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "31679/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0125JUD003167996 (scl_judgment); scl='Ignaccolo-Zenide v. Romania, no. 31679/96, p. 265, §§ 94, 96, ECHR 2000 I'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:1005JUD007288101",
+      "source_date": "2006-10-05",
+      "target_ecli": "ECLI:CE:ECHR:1997:0908DEC003098596",
+      "target_date": "1997-09-08",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "30985/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:1026JUD003098596 (scl_judgment); scl='Hasan and Chaush v. Bulgaria [GC], no. 30985/96, § 62 and § 78, ECHR 2000-XI'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:1019JUD006209400",
+      "source_date": "2006-10-19",
+      "target_ecli": "ECLI:CE:ECHR:2003:0624DEC006797201",
+      "target_date": "2003-06-24",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "67972/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0518JUD006797201 (scl_judgment); scl='Somogyi v. Italy, no. 67972/01, § 86, 18 May 2004'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2010:0216JUD003214605",
+      "source_date": "2010-02-16",
+      "target_ecli": "ECLI:CE:ECHR:2000:0914DEC003770397",
+      "target_date": "2000-09-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "37703/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:1024JUD003770397 (scl_judgment); scl='Mastromatteo v. Italy [GC], no. 37703/97, § 90, ECHR 2002-VIII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2015:0113JUD004423006",
+      "source_date": "2015-01-13",
+      "target_ecli": "ECLI:CE:ECHR:2002:0228DEC006065400",
+      "target_date": "2002-02-28",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "60654/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2007:0115JUD006065400 (scl_judgment_year); scl='Sisojeva and Others v. Latvia (striking out) [GC], no. 60654/00, §§ 46-47, ECHR 2007 I'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2004:0727JUD003292796",
+      "source_date": "2004-07-27",
+      "target_ecli": "ECLI:CE:ECHR:1997:0915DEC002662995",
+      "target_date": "1997-09-15",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "26629/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0404JUD002662995 (scl_judgment); scl='Witold Litwa v. Poland, no. 26629/95, § 88, ECHR 2000-III'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2023:1128JUD001826918",
+      "source_date": "2023-11-28",
+      "target_ecli": "ECLI:CE:ECHR:2001:0522DEC004893999",
+      "target_date": "2001-05-22",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "48939/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:1130JUD004893999 (scl_judgment_year); scl='Öneryıldız v. Turkey [GC], no. 48939/99, § 107, ECHR 2004-XII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:0329JUD007595501",
+      "source_date": "2005-03-29",
+      "target_ecli": "ECLI:CE:ECHR:1997:0526DEC002198093",
+      "target_date": "1997-05-26",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "21980/93"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0520JUD002198093 (scl_judgment); scl='Bladet Tromsø and Stensaas v. Norway [GC], no. 21980/93, § 58, ECHR 1999-III'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:1122JUD003859597",
+      "source_date": "2005-11-22",
+      "target_ecli": "ECLI:CE:ECHR:1995:0403DEC002267693",
+      "target_date": "1995-04-03",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "22676/93"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:1214JUD002267693 (scl_judgment); scl='Gül v. Turkey, no. 22676/93, § 80, § 89, 14 December 2000'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2003:0116JUD005135499",
+      "source_date": "2003-01-16",
+      "target_ecli": "ECLI:CE:ECHR:1999:1125DEC004362298",
+      "target_date": "1999-11-25",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "43622/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0301JUD004362298 (scl_judgment_year); scl='Malama v. Greece, no 43622/98, § 51, ECHR 2001-II'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2009:1201JUD006430101",
+      "source_date": "2009-12-01",
+      "target_ecli": "ECLI:CE:ECHR:2000:0404DEC003005496",
+      "target_date": "2000-04-04",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "30054/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0504JUD003005496 (scl_judgment_exact_date_year_principal_ecli_appno); scl='Kelly and Others v. the United Kingdom, no. 30054/96, § 114, 4 May 2001'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2001:0710JUD002493994",
+      "source_date": "2001-07-10",
+      "target_ecli": "ECLI:CE:ECHR:1994:1017DEC002086992",
+      "target_date": "1994-10-17",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "20869/92"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0711JUD002086992 (scl_judgment); scl='Dikme v. Turkey, no. 20869/92, ECHR 2000-VIII'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2015:1006JUD002152809",
+      "source_date": "2015-10-06",
+      "target_ecli": "ECLI:CE:ECHR:1996:0902DEC003054496",
+      "target_date": "1996-09-02",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "30544/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0121JUD003054496 (scl_judgment); scl='García Ruiz v. Spain [GC], no 30544/96, § 28, ECHR 1999 I'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2010:0715JUD002021607",
+      "source_date": "2010-07-15",
+      "target_ecli": "ECLI:CE:ECHR:2006:1023DEC002936102",
+      "target_date": "2006-10-23",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "29361/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2007:1115JUD002936102 (scl_judgment); scl='Kukayev v. Russia, no. 29361/02, § 119, 15 November 2007'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0629JUD001190102",
+      "source_date": "2006-06-29",
+      "target_ecli": "ECLI:CE:ECHR:2002:1003DEC004613399",
+      "target_date": "2002-10-03",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "46133/99",
+        "48183/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0724JUD004613399 (scl_judgment); scl='Smirnova v. Russia, nos. 46133/99 and 48183/99, § 99, ECHR 2003-I'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2007:0426JUD004210402",
+      "source_date": "2007-04-26",
+      "target_ecli": "ECLI:CE:ECHR:2000:1214DEC004622199",
+      "target_date": "2000-12-14",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "46221/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:0512JUD004622199 (scl_judgment_year); scl='Öcalan v. Turkey, no. 46221/99 [GC], § 210, in fine, ECHR 2005-IV'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2021:0408JUD004762113",
+      "source_date": "2021-04-08",
+      "target_ecli": "ECLI:CE:ECHR:2012:0221DEC004703911",
+      "target_date": "2012-02-21",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "358/12",
+        "47039/11"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2012:1113JUD004703911 (scl_judgment); scl='Hristozov and Others v. Bulgaria, nos. 47039/11 and 358/12, ECHR 2012 (extracts)'"
+    },
+    {
+      "reason": "wrong_doctype_decision_without_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2009:0108JUD003744902",
+      "source_date": "2009-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2002:1003DEC004065398",
+      "target_date": "2002-10-03",
+      "target_kind": "decision",
+      "target_owner_appnos": [
+        "40653/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0311JUD004065398 (scl_judgment); scl='Iorgov v. Bulgaria, no. 40653/98, § 46, 11 March 2004'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2014:0520JUD000075811",
+      "source_date": "2014-05-20",
+      "target_ecli": "ECLI:CE:ECHR:2004:0720JUD004126598",
+      "target_date": "2004-07-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41265/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0408DEC004126598 (scl_decision_cue); scl='Manasson v. Sweden (dec.), no. 41265/98, 8 April 2003'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2008:1218JUD002997104",
+      "source_date": "2008-12-18",
+      "target_ecli": "ECLI:CE:ECHR:2006:0202JUD005595500",
+      "target_date": "2006-02-02",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "55955/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:1202DEC005595500 (scl_decision_cue); scl='Bic and others v. Turkey (dec.), no. 55955/00, 2 February 2006'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2014:0114JUD002463010",
+      "source_date": "2014-01-14",
+      "target_ecli": "ECLI:CE:ECHR:2000:0928JUD002549894",
+      "target_date": "2000-09-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "25498/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1999:0608DEC002549894 (scl_decision_cue); scl='Messina v. Italy (no. 2) (dec.), no. 25498/94, ECHR 1999 V'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0209JUD000253102",
+      "source_date": "2006-02-09",
+      "target_ecli": "ECLI:CE:ECHR:2003:0710JUD005863400",
+      "target_date": "2003-07-10",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "58634/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0516DEC005863400 (scl_decision_cue); scl='Konstantopoulos AE and Others v. Greece (dec.), no. 58634/00, 16 May 2002'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2008:0513JUD005251599",
+      "source_date": "2008-05-13",
+      "target_ecli": "ECLI:CE:ECHR:2005:1020JUD004590799",
+      "target_date": "2005-10-20",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "45907/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:1022DEC004590799 (scl_decision_cue); scl='Tanrikulu and Others v. Turkey (dec.), no. 45907/99, 22 October 2002'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:1997:0910DEC003589197",
+      "source_date": "1997-09-10",
+      "target_ecli": "ECLI:CE:ECHR:1993:0623JUD001295287",
+      "target_date": "1993-06-23",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "12952/87"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1990:1106DEC001295287 (scl_decision_cue); scl='No 12952/87, déc. 6.11.90, D.R. 67, p. 175'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2009:1015JUD005389607",
+      "source_date": "2009-10-15",
+      "target_ecli": "ECLI:CE:ECHR:2008:1211JUD000629304",
+      "target_date": "2008-12-11",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "6293/04"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2007:0710DEC000629304 (scl_decision_cue); scl='Mirilashivili v. Russia (dec.), no. 6293/04, 10 July 2007'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2013:0108JUD003757605",
+      "source_date": "2013-01-08",
+      "target_ecli": "ECLI:CE:ECHR:2004:1221JUD006568101",
+      "target_date": "2004-12-21",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "65681/01"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0429DEC006568101 (scl_decision_cue); scl='Moreira Barbosa v. Portugal (dec.), no 65681/01, ECHR 2004-V (extracts)'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2002:1128JUD005844200",
+      "source_date": "2002-11-28",
+      "target_ecli": "ECLI:CE:ECHR:2002:0715JUD004709599",
+      "target_date": "2002-07-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "47095/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0918DEC004709599 (scl_decision_cue); scl='Kalashnikov v. Russia (dec.), no 47095/99, 18 September 2001, unreportede'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2010:0910JUD003133306",
+      "source_date": "2010-09-10",
+      "target_ecli": "ECLI:CE:ECHR:2003:0715JUD004497898",
+      "target_date": "2003-07-15",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "44978/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0507DEC004497898 (scl_decision_cue); scl='Berlin v. Luxembourg ((dec.)), no. 44978/98, 7 May 2002'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:1999:0427DEC003878397",
+      "source_date": "1999-04-27",
+      "target_ecli": "ECLI:CE:ECHR:1993:0225JUD001082884",
+      "target_date": "1993-02-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "10828/84"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1988:1006DEC001082884 (scl_decision_cue); scl='No 10828/84, déc. 6.10.88, D.R. 57, p. 5'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2003:0916DEC003637802",
+      "source_date": "2003-09-16",
+      "target_ecli": "ECLI:CE:ECHR:2001:0503JUD003243896",
+      "target_date": "2001-05-03",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "32438/96"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0406DEC003243896 (scl_decision_cue); scl='I.S. c. Bulgarie (déc.), n° 32438/96, 6 avril 2000'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2007:1206JUD002029402",
+      "source_date": "2007-12-06",
+      "target_ecli": "ECLI:CE:ECHR:2004:0729JUD005953200",
+      "target_date": "2004-07-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "59532/00"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0130DEC005953200 (scl_decision_cue_exact_date); scl='Blecic v. Croatia (dec.), no. 59532/00, 30 January 2003'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2023:0126JUD002238619",
+      "source_date": "2023-01-26",
+      "target_ecli": "ECLI:CE:ECHR:2006:1031JUD004118302",
+      "target_date": "2006-10-31",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41183/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2005:1115DEC004118302 (scl_decision_cue); scl='Jeličić v. Bosnia and Herzegovina (dec.), no. 41183/02, ECHR 2005-XII (extracts)'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2021:0311DEC001429614",
+      "source_date": "2021-03-11",
+      "target_ecli": "ECLI:CE:ECHR:2008:0624JUD004458798",
+      "target_date": "2008-06-24",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "44587/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:0928DEC004458798 (scl_decision_cue); scl='Isaak c. Turquie (déc.), no 44587/98, 28 septembre 2006'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2011:0329JUD005008406",
+      "source_date": "2011-03-29",
+      "target_ecli": "ECLI:CE:ECHR:2005:1006JUD000151303",
+      "target_date": "2005-10-06",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "11810/03",
+        "1513/03"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0706DEC001181003 (scl_decision_cue); scl='Maurice and Others c. France (dec.), no 11810/03, 6 July 2004'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2004:0506DEC004323398",
+      "source_date": "2004-05-06",
+      "target_ecli": "ECLI:CE:ECHR:1998:1028JUD002476094",
+      "target_date": "1998-10-28",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "24760/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1996:0627DEC002476094 (scl_decision_cue); scl='Assenov et autres c. Bulgarie (dec.), no 24760/94, 27 juin 1996, DR 86, p. 54'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2012:0110JUD003076508",
+      "source_date": "2012-01-10",
+      "target_ecli": "ECLI:CE:ECHR:2006:0124JUD003943798",
+      "target_date": "2006-01-24",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "39437/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0601DEC003943798 (scl_decision_cue); scl='Ülke v. Turkey (dec.), no 39437/98, 1er June 2004'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:1997:0116DEC002803895",
+      "source_date": "1997-01-16",
+      "target_ecli": "ECLI:CE:ECHR:1991:1129JUD001274287",
+      "target_date": "1991-11-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "12742/87"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1989:0503DEC001274287 (scl_decision_cue); scl='No. 12742/87, Dec. 3.5.89, D.R. 61, p. 206'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:1222JUD003049796",
+      "source_date": "2005-12-22",
+      "target_ecli": "ECLI:CE:ECHR:2002:0409JUD002753295",
+      "target_date": "2002-04-09",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "27532/95"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0619DEC002753295 (scl_decision_cue); scl='Z.Y. v. Turkey (dec.) no. 27532/95, 19 June 2001'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2000:0912DEC004133398",
+      "source_date": "2000-09-12",
+      "target_ecli": "ECLI:CE:ECHR:2000:0718JUD004186098",
+      "target_date": "2000-07-18",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41860/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2000:0111DEC004186098 (scl_decision_cue); scl='Droulez c. France (déc.), n° 41860/98, 11.1.2000'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0329JUD006507501",
+      "source_date": "2006-03-29",
+      "target_ecli": "ECLI:CE:ECHR:2006:0329JUD003681397",
+      "target_date": "2006-03-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "36813/97"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2003:0327DEC003681397 (scl_decision_cue); scl='Scordino v. Italy, (dec.), no. 36813/97, ECHR 2003-IV'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2006:0131JUD000139502",
+      "source_date": "2006-01-31",
+      "target_ecli": "ECLI:CE:ECHR:2002:1112JUD004780499",
+      "target_date": "2002-11-12",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "47804/99"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2001:0913DEC004780499 (scl_decision_cue_exact_date); scl='Havala v. Slovakia (dec.), no. 47804/99, 13 September 2001'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2007:0522JUD004729799",
+      "source_date": "2007-05-22",
+      "target_ecli": "ECLI:CE:ECHR:2003:0617JUD004147898",
+      "target_date": "2003-06-17",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "41478/98"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2002:0430DEC004147898 (scl_decision_cue); scl='Sen v. Turkey (dec.), no. 41478/98, 30 April 2002'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2021:0617JUD005509313",
+      "source_date": "2021-06-17",
+      "target_ecli": "ECLI:CE:ECHR:2007:1129JUD002673302",
+      "target_date": "2007-11-29",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "26733/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2006:0601DEC002673302 (scl_decision_cue); scl='Sobaci v. Turkey (dec.), no 26733/02, 1 June 2006'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2005:0609DEC006251200",
+      "source_date": "2005-06-09",
+      "target_ecli": "ECLI:CE:ECHR:2004:1116JUD001388102",
+      "target_date": "2004-11-16",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "13881/02"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:2004:0217DEC001388102 (scl_decision_cue_exact_date); scl='King v. the United Kingdom (dec.), no. 13881/02, 17 February 2004'"
+    },
+    {
+      "reason": "wrong_doctype_judgment_for_dec_cue",
+      "source_ecli": "ECLI:CE:ECHR:2002:0528DEC003645197",
+      "source_date": "2002-05-28",
+      "target_ecli": "ECLI:CE:ECHR:2000:0725JUD002495494",
+      "target_date": "2000-07-25",
+      "target_kind": "judgment",
+      "target_owner_appnos": [
+        "24954/94",
+        "24971/94",
+        "24972/94"
+      ],
+      "evidence": "v2 chose ECLI:CE:ECHR:1996:1018DEC002495494 (scl_decision_cue_exact_date); scl='Comm. Eur. D.H.  No 24954/94, déc. 18.10.96'"
+    }
+  ],
+  "sampled_kept": [
+    {
+      "source_ecli": "ECLI:CE:ECHR:2004:1109JUD004198498",
+      "target_ecli": "ECLI:CE:ECHR:2004:0406DEC005691800",
+      "target_date": "2004-04-06",
+      "target_kind": "decision",
+      "appno": "56918/00",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Leshchenko and Tolyupa v. Ukraine (dec.), no. 56918/00, 6 April 2004"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:1004JUD001132402",
+      "target_ecli": "ECLI:CE:ECHR:2005:0111JUD007422101",
+      "target_date": "2005-01-11",
+      "target_kind": "judgment",
+      "appno": "74221/01",
+      "rule": "scl_judgment",
+      "scl_reference": "Dubenko v. Ukraine, no. 74221/01, §§ 22 29, 47 and 51, 30 November 2004"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:0118DEC000971303",
+      "target_ecli": "ECLI:CE:ECHR:2003:1127DEC000429002",
+      "target_date": "2003-11-27",
+      "target_kind": "decision",
+      "appno": "4290/02",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Natoli c. Italie (déc.), n° 4290/02, 27 novembre 2003"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2021:0511JUD004416615",
+      "target_ecli": "ECLI:CE:ECHR:2011:0324JUD002345802",
+      "target_date": "2011-03-24",
+      "target_kind": "judgment",
+      "appno": "23458/02",
+      "rule": "scl_judgment_year",
+      "scl_reference": "Giuliani and Gaggio v. Italy [GC], no 23458/02, § 306, ECHR 2011 (extracts)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:0119JUD003266719",
+      "target_ecli": "ECLI:CE:ECHR:2013:0219JUD000283406",
+      "target_date": "2013-02-19",
+      "target_kind": "judgment",
+      "appno": "2834/06",
+      "rule": "scl_judgment",
+      "scl_reference": "Petko Petkov v. Bulgaria, no. 2834/06, § 33, 19 February 2013"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:1121JUD004852319",
+      "target_ecli": "ECLI:CE:ECHR:2020:0114JUD000229715",
+      "target_date": "2020-01-14",
+      "target_kind": "judgment",
+      "appno": "2297/15",
+      "rule": "scl_judgment",
+      "scl_reference": "S.A. and Others v. Russia [Committee], no. 2297/15, § 63, 14 January 2020"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2022:1110JUD000508418",
+      "target_ecli": "ECLI:CE:ECHR:2011:0906DEC004805809",
+      "target_date": "2011-09-06",
+      "target_kind": "decision",
+      "appno": "48058/09",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Müller v. the Czech Republic (dec.), no. 48058/09, 6 September 2011"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2003:1106JUD003444297",
+      "target_ecli": "ECLI:CE:ECHR:1999:0728JUD002277493",
+      "target_date": "1999-07-28",
+      "target_kind": "judgment",
+      "appno": "22774/93",
+      "rule": "scl_judgment",
+      "scl_reference": "Immobiliare Saffi v. Italy [GC], no. 22774/93, §§ 18-35, §§ 46-75, ECHR 1999-V"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:1005JUD002271612",
+      "target_ecli": "ECLI:CE:ECHR:2022:1206JUD003985914",
+      "target_date": "2022-12-06",
+      "target_kind": "judgment",
+      "appno": "39859/14",
+      "rule": "scl_judgment",
+      "scl_reference": "Pannon Plakát Kft and Others v. Hungary, no. 39859/14, §§ 44 and 46, 6 December 2022"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2025:0116JUD001545720",
+      "target_ecli": "ECLI:CE:ECHR:2022:0203DEC001435619",
+      "target_date": "2022-02-03",
+      "target_kind": "decision",
+      "appno": "14356/19",
+      "rule": "scl_decision_cue",
+      "scl_reference": "S.M.K. v. France (dec.), no 14356/19, 3 February 2022"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2015:1013JUD001132714",
+      "target_ecli": "ECLI:CE:ECHR:2015:0122JUD001519112",
+      "target_date": "2015-01-22",
+      "target_kind": "judgment",
+      "appno": "15191/12",
+      "rule": "scl_judgment",
+      "scl_reference": "Kitanovski v. the former Yugoslav Republic of Macedonia, no. 15191/12, § 52 to 57, 22 January 2015"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2012:0124JUD005754109",
+      "target_ecli": "ECLI:CE:ECHR:2010:0921JUD000739007",
+      "target_date": "2010-09-21",
+      "target_kind": "judgment",
+      "appno": "7390/07",
+      "rule": "scl_judgment",
+      "scl_reference": "Kevin O’Dowd v. the United Kingdom, no. 7390/07, §§ 71-77, 21 September 2010"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:0126JUD002238619",
+      "target_ecli": "ECLI:CE:ECHR:2015:0512JUD003686205",
+      "target_date": "2015-05-12",
+      "target_kind": "judgment",
+      "appno": "36862/05",
+      "rule": "scl_judgment",
+      "scl_reference": "Gogitidze and Others v. Georgia, no. 36862/05, § 96, 12 May 2015"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2014:0325JUD003859010",
+      "target_ecli": "ECLI:CE:ECHR:2011:0614JUD003805809",
+      "target_date": "2011-06-14",
+      "target_kind": "judgment",
+      "appno": "38058/09",
+      "rule": "scl_judgment",
+      "scl_reference": "Osman v. Denmark, no. 38058/09, § 53, 14 June 2011"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2014:0311DEC006044113",
+      "target_ecli": "ECLI:CE:ECHR:2010:0603DEC005962308",
+      "target_date": "2010-06-03",
+      "target_kind": "decision",
+      "appno": "59623/08",
+      "rule": "scl_decision_cue_exact_date",
+      "scl_reference": "Emin and Others v Cyprus, Greece and the United Kingdom, nos. 59623/08 et al, (dec.) 3 June 2010"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2021:0914JUD004164319",
+      "target_ecli": "ECLI:CE:ECHR:2005:1027JUD003223102",
+      "target_date": "2005-10-27",
+      "target_kind": "judgment",
+      "appno": "32231/02",
+      "rule": "scl_judgment",
+      "scl_reference": "Keles v. Germany, no. 32231/02, § 66, 27 October 2005"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:1107JUD001507202",
+      "target_ecli": "ECLI:CE:ECHR:2006:0530JUD007115201",
+      "target_date": "2006-05-30",
+      "target_kind": "judgment",
+      "appno": "71152/01",
+      "rule": "scl_judgment",
+      "scl_reference": "Barszcz v. Poland, no. 71152/01, §§ 26-35, §§ 41-45, 30 May 2006"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2021:1214JUD002391415",
+      "target_ecli": "ECLI:CE:ECHR:2016:0330JUD000587808",
+      "target_date": "2016-03-30",
+      "target_kind": "judgment",
+      "appno": "5878/08",
+      "rule": "scl_judgment",
+      "scl_reference": "Armani Da Silva v. the United Kingdom [GC], no. 5878/08, § 243, 30 March 2016"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2024:1203JUD002050320",
+      "target_ecli": "ECLI:CE:ECHR:2019:0618JUD001512217",
+      "target_date": "2019-06-18",
+      "target_kind": "judgment",
+      "appno": "15122/17",
+      "rule": "scl_judgment",
+      "scl_reference": "Vladimir Ushakov v. Russia, no. 15122/17, § 88, 18 June 2019"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2014:0708JUD003827011",
+      "target_ecli": "ECLI:CE:ECHR:2006:1003JUD000054303",
+      "target_date": "2006-10-03",
+      "target_kind": "judgment",
+      "appno": "543/03",
+      "rule": "scl_judgment",
+      "scl_reference": "McKay v. the United Kingdom [GC], no 543/03, § 43, ECHR 2006 X"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2019:0409JUD002388716",
+      "target_ecli": "ECLI:CE:ECHR:2016:1108JUD005697110",
+      "target_date": "2016-11-08",
+      "target_kind": "judgment",
+      "appno": "56971/10",
+      "rule": "scl_judgment",
+      "scl_reference": "El Ghatet v. Switzerland, no 56971/10, §§ 47 and 52, 8 November 2016"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:0613DEC000751004",
+      "target_ecli": "ECLI:CE:ECHR:2000:0627JUD002227793",
+      "target_date": "2000-06-27",
+      "target_kind": "judgment",
+      "appno": "22277/93",
+      "rule": "scl_judgment",
+      "scl_reference": "Ilhan v. Turkey [GC], no. 22277/93, §§ 58-59, ECHR 2000 VII"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2019:0711JUD002850811",
+      "target_ecli": "ECLI:CE:ECHR:2015:1217JUD002485311",
+      "target_date": "2015-12-17",
+      "target_kind": "judgment",
+      "appno": "24853/11",
+      "rule": "scl_judgment",
+      "scl_reference": "Vugar Aliyev and Others v. Azerbaijan [Committee], nos. 24853/11 and 3 others, 17 December 2015"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2001:0906DEC006978901",
+      "target_ecli": "ECLI:CE:ECHR:2001:0522JUD003359296",
+      "target_date": "2001-05-22",
+      "target_kind": "judgment",
+      "appno": "33592/96",
+      "rule": "scl_judgment",
+      "scl_reference": "Arrêt Baumann c. France, no. 33592/96, § 47, - (22.5.01)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2007:0703JUD003100103",
+      "target_ecli": "ECLI:CE:ECHR:2004:1221JUD006151300",
+      "target_date": "2004-12-21",
+      "target_kind": "judgment",
+      "appno": "61513/00",
+      "rule": "scl_judgment",
+      "scl_reference": "Busuioc v. Moldova (no. 61513/00, § 52-54, 21 December 2004"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2018:0201JUD004528512",
+      "target_ecli": "ECLI:CE:ECHR:2009:1203JUD001896703",
+      "target_date": "2009-12-03",
+      "target_kind": "judgment",
+      "appno": "18967/03",
+      "rule": "scl_judgment_exact_date",
+      "scl_reference": "Mutishev and Others v. Bulgaria, no. 18967/03, § 160, 3 December 2009"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:1222JUD004634799",
+      "target_ecli": "ECLI:CE:ECHR:2003:0731JUD001616390",
+      "target_date": "2003-07-31",
+      "target_kind": "judgment",
+      "appno": "16163/90",
+      "rule": "scl_judgment",
+      "scl_reference": "Eugenia Michaelidou Developments Ltd and Michael Tymvios v. Turkey, no. 16163/90, §§ 28-31, 31 July 2003"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2022:1122JUD004439415",
+      "target_ecli": "ECLI:CE:ECHR:2020:0211JUD001561310",
+      "target_date": "2020-02-11",
+      "target_kind": "judgment",
+      "appno": "15613/10",
+      "rule": "scl_judgment",
+      "scl_reference": "Vovk and Bogdanov v. Russia, no. 15613/10, § 75, 11 February 2020"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2003:0925DEC006141600",
+      "target_ecli": "ECLI:CE:ECHR:2003:0327DEC005869800",
+      "target_date": "2003-03-27",
+      "target_kind": "decision",
+      "appno": "58698/00",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Paulino Tomas c. Portugal (déc.), n° 58698/00, CEDH 2003"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2002:1001JUD003625597",
+      "target_ecli": "ECLI:CE:ECHR:2002:0723JUD005613200",
+      "target_date": "2002-07-23",
+      "target_kind": "judgment",
+      "appno": "56132/00",
+      "rule": "scl_judgment",
+      "scl_reference": "Taskin v. Germany judgment of 23 July 2002, application no. 56132/00"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2024:0111JUD007668017",
+      "target_ecli": "ECLI:CE:ECHR:2023:0502JUD003646311",
+      "target_date": "2023-05-02",
+      "target_kind": "judgment",
+      "appno": "36463/11",
+      "rule": "scl_judgment",
+      "scl_reference": "S.P. and Others v. Russia, nos. 36463/11 and 10 others, 2 May 2023"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2026:0219JUD001439624",
+      "target_ecli": "ECLI:CE:ECHR:2023:1121DEC002524020",
+      "target_date": "2023-11-21",
+      "target_kind": "decision",
+      "appno": "25240/20",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Gyulumyan v. Armenia (dec.), no. 25240/20, 21 November 2023"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2024:0416JUD004051915",
+      "target_ecli": "ECLI:CE:ECHR:2020:0213JUD005320513",
+      "target_date": "2020-02-13",
+      "target_kind": "judgment",
+      "appno": "53205/13",
+      "rule": "scl_judgment",
+      "scl_reference": "Trajkovski and Chipovski v. North Macedonia, nos. 53205/13 and 63320/13, § 51, 13 February 2020"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2022:0308DEC006814413",
+      "target_ecli": "ECLI:CE:ECHR:2007:0308DEC001871203",
+      "target_date": "2007-03-08",
+      "target_kind": "decision",
+      "appno": "18712/03",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Thiermann and Others v. Norway (dec.), no. 18712/03, 8 March 2007"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2000:1012DEC004344098",
+      "target_ecli": "ECLI:CE:ECHR:1985:0304DEC001067183",
+      "target_date": "1985-03-04",
+      "target_kind": "decision",
+      "appno": "10671/83",
+      "rule": "scl_decision_cue",
+      "scl_reference": "No. 10671/83, Dec. 4.3.85, D.R. 42, p. 229"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:0627JUD004196498",
+      "target_ecli": "ECLI:CE:ECHR:2001:0710JUD002565794",
+      "target_date": "2001-07-10",
+      "target_kind": "judgment",
+      "appno": "25657/94",
+      "rule": "scl_judgment",
+      "scl_reference": "Avsar v. Turkey, no. 25657/94, § 283, § 284, § 393, ECHR 2001-VII (extracts)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2015:1029JUD005309813",
+      "target_ecli": "ECLI:CE:ECHR:2006:0504JUD006239300",
+      "target_date": "2006-05-04",
+      "target_kind": "judgment",
+      "appno": "62393/00",
+      "rule": "scl_judgment",
+      "scl_reference": "Kadiķis v. Latvia, no 62393/00, § 55, 4 May 2006"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:1128JUD001826918",
+      "target_ecli": "ECLI:CE:ECHR:2007:0911JUD003719402",
+      "target_date": "2007-09-11",
+      "target_kind": "judgment",
+      "appno": "37194/02",
+      "rule": "scl_judgment",
+      "scl_reference": "V.T. v. France, no. 37194/02, § 25, 11 September 2007"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2014:0121DEC004745011",
+      "target_ecli": "ECLI:CE:ECHR:2009:0414DEC001829708",
+      "target_date": "2009-04-14",
+      "target_kind": "decision",
+      "appno": "18297/08",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Borisenko and Yerevanyan Bazalt Ltd v. Armenia (dec.), no. 18297/08, 14 April 2009"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2018:1204JUD001021112",
+      "target_ecli": "ECLI:CE:ECHR:2016:0225JUD005315711",
+      "target_date": "2016-02-25",
+      "target_kind": "judgment",
+      "appno": "53157/11",
+      "rule": "scl_judgment",
+      "scl_reference": "Klinkenbuß v. Germany, no. 53157/11, § 48, 25 February 2016"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2014:0717JUD003254108",
+      "target_ecli": "ECLI:CE:ECHR:1999:1216JUD002488894",
+      "target_date": "1999-12-16",
+      "target_kind": "judgment",
+      "appno": "24888/94",
+      "rule": "scl_judgment_year_gc_principal_ecli_appno",
+      "scl_reference": "V. v. the United Kingdom [GC], no. 24888/94, § 71, ECHR 1999-IX"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2021:0316JUD002139208",
+      "target_ecli": "ECLI:CE:ECHR:2019:0305JUD001962005",
+      "target_date": "2019-03-05",
+      "target_kind": "judgment",
+      "appno": "19620/05",
+      "rule": "scl_judgment_exact_date",
+      "scl_reference": "Uzan and Others v. Turkey, no. 19620/05 and 3 others, 5 March 2019"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2015:0616JUD004016706",
+      "target_ecli": "ECLI:CE:ECHR:2005:1222JUD004634799",
+      "target_date": "2005-12-22",
+      "target_kind": "judgment",
+      "appno": "46347/99",
+      "rule": "scl_judgment_exact_date",
+      "scl_reference": "Xenides-Arestis v. Turkey, no. 46347/99, § 36, 22 December 2005"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2011:0614JUD007107201",
+      "target_ecli": "ECLI:CE:ECHR:2008:0212JUD002190604",
+      "target_date": "2008-02-12",
+      "target_kind": "judgment",
+      "appno": "21906/04",
+      "rule": "scl_judgment",
+      "scl_reference": "Kafkaris v. Cyprus [GC], no. 21906/04, § 159, ECHR 2008-..."
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2020:0213JUD004524515",
+      "target_ecli": "ECLI:CE:ECHR:2013:0422JUD004887608",
+      "target_date": "2013-04-22",
+      "target_kind": "judgment",
+      "appno": "48876/08",
+      "rule": "scl_judgment",
+      "scl_reference": "Animal Defenders International v. the United Kingdom [GC], no. 48876/08, § 110, ECHR 2013 (extracts)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2012:1218JUD000294406",
+      "target_ecli": "ECLI:CE:ECHR:2005:0324JUD002189493",
+      "target_date": "2005-03-24",
+      "target_kind": "judgment",
+      "appno": "21894/93",
+      "rule": "scl_judgment",
+      "scl_reference": "Akkum and Others v. Turkey, no. 21894/93, § 211, ECHR 2005-II (extracts)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:0906JUD006551801",
+      "target_ecli": "ECLI:CE:ECHR:2000:0216JUD002890195",
+      "target_date": "2000-02-16",
+      "target_kind": "judgment",
+      "appno": "28901/95",
+      "rule": "scl_judgment",
+      "scl_reference": "Rowe and Davis v. the United Kingdom [GC], no. 28901/95, § 60, ECHR 2000 II"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2004:1217JUD004901799",
+      "target_ecli": "ECLI:CE:ECHR:2001:0206JUD004120598",
+      "target_date": "2001-02-06",
+      "target_kind": "judgment",
+      "appno": "41205/98",
+      "rule": "scl_judgment",
+      "scl_reference": "Tammer v. Estonia, no. 41205/98, § 69, ECHR 2001-I"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:0413JUD001470907",
+      "target_ecli": "ECLI:CE:ECHR:2021:1130JUD005235815",
+      "target_date": "2021-11-30",
+      "target_kind": "judgment",
+      "appno": "52358/15",
+      "rule": "scl_judgment",
+      "scl_reference": "Genov and Sarbinska v. Bulgaria, no. 52358/15, § 66, 30 November 2021"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:1020JUD005238999",
+      "target_ecli": "ECLI:CE:ECHR:2001:1016JUD003755597",
+      "target_date": "2001-10-16",
+      "target_kind": "judgment",
+      "appno": "37555/97",
+      "rule": "scl_judgment",
+      "scl_reference": "O'Hara v. the United Kingdom, no. 37555/97, § 36, ECHR 2001-X"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2022:0607JUD003240110",
+      "target_ecli": "ECLI:CE:ECHR:2009:0115DEC001982004",
+      "target_date": "2009-01-15",
+      "target_kind": "decision",
+      "appno": "19820/04",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Faizov v. Russia (dec.), no. 19820/04, 15 January 2009"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2021:1209JUD000272013",
+      "target_ecli": "ECLI:CE:ECHR:2011:0920JUD001490204",
+      "target_date": "2011-09-20",
+      "target_kind": "judgment",
+      "appno": "14902/04",
+      "rule": "scl_judgment_exact_date",
+      "scl_reference": "OAO Neftyanaya Kompaniya Yukos v. Russia, no. 14902/04, § 568, 20 September 2011"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:0309JUD002014809",
+      "target_ecli": "ECLI:CE:ECHR:2000:1221JUD003472097",
+      "target_date": "2000-12-21",
+      "target_kind": "judgment",
+      "appno": "34720/97",
+      "rule": "scl_judgment",
+      "scl_reference": "Heaney and McGuinness v. Ireland, no 34720/97, § 40, ECHR 2000‑XII"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2023:0221JUD005204816",
+      "target_ecli": "ECLI:CE:ECHR:2009:0310JUD000437802",
+      "target_date": "2009-03-10",
+      "target_kind": "judgment",
+      "appno": "4378/02",
+      "rule": "scl_judgment",
+      "scl_reference": "Bykov v. Russia [GC], no. 4378/02, § 66, 10 March 2009"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2014:0717JUD003254108",
+      "target_ecli": "ECLI:CE:ECHR:2012:0724JUD001480708",
+      "target_date": "2012-07-24",
+      "target_kind": "judgment",
+      "appno": "14807/08",
+      "rule": "scl_judgment",
+      "scl_reference": "Mikhail Grishin v. Russia, no. 14807/08, 24 July 2012"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2013:0709JUD006606909",
+      "target_ecli": "ECLI:CE:ECHR:2009:1215JUD002863406",
+      "target_date": "2009-12-15",
+      "target_kind": "judgment",
+      "appno": "28634/06",
+      "rule": "scl_judgment",
+      "scl_reference": "Maiorano and Others v. Italy, no. 28634/06, 15 December 2009"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2010:1104JUD003458807",
+      "target_ecli": "ECLI:CE:ECHR:2008:0408JUD004294202",
+      "target_date": "2008-04-08",
+      "target_kind": "judgment",
+      "appno": "42942/02",
+      "rule": "scl_judgment",
+      "scl_reference": "Ali and Ayse Duran v. Turkey, no. 42942/02, 8 April 2008"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2010:1014JUD000146607",
+      "target_ecli": "ECLI:CE:ECHR:2000:1019JUD003110796",
+      "target_date": "2000-10-19",
+      "target_kind": "judgment",
+      "appno": "31107/96",
+      "rule": "scl_judgment_year",
+      "scl_reference": "Iatridis v. Greece [GC], no. 31107/96, ECHR 2000-XI"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2002:0924DEC000264702",
+      "target_ecli": "ECLI:CE:ECHR:1999:0121JUD003054496",
+      "target_date": "1999-01-21",
+      "target_kind": "judgment",
+      "appno": "30544/96",
+      "rule": "scl_judgment",
+      "scl_reference": "Arrêt Garcia Ruiz c. Espagne [GC], n° 30544/96, § 28, CEDH 1999-I - (21.1.99)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2011:0707JUD003922903",
+      "target_ecli": "ECLI:CE:ECHR:2002:0620JUD002771595",
+      "target_date": "2002-06-20",
+      "target_kind": "judgment",
+      "appno": "27715/95",
+      "rule": "scl_judgment",
+      "scl_reference": "Berlinski v. Poland, nos. 27715/95 and 30209/96, § 62, 20 June 2002"
+    }
+  ],
+  "sampled_added": [
+    {
+      "source_ecli": "ECLI:CE:ECHR:2010:0406JUD000000208",
+      "target_ecli": "ECLI:CE:ECHR:1999:1214JUD003479197",
+      "target_date": "1999-12-14",
+      "target_kind": "judgment",
+      "appno": "34791/97",
+      "rule": "scl_judgment",
+      "scl_reference": "Khalfaoui c. France, no 34791/97, §§ 35-36, CEDH 1999-IX"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2002:1205DEC005387100",
+      "target_ecli": "ECLI:CE:ECHR:2000:1213DEC003307196",
+      "target_date": "2000-12-13",
+      "target_kind": "decision",
+      "appno": "33071/96",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Malhous c. la République tchèque (déc.), n° 33071/96, CEDH 2000-XII - (13.12.00)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2009:0929DEC001832404",
+      "target_ecli": "ECLI:CE:ECHR:2004:0129DEC004611799",
+      "target_date": "2004-01-29",
+      "target_kind": "decision",
+      "appno": "46117/99",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Taÿkÿn and Others v. Turkey (dec.), no. 46117/99, 29 January 2004"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2009:1208DEC004529106",
+      "target_ecli": "ECLI:CE:ECHR:2000:0615DEC004544199",
+      "target_date": "2000-06-15",
+      "target_kind": "decision",
+      "appno": "45441/99",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Pullicino c. Malte (déc.), no 45441/99, 15 juin 2000"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:1212JUD006421201",
+      "target_ecli": "ECLI:CE:ECHR:2005:0531DEC001121502",
+      "target_date": "2005-05-31",
+      "target_kind": "decision",
+      "appno": "11215/02",
+      "rule": "scl_decision_cue_exact_date",
+      "scl_reference": "(dec), 11215/02, 31 May 2005"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:1995:0906DEC002503094",
+      "target_ecli": "ECLI:CE:ECHR:1973:0208DEC000525871",
+      "target_date": "1973-02-08",
+      "target_kind": "decision",
+      "appno": "5258/71",
+      "rule": "scl_decision_cue",
+      "scl_reference": "No. 5258/71, Dec. 8.2.73, Collection 43 pp. 71, 77"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:1219JUD007583601",
+      "target_ecli": "ECLI:CE:ECHR:2000:0208JUD003539697",
+      "target_date": "2000-02-08",
+      "target_kind": "judgment",
+      "appno": "35396/97",
+      "rule": "scl_judgment",
+      "scl_reference": "Stefanelli c. Saint-Marin, no 35396/97, § 19, CEDH 2000-II"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2002:0827DEC005818800",
+      "target_ecli": "ECLI:CE:ECHR:2001:0607JUD003959498",
+      "target_date": "2001-06-07",
+      "target_kind": "judgment",
+      "appno": "39594/98",
+      "rule": "scl_judgment",
+      "scl_reference": "Arrêt Kress c. France [GC], n° 39594/98, § 76, CEDH 2001 - (7.6.01)"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:1964:0706DEC000193663",
+      "target_ecli": "ECLI:CE:ECHR:1961:1219DEC000092060",
+      "target_date": "1961-12-19",
+      "target_kind": "decision",
+      "appno": "920/60",
+      "rule": "scl_decision_no_judgment",
+      "scl_reference": "No. 920/60, Collection 8, p. 46"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:1981:0507DEC000839878",
+      "target_ecli": "ECLI:CE:ECHR:1967:0403DEC000267665",
+      "target_date": "1967-04-03",
+      "target_kind": "decision",
+      "appno": "2676/65",
+      "rule": "scl_decision_no_judgment",
+      "scl_reference": "No. 2676/65, Coll. 23, p. 31, § 35"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2004:0108DEC005516100",
+      "target_ecli": "ECLI:CE:ECHR:2003:1016DEC006879201",
+      "target_date": "2003-10-16",
+      "target_kind": "decision",
+      "appno": "68792/01",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Mascolo v. Italy (dec.), no. 68792/01, 16 October 2003"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2007:0215JUD002200003",
+      "target_ecli": "ECLI:CE:ECHR:2004:0708DEC007590701",
+      "target_date": "2004-07-08",
+      "target_kind": "decision",
+      "appno": "75907/01",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Grishchenko v. Russia, (dec.), no. 75907/01, 8 July 2004"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:1995:1129DEC002560294",
+      "target_ecli": "ECLI:CE:ECHR:1995:1129DEC002537394",
+      "target_date": "1995-11-29",
+      "target_kind": "decision",
+      "appno": "25373/94",
+      "rule": "scl_decision_cue",
+      "scl_reference": "No. 25373/94, Dec. 29.11.95"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2004:0729JUD003587597",
+      "target_ecli": "ECLI:CE:ECHR:1995:0515DEC002365494",
+      "target_date": "1995-05-15",
+      "target_kind": "decision",
+      "appno": "23654/94",
+      "rule": "scl_decision_no_judgment",
+      "scl_reference": "Laçin c. Turquie, n° 23654/94, Commission décision du 15 mai 1995, Décisions et rapports (DR) 81-A, p. 31"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:1201DEC001356504",
+      "target_ecli": "ECLI:CE:ECHR:2000:1026JUD003021096",
+      "target_date": "2000-10-26",
+      "target_kind": "judgment",
+      "appno": "30210/96",
+      "rule": "scl_judgment",
+      "scl_reference": "Kudla c. Pologne [GC], no 30210/96, § 94, CEDH 2000 XI"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2011:1011DEC006847610",
+      "target_ecli": "ECLI:CE:ECHR:2011:0405DEC000441306",
+      "target_date": "2011-04-05",
+      "target_kind": "decision",
+      "appno": "4413/06",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Törköly c. Hongrie (déc.), no 4413/06, 5 avril 2011"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2020:0908DEC003819716",
+      "target_ecli": "ECLI:CE:ECHR:2019:0625DEC007391116",
+      "target_date": "2019-06-25",
+      "target_kind": "decision",
+      "appno": "73911/16",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Larrañaga Arando et autres c. Espagne (déc.), nos 73911/16 233/17 3086/17 et 5155/17, § 48, 25 juin 2019"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:1992:0220DEC001813991",
+      "target_ecli": "ECLI:CE:ECHR:1973:0208DEC000525871",
+      "target_date": "1973-02-08",
+      "target_kind": "decision",
+      "appno": "5258/71",
+      "rule": "scl_decision_cue",
+      "scl_reference": "No. 5258/71, Dec. 8.2.73, Collection 43 pp. 71, 77"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:1219JUD007764201",
+      "target_ecli": "ECLI:CE:ECHR:2002:0711JUD003659097",
+      "target_date": "2002-07-11",
+      "target_kind": "judgment",
+      "appno": "36590/97",
+      "rule": "scl_judgment_year",
+      "scl_reference": "Göç c. Turquie [GC], no 36590/97, § 55, CEDH 2002-V"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2001:1018DEC003722597",
+      "target_ecli": "ECLI:CE:ECHR:1994:1130DEC001952592",
+      "target_date": "1994-11-30",
+      "target_kind": "decision",
+      "appno": "19525/92",
+      "rule": "scl_decision_cue",
+      "scl_reference": "No 19525/92, Finkensieper c. Pays-Bas, déc. 17.5.95, §§ 54, 55, 67"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2000:0525DEC004634699",
+      "target_ecli": "ECLI:CE:ECHR:2000:0229DEC004505398",
+      "target_date": "2000-02-29",
+      "target_kind": "decision",
+      "appno": "45053/98",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Association des amis de Saint-Raphaël et de Fréjus c. France (déc), n° 45053/98, CEDH - 29.2.00"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2004:0909DEC004105598",
+      "target_ecli": "ECLI:CE:ECHR:2003:0403DEC004392498",
+      "target_date": "2003-04-03",
+      "target_kind": "decision",
+      "appno": "43924/98",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Karatepe v. Turkey (dec.), no. 43924/98, 3 April 2003"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2002:0314DEC005919700",
+      "target_ecli": "ECLI:CE:ECHR:1974:1005DEC000552372",
+      "target_date": "1974-10-05",
+      "target_kind": "decision",
+      "appno": "5523/72",
+      "rule": "scl_decision_cue",
+      "scl_reference": "No 5523/72, déc. 5.10.74, Recueil 46, p. 99, 106"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:1219JUD007764201",
+      "target_ecli": "ECLI:CE:ECHR:1999:0708JUD002668295",
+      "target_date": "1999-07-08",
+      "target_kind": "judgment",
+      "appno": "26682/95",
+      "rule": "scl_judgment",
+      "scl_reference": "Sürek c. Turquie (no 1) [GC], no 26682/95, § 62, CEDH 1999-IV"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2013:0702DEC001721009",
+      "target_ecli": "ECLI:CE:ECHR:2003:0708DEC001522703",
+      "target_date": "2003-07-08",
+      "target_kind": "decision",
+      "appno": "15227/03",
+      "rule": "scl_decision_cue_year_principal_earliest",
+      "scl_reference": "Lyons et autres c. Royaume-Uni (déc.), no 15227/03, CEDH 2003-IX"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2011:1213DEC006703709",
+      "target_ecli": "ECLI:CE:ECHR:2007:0925DEC004216502",
+      "target_date": "2007-09-25",
+      "target_kind": "decision",
+      "appno": "42165/02",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Hadrabová et Hadrabová c. République tchèque (déc.), no 42165/02, 25 septembre 2007"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2006:1212JUD006542201",
+      "target_ecli": "ECLI:CE:ECHR:2005:1115JUD005870700",
+      "target_date": "2005-11-15",
+      "target_kind": "judgment",
+      "appno": "58707/00",
+      "rule": "scl_judgment",
+      "scl_reference": "Polácik v. Slovakia, no. 58707/00, § 48, 15 November 2005"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2018:0515DEC004431212",
+      "target_ecli": "ECLI:CE:ECHR:2005:0301DEC006986901",
+      "target_date": "2005-03-01",
+      "target_kind": "decision",
+      "appno": "69869/01",
+      "rule": "scl_decision_cue",
+      "scl_reference": "Bone v. France (dec.), no. 69869/01, 1 March 2005"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:2005:0705DEC003946498",
+      "target_ecli": "ECLI:CE:ECHR:2004:0518DEC007753201",
+      "target_date": "2004-05-18",
+      "target_kind": "decision",
+      "appno": "77532/01",
+      "rule": "scl_decision_cue_exact_date",
+      "scl_reference": "Harrach c. République Tchèque (déc.), n° 77532/01, 18 mai 2004"
+    },
+    {
+      "source_ecli": "ECLI:CE:ECHR:1976:0309DEC000733475",
+      "target_ecli": "ECLI:CE:ECHR:1969:1217DEC000416269",
+      "target_date": "1969-12-17",
+      "target_kind": "decision",
+      "appno": "4162/69",
+      "rule": "scl_decision_no_judgment",
+      "scl_reference": "No. 4162/69, Collection 32, p. 87"
+    }
+  ]
+}
