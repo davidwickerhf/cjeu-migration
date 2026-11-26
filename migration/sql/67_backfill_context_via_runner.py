@@ -257,51 +257,70 @@ def run_eu_legislation(
 def _load_eu_legislation_lookup(
     client: SqlRunnerClient,
 ) -> tuple[dict[tuple[str, str], int], dict[tuple[int, str], int]]:
-    """Preload curated EU/CoE/UN legislation IDs (+ aliases) and provisions."""
+    """Preload all EU/CoE/UN legislation IDs (+ aliases) and provisions (paginated)."""
     leg_map: dict[tuple[str, str], int] = {}
-    leg_rows = client.query_rows(
-        """
-        SELECT id, scheme, identifier
-          FROM legislation
-         WHERE scheme IN ('celex', 'coe_treaty', 'un_treaty')
-         ORDER BY id
-         LIMIT 900
-        """
-    )
     leg_ids: list[int] = []
-    for r in leg_rows:
-        lid = int(r["id"])
-        leg_ids.append(lid)
-        leg_map.setdefault((r["scheme"], r["identifier"]), lid)
-    if leg_ids:
-        alias_rows = client.query_rows(
+    last_lid = 0
+    while True:
+        leg_rows = client.query_rows(
             """
-            SELECT legislation_id, alias
-              FROM legislation_alias
-             WHERE legislation_id = ANY(%s::bigint[])
-             ORDER BY legislation_id
+            SELECT id, scheme, identifier
+              FROM legislation
+             WHERE scheme IN ('celex', 'coe_treaty', 'un_treaty')
+               AND id > %s
+             ORDER BY id
              LIMIT 900
             """,
-            params=[leg_ids],
+            params=[last_lid],
         )
-        for r in alias_rows:
-            leg_map.setdefault(("celex", r["alias"]), int(r["legislation_id"]))
+        if not leg_rows:
+            break
+        for r in leg_rows:
+            lid = int(r["id"])
+            leg_ids.append(lid)
+            leg_map.setdefault((r["scheme"], r["identifier"]), lid)
+        last_lid = int(leg_rows[-1]["id"])
+        if len(leg_rows) < 900:
+            break
+    if leg_ids:
+        last_aid = 0
+        while True:
+            alias_rows = client.query_rows(
+                """
+                SELECT a.id, a.legislation_id, a.alias
+                  FROM legislation_alias a
+                  JOIN legislation l ON l.id = a.legislation_id
+                 WHERE l.scheme IN ('celex', 'coe_treaty', 'un_treaty')
+                   AND a.id > %s
+                 ORDER BY a.id
+                 LIMIT 900
+                """,
+                params=[last_aid],
+            )
+            if not alias_rows:
+                break
+            for r in alias_rows:
+                leg_map.setdefault(("celex", r["alias"]), int(r["legislation_id"]))
+            last_aid = int(alias_rows[-1]["id"])
+            if len(alias_rows) < 900:
+                break
     prov_map: dict[tuple[int, str], int] = {}
     if leg_ids:
         last_pid = 0
         while True:
             prows = client.query_rows(
                 """
-                SELECT id, legislation_id, lower(article_label) AS label
-                  FROM legal_provision
-                 WHERE legislation_id = ANY(%s::bigint[])
-                   AND element_type = 'article'
-                   AND article_label IS NOT NULL
-                   AND id > %s
-                 ORDER BY id
+                SELECT p.id, p.legislation_id, lower(p.article_label) AS label
+                  FROM legal_provision p
+                  JOIN legislation l ON l.id = p.legislation_id
+                 WHERE l.scheme IN ('celex', 'coe_treaty', 'un_treaty')
+                   AND p.element_type = 'article'
+                   AND p.article_label IS NOT NULL
+                   AND p.id > %s
+                 ORDER BY p.id
                  LIMIT 900
                 """,
-                params=[leg_ids, last_pid],
+                params=[last_pid],
             )
             if not prows:
                 break
@@ -695,6 +714,12 @@ def run_cjeu_outcomes(
                 chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
             )
             explained = True
+        if scanned % 10000 < len(rows):
+            print(
+                f"[cjeu_outcomes] scanned={scanned} last_id={cursor_id} prepared={prepared} inserted={inserted}",
+                file=sys.stderr,
+                flush=True,
+            )
         if len(rows) < lim:
             break
 
@@ -777,6 +802,12 @@ def run_echr_outcomes(
                 chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
             )
             explained = True
+        if scanned % 10000 < len(rows):
+            print(
+                f"[echr_outcomes] scanned={scanned} last_id={cursor_id} prepared={prepared} inserted={inserted}",
+                file=sys.stderr,
+                flush=True,
+            )
         if len(rows) < lim:
             break
 
@@ -826,10 +857,12 @@ def run_rs_dictum(
             """
             SELECT c.id, c.ecli, ct.fulltext
               FROM cases c
+              JOIN rs_document d ON d.case_id = c.id
               JOIN case_text ct ON ct.case_id = c.id AND ct.source = 'RECHTSPRAAK'
              WHERE 'RS' = ANY(c.sources)
                AND c.id > %s AND c.id <= %s
                AND ct.fulltext IS NOT NULL
+               AND coalesce(d.document_type, '') !~* 'conclusie'
              ORDER BY c.id
              LIMIT %s
             """,
@@ -857,6 +890,12 @@ def run_rs_dictum(
                 chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
             )
             explained = True
+        if scanned % 10000 < len(rows):
+            print(
+                f"[rs_dictum] scanned={scanned} last_id={cursor_id} prepared={prepared} inserted={inserted}",
+                file=sys.stderr,
+                flush=True,
+            )
         if len(rows) < lim:
             break
 

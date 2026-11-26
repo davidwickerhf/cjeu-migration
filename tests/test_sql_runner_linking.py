@@ -637,10 +637,10 @@ def test_step3_eu_law_authorities_and_dictum_modes():
         sql = payload["sql"]
         if path == "/execute":
             return 200, {"ok": True, "row_count": len(payload["params"][0]), "rows": []}
-        if "FROM legislation" in sql and "scheme IN" in sql:
-            return 200, {"ok": True, "rows": [{"id": 500, "scheme": "celex", "identifier": "32011L0095"}]}
         if "FROM legislation_alias" in sql or "FROM legal_provision" in sql:
             return 200, {"ok": True, "rows": []}
+        if "FROM legislation" in sql and "scheme IN" in sql:
+            return 200, {"ok": True, "rows": [{"id": 500, "scheme": "celex", "identifier": "32011L0095"}]}
         if "SELECT min(id) AS lo, max(id) AS hi FROM cases" in sql:
             return 200, {"ok": True, "rows": [{"lo": 10, "hi": 10}]}
         if "FROM cases c" in sql and "JOIN case_text ct" in sql:
