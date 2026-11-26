@@ -363,31 +363,41 @@ published text), and regular-expression scans over ~1.1M texts are light. We
 do not fetch from data.rechtspraak.nl from other IPs to get around its rate
 limit or block.
 
-## Open decisions
+## Decisions (confirmed 2026-11-26)
 
-Each has a recommendation from the review (2026-11-24); none is final until
-the owner confirms it.
+Validated against live production `cle_v2` on 2026-11-26 and confirmed by the
+owner:
 
-- **D1.** The 3 gold-set links that are not citations (Ramadan, K2 and Usmanov
-  for Tjebbes). HR:2022:637 turned out to be a citation (in its summary) and
-  moves into the citation set. *Recommended:* keep the 3 out of citation
-  scoring and out of `case_citation`; if wanted, add a separate hand-curated
-  "related case" layer with its own provenance.
-- **D2.** Decisions published twice under different ECLIs. *Recommended:*
-  resolve every edge to one canonical case, with the other ECLIs as
-  identifiers (R1.2) so both stay findable; linking to every duplicate inflates
-  counts and repeats the fan-out problem of #69.
-- **D3.** Citations of an AG opinion and its judgment. *Recommended:* no
-  derived `cites` rows (courts often depart from their AG); keep `opinion_of`
-  as a typed edge and offer the opt-in traversal in R7.3.
-- **D4.** References inside a quoted national judgment in ECtHR texts.
-  *Recommended:* their own relation type (e.g. `cites_in_domestic_law`) or a
-  section label from `echr_extractor_segments`, excluded from the default
+- **D1 (Confirmed).** The 3 gold-set links that are not citations (Ramadan, K2
+  and Usmanov for Tjebbes). Verified on live `ECLI:EU:C:2019:189` EN/FR/NL
+  fulltexts (0 mentions of Ramadan, K2, or Usmanov); HR:2022:637 is a citation
+  in its summary and moves into the citation set. Keep the 3 out of citation
+  scoring and out of `case_citation`; if wanted later, add a separate
+  hand-curated "related case" layer with its own provenance.
+- **D2 (Confirmed).** Decisions published twice under different ECLIs
+  (`rs_replaces`: 16,466 rows; cross-court `replaced_by`: 26,462 rows on live
+  production). Resolve every edge to one canonical case, with the alternate
+  ECLIs stored in `case_identifier` (R1.2) so both stay findable without
+  inflating counts.
+- **D3 (Confirmed).** Citations of an AG opinion and its judgment
+  (`cjeu_ag_opinion`: 11,475 rows, only 51 with `parent_case_id` populated).
+  No derived `cites` rows (courts often depart from their AG); keep
+  `opinion_of` as a typed edge (`cjeu_ag_link`) and offer opt-in `via_opinion`
+  traversal in R7.3.
+- **D4 (Confirmed).** References inside a quoted national judgment in ECtHR
+  texts (`case_segment` currently has 0 ECtHR rows on live production;
+  `echr_text.heading_sections` classifies sections directly from HUDOC
+  headings). Store under `cites_in_domestic_law` and exclude from default
   ECtHR citation counts.
-- **D5.** Name-only citations. *Recommended:* leave out bare names; allow
-  name plus exact decision date (`match_method = 'name_date'`) only after it
-  reaches at least 95% precision on a 100-row stratified sample, excluded from
-  strict counts until then.
+- **D5 (Confirmed).** Name-only citations (0 `name_date` hits across 40 live
+  EN CJEU texts mentioning `ECtHR`). Leave out bare names; keep `name_date`
+  behind a flag and excluded from strict counts until it reaches ≥95%
+  precision on a 100-row stratified sample.
+- **D6 (Confirmed).** ECtHR owner `appno` population in `echr_document_appno`
+  (397,629 existing `source='appno'` rows covering 169,989 of 171,750
+  `echr_document` rows = 99.0%; 1,761 newer documents missing). Allow the
+  ECtHR loader to insert HUDOC owner `appno` rows into `echr_document_appno`
+  behind `CASE_IDENTIFIER_ENABLED` (default off).
 
 ## Review log
 
