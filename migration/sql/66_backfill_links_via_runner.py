@@ -48,6 +48,7 @@ MODE_DATASETS = {
     "rs_text": ("rs_text_ecli", "rs_text_cjeu_casenum", "rs_text_echr_appno"),
     "echr_text": ("echr_text_cjeu", "echr_text_rs"),
     "cjeu_text": ("cjeu_text_echr",),
+    "cellar_referrals": ("cellar_national_judgement",),
 }
 
 INSERT_RESOLVED_SQL = """
@@ -124,16 +125,22 @@ def _load_cle(cle_checkout: Path):
     from data_extraction.linking import (
         ag_opinions,
         artifact,
+        cellar_referrals,
         cjeu_text,
         echr_text,
+        identifiers,
         resolver,
         rs_text,
         text_common,
     )
+    from data_loading import identifier_loader
 
     return {
         "ag_opinions": ag_opinions,
         "artifact": artifact,
+        "cellar_referrals": cellar_referrals,
+        "identifiers": identifiers,
+        "identifier_loader": identifier_loader,
         "rs_text": rs_text,
         "echr_text": echr_text,
         "cjeu_text": cjeu_text,
@@ -1026,11 +1033,180 @@ def run_cjeu_text(
     }
 
 
+def run_cellar_referrals(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    from_id: int,
+    to_id: int | None,
+    page_size: int,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+    max_cases: int | None,
+) -> dict[str, Any]:
+    ref_mod = cle["cellar_referrals"]
+    id_mod = cle["identifiers"]
+    loader_mod = cle["identifier_loader"]
+    lookup = RunnerCandidateLookup(client, cle["resolver"])
+
+    bounds = client.query_rows(
+        "SELECT min(case_id) AS lo, max(case_id) AS hi FROM cjeu_document WHERE national_judgement_xml IS NOT NULL"
+    )[0]
+    if bounds["lo"] is None:
+        return {"mode": "cellar_referrals", "scanned": 0}
+    hi = to_id if to_id is not None else int(bounds["hi"])
+    cursor_id = max(int(bounds["lo"]) - 1, from_id - 1) if from_id > 0 else int(bounds["lo"]) - 1
+
+    stats: Counter[str] = Counter()
+    date_cache: dict[dt.date, list[Any]] = {}
+    scanned = 0
+    ins_res = 0
+    explained = [False]
+
+    def fetch_dates(dates: set[dt.date]) -> None:
+        missing = sorted(d for d in dates if d not in date_cache)
+        # Fetch 2 dates per query so busy court days never exceed sql-runner's 1000-row cap.
+        for i in range(0, len(missing), 2):
+            batch_dates = missing[i : i + 2]
+            iso_dates = [d.isoformat() for d in batch_dates]
+            rows = client.query_rows(
+                """
+                SELECT c.id, c.ecli, r.date_decision, r.instance, r.zaaknummer,
+                       r.language, r.date_published, r.replaces_identifier
+                  FROM rs_document r
+                  JOIN cases c ON c.id = r.case_id
+                 WHERE r.date_decision = ANY(%s::date[])
+                   AND c.ecli IS NOT NULL
+                   AND (r.instance = ANY(%s::text[]) OR r.instance LIKE 'Gerechtshof%%'
+                        OR r.instance LIKE 'Rechtbank%%' OR r.instance LIKE 'Kantongerecht%%')
+                """,
+                params=[iso_dates, list(ref_mod.NATIONAL_INSTANCES)],
+            )
+            for d in batch_dates:
+                date_cache[d] = []
+            for r in rows:
+                dec = _parse_date(r.get("date_decision"))
+                if dec is None:
+                    continue
+                zk_vars: set[str] = set()
+                for z in loader_mod.split_zaaknummers(r.get("zaaknummer")):
+                    zk_vars.update(id_mod.zaaknummer_variants(z))
+                ljn_vals: set[str] = set()
+                for ljn in loader_mod.split_ljns(r.get("replaces_identifier")):
+                    norm = id_mod.normalize_ljn(ljn)
+                    if norm:
+                        ljn_vals.add(norm)
+                date_cache.setdefault(dec, []).append(
+                    ref_mod.RsCandidate(
+                        ecli=r["ecli"],
+                        decided=dec,
+                        instance=r.get("instance"),
+                        zaaknummer=r.get("zaaknummer"),
+                        language=r.get("language"),
+                        published=_parse_date(r.get("date_published")),
+                        identifiers=tuple(sorted(zk_vars)),
+                        ljns=tuple(sorted(ljn_vals)),
+                    )
+                )
+                lookup._case_key_cache[("ecli", r["ecli"])] = (int(r["id"]), ["RS"])
+
+    while True:
+        lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
+        if lim <= 0:
+            break
+        rows = client.query_rows(
+            """
+            SELECT c.id, c.ecli, COALESCE(d.celex_id, c.celex_id) AS celex_id,
+                   c.date_decision, d.national_judgement_xml
+              FROM cjeu_document d
+              JOIN cases c ON c.id = d.case_id
+             WHERE d.national_judgement_xml IS NOT NULL
+               AND d.case_id > %s AND d.case_id <= %s
+             ORDER BY d.case_id
+             LIMIT %s
+            """,
+            params=[cursor_id, hi, lim],
+        )
+        if not rows:
+            break
+        scanned += len(rows)
+        cursor_id = int(rows[-1]["id"])
+
+        docs = []
+        needed_dates: set[dt.date] = set()
+        for r in rows:
+            doc = ref_mod.CjeuDocument(
+                ecli=r.get("ecli"),
+                celex=r.get("celex_id"),
+                decided=_parse_date(r.get("date_decision")),
+                xml=r["national_judgement_xml"],
+            )
+            lines = ref_mod.parse_notice(doc.xml)
+            needed_dates.update(ref_mod._needed_dates(lines))
+            docs.append((int(r["id"]), doc))
+
+        if needed_dates:
+            fetch_dates(needed_dates)
+
+        raw_recs: list[tuple[int, Any]] = []
+        for tgt_id, doc in docs:
+            lines = ref_mod.parse_notice(doc.xml)
+            cands = []
+            for d in ref_mod._needed_dates(lines):
+                cands.extend(date_cache.get(d, ()))
+            for rec in ref_mod.links_for_document(doc, cands, stats=stats, date_court_fallback=False):
+                raw_recs.append((tgt_id, rec))
+
+        if raw_recs:
+            lookup.prefetch_case_keys(rec.source for _, rec in raw_recs)
+            res_batch: dict[tuple, tuple] = {}
+            for tgt_id, rec in raw_recs:
+                src_hit = lookup.resolve_case_key(rec.source)
+                if src_hit is None:
+                    stats["source_ecli_not_in_db"] += 1
+                    continue
+                src_id, _ = src_hit
+                if src_id == tgt_id:
+                    continue
+                key = (src_id, tgt_id, rec.relation_type, rec.source_dataset)
+                res_batch[key] = (
+                    src_id, tgt_id, rec.relation_type, rec.source_dataset, True,
+                    rec.extractor_version, rec.match_method, rec.confidence,
+                )
+            if res_batch:
+                ins_res += client.execute_unnest_chunks(
+                    INSERT_RESOLVED_SQL,
+                    list(zip(*res_batch.values())),
+                    chunk_size=chunk_size,
+                    dry_run=dry_run,
+                    explain_first=(dry_run and explain_sql and not explained[0]),
+                )
+                explained[0] = True
+
+        if scanned % 1000 < len(rows):
+            print(
+                f"[cellar_referrals] scanned={scanned} last_id={cursor_id} res={ins_res}",
+                file=sys.stderr,
+                flush=True,
+            )
+        if len(rows) < lim:
+            break
+
+    return {
+        "mode": "cellar_referrals",
+        "last_id_scanned": cursor_id,
+        "scanned": scanned,
+        "inserted_resolved": ins_res,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("ag_opinions", "rs_text", "echr_text", "cjeu_text"),
+        choices=("ag_opinions", "rs_text", "echr_text", "cjeu_text", "cellar_referrals"),
         required=True,
     )
     parser.add_argument("--cle-checkout", type=Path, default=Path("/home/agent/projects/cle-law-and-context"))
@@ -1071,12 +1247,19 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=dry_run, explain_sql=args.explain,
             max_cases=args.max_cases, resolved_only=args.resolved_only,
         )
-    else:
+    elif args.mode == "cjeu_text":
         summary = run_cjeu_text(
             client, cle, from_id=args.from_id, to_id=args.to_id,
             page_size=args.page_size, chunk_size=args.chunk_size,
             dry_run=dry_run, explain_sql=args.explain,
             max_cases=args.max_cases, resolved_only=args.resolved_only,
+        )
+    else:
+        summary = run_cellar_referrals(
+            client, cle, from_id=args.from_id, to_id=args.to_id,
+            page_size=args.page_size, chunk_size=args.chunk_size,
+            dry_run=dry_run, explain_sql=args.explain,
+            max_cases=args.max_cases,
         )
 
     after = counts_checksum(client)
