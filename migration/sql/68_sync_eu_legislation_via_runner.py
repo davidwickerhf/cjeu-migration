@@ -152,7 +152,7 @@ def fetch_cellar_metadata(
     celexes: list[str],
     *,
     batch_size: int = 120,
-    pause: float = 0.15,
+    pause: float = 0.5,
 ) -> dict[str, dict[str, Any]]:
     """Fetch title (EN else FR), enacted_date, eli, and document_type from Cellar SPARQL."""
     found: dict[str, dict[str, Any]] = {}
@@ -191,22 +191,25 @@ WHERE {{
 }}
 GROUP BY ?celex
 """
-        for attempt in range(3):
+        for attempt in range(4):
             try:
                 req = urllib.request.Request(
                     SPARQL_ENDPOINT,
                     data=urllib.parse.urlencode({"query": query}).encode(),
-                    headers={"Accept": "application/sparql-results+json"},
+                    headers={
+                        "Accept": "application/sparql-results+json",
+                        "User-Agent": "CaseLawExplorer/1.0 (https://caselawexplorer.tech)",
+                    },
                 )
                 with urllib.request.urlopen(req, timeout=60) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 break
             except Exception as exc:
-                if attempt == 2:
-                    print(f"[warn] SPARQL batch {i} failed after 3 attempts: {exc}", file=sys.stderr, flush=True)
+                if attempt == 3:
+                    print(f"[warn] SPARQL batch {i} failed after 4 attempts: {exc}", file=sys.stderr, flush=True)
                     data = {"results": {"bindings": []}}
                 else:
-                    time.sleep(1.5 * (attempt + 1))
+                    time.sleep(3.0 * (attempt + 1))
 
         for b in data.get("results", {}).get("bindings", []):
             cx = b["celex"]["value"]
