@@ -481,7 +481,7 @@ def backfill_rs_publications(
     py_parsed = 0
     if not dry_run:
         print("[r4.6-py] Processing remaining edge-case publication rows with rs_publication.parse_publication...", flush=True)
-        last_cid = 0
+        last_cid = from_id
         pending_records: list[tuple[int, str, str, str, str, str, str, float]] = []
 
         def _flush(records: list[tuple[int, str, str, str, str, str, str, float]]):
