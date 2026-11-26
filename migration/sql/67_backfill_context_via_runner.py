@@ -764,21 +764,43 @@ def run_echr_outcomes(
         lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
         if lim <= 0:
             break
-        rows = client.query_rows(
+        id_rows = client.query_rows(
             """
-            SELECT case_id, doctype, conclusion, violation, nonviolation
+            SELECT DISTINCT case_id
               FROM echr_document
              WHERE case_id > %s AND case_id <= %s
                AND (doctype ILIKE '%%JUD%%' OR doctype ILIKE '%%DEC%%')
              ORDER BY case_id
              LIMIT %s
             """,
-            params=[cursor_id, hi, lim],
+            params=[cursor_id, hi, min(lim, 250)],
         )
-        if not rows:
+        if not id_rows:
             break
-        scanned += len(rows)
-        cursor_id = int(rows[-1]["case_id"])
+        page_ids = [int(r["case_id"]) for r in id_rows]
+        scanned += len(page_ids)
+        cursor_id = page_ids[-1]
+        rows = []
+        last_item = ""
+        while True:
+            sub = client.query_rows(
+                """
+                SELECT case_id, item_id, doctype, conclusion, violation, nonviolation
+                  FROM echr_document
+                 WHERE case_id = ANY(%s::bigint[])
+                   AND (doctype ILIKE '%%JUD%%' OR doctype ILIKE '%%DEC%%')
+                   AND item_id > %s
+                 ORDER BY item_id
+                 LIMIT 900
+                """,
+                params=[page_ids, last_item],
+            )
+            if not sub:
+                break
+            rows.extend(sub)
+            last_item = sub[-1]["item_id"]
+            if len(sub) < 900:
+                break
         by_case: dict[int, list[tuple]] = {}
         for r in rows:
             cid = int(r["case_id"])
@@ -802,13 +824,13 @@ def run_echr_outcomes(
                 chunk_size=chunk_size, dry_run=dry_run, explain_first=(dry_run and explain_sql and not explained),
             )
             explained = True
-        if scanned % 10000 < len(rows):
+        if scanned % 10000 < len(page_ids):
             print(
                 f"[echr_outcomes] scanned={scanned} last_id={cursor_id} prepared={prepared} inserted={inserted}",
                 file=sys.stderr,
                 flush=True,
             )
-        if len(rows) < lim:
+        if len(page_ids) < min(lim, 250):
             break
 
     return {

@@ -373,17 +373,31 @@ def run_targeted_corpus(
             page_ids = [int(r["case_id"]) for r in case_rows]
             scanned += len(page_ids)
             cursor_id = page_ids[-1]
-            rows = client.query_rows(
-                """
-                SELECT ed.case_id, a.appno, c.case_number
-                  FROM echr_document ed
-                  JOIN echr_document_appno a ON a.item_id = ed.item_id
-                  JOIN cases c ON c.id = ed.case_id
-                 WHERE ed.case_id = ANY(%s::bigint[])
-                   AND a.source = 'appno'
-                """,
-                params=[page_ids],
-            )
+            rows = []
+            last_item = ""
+            last_appno = ""
+            while True:
+                sub = client.query_rows(
+                    """
+                    SELECT DISTINCT ed.case_id, ed.item_id, a.appno, c.case_number
+                      FROM echr_document ed
+                      JOIN echr_document_appno a ON a.item_id = ed.item_id
+                      JOIN cases c ON c.id = ed.case_id
+                     WHERE ed.case_id = ANY(%s::bigint[])
+                       AND a.source = 'appno'
+                       AND (ed.item_id, a.appno) > (%s, %s)
+                     ORDER BY ed.item_id, a.appno
+                     LIMIT 900
+                    """,
+                    params=[page_ids, last_item, last_appno],
+                )
+                if not sub:
+                    break
+                rows.extend(sub)
+                last_item = sub[-1]["item_id"]
+                last_appno = sub[-1]["appno"]
+                if len(sub) < 900:
+                    break
             raw = []
             for r in rows:
                 cid = int(r["case_id"])

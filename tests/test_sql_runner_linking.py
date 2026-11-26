@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import importlib.util
 import json
+import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -14,7 +15,12 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-CLE_CHECKOUT = Path("/home/agent/projects/cle-law-and-context")
+CLE_CHECKOUT = Path(os.environ.get("CLE_CHECKOUT", "/home/agent/projects/cle-law-and-context"))
+_HAS_CLE_CHECKOUT = (CLE_CHECKOUT / "airflow" / "dags").is_dir()
+requires_cle_checkout = pytest.mark.skipif(
+    not _HAS_CLE_CHECKOUT,
+    reason="Requires case-law-explorer checkout (set CLE_CHECKOUT env var)",
+)
 sys.path.insert(0, str(REPO_ROOT / "migration" / "sql"))
 
 from sql_runner_client import SqlRunnerClient, SqlRunnerError  # noqa: E402
@@ -138,6 +144,7 @@ def test_execute_unnest_chunks_bisects_on_timeout():
         srv.close()
 
 
+@requires_cle_checkout
 def test_step1_preflight_and_sampler_strictly_read_only(tmp_path):
     mod = _load_module(
         "preflight_and_sample_via_runner",
@@ -253,6 +260,7 @@ def test_step1_preflight_and_sampler_strictly_read_only(tmp_path):
         srv.close()
 
 
+@requires_cle_checkout
 def test_step3_case_identifier_runner_backfill():
     mod = _load_module(
         "backfill_case_identifier_via_runner",
@@ -382,6 +390,7 @@ def test_step3_links_runner_enforces_dark_guard():
         srv2.close()
 
 
+@requires_cle_checkout
 def test_step3_ag_opinions_and_context_runner_backfills():
     links_mod = _load_module(
         "backfill_links_via_runner",
@@ -449,6 +458,7 @@ def test_step3_ag_opinions_and_context_runner_backfills():
         srv.close()
 
 
+@requires_cle_checkout
 def test_step3_text_links_modes_and_resolved_only():
     mod = _load_module(
         "backfill_links_via_runner",
@@ -627,6 +637,7 @@ def test_step3_text_links_modes_and_resolved_only():
         srv.close()
 
 
+@requires_cle_checkout
 def test_step3_eu_law_authorities_and_dictum_modes():
     mod = _load_module(
         "backfill_context_via_runner",
