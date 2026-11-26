@@ -775,12 +775,12 @@ def run_echr_text(
     lookup = RunnerCandidateLookup(client, cle["resolver"])
 
     bounds = client.query_rows(
-        "SELECT min(id) AS lo, max(id) AS hi FROM cases WHERE 'ECHR' = ANY(sources)"
+        "SELECT min(case_id) AS lo, max(case_id) AS hi FROM echr_document"
     )[0]
     if bounds["lo"] is None:
         return {"mode": "echr_text", "scanned": 0}
     hi = to_id if to_id is not None else int(bounds["hi"])
-    cursor_id = max(0, from_id - 1) if from_id > 0 else 0
+    cursor_id = max(int(bounds["lo"]) - 1, from_id - 1) if from_id > 0 else int(bounds["lo"]) - 1
 
     stats: Counter[str] = Counter()
     scanned = 0
@@ -791,24 +791,33 @@ def run_echr_text(
         lim = page_size if max_cases is None else min(page_size, max_cases - scanned)
         if lim <= 0:
             break
+        id_rows = client.query_rows(
+            """
+            SELECT DISTINCT case_id
+              FROM echr_document
+             WHERE case_id > %s AND case_id <= %s
+             ORDER BY case_id
+             LIMIT %s
+            """,
+            params=[cursor_id, hi, lim],
+        )
+        if not id_rows:
+            break
+        page_ids = [int(r["case_id"]) for r in id_rows]
+        scanned += len(page_ids)
+        cursor_id = page_ids[-1]
         rows = client.query_rows(
             """
             SELECT c.id, c.ecli, c.celex_id, c.item_id, c.date_decision, c.sources,
                    ct.language, ct.fulltext, ct.summary
               FROM cases c
               JOIN case_text ct ON ct.case_id = c.id AND ct.source = 'HUDOC'
-             WHERE 'ECHR' = ANY(c.sources)
-               AND c.id > %s AND c.id <= %s
+             WHERE c.id = ANY(%s::bigint[])
                AND (ct.fulltext IS NOT NULL OR ct.summary IS NOT NULL)
              ORDER BY c.id
-             LIMIT %s
             """,
-            params=[cursor_id, hi, lim],
+            params=[page_ids],
         )
-        if not rows:
-            break
-        scanned += len(rows)
-        cursor_id = int(rows[-1]["id"])
 
         scans = []
         cjeu_vals: set[str] = set()
@@ -860,13 +869,13 @@ def run_echr_text(
         ins_ue += r2
         ins_ur += r3
 
-        if scanned % 1000 < len(rows):
+        if scanned % 1000 < len(page_ids):
             print(
                 f"[echr_text] scanned={scanned} last_id={cursor_id} res={ins_res} ue={ins_ue} ur={ins_ur}",
                 file=sys.stderr,
                 flush=True,
             )
-        if len(rows) < lim:
+        if len(page_ids) < lim:
             break
 
     return {
@@ -900,12 +909,12 @@ def run_cjeu_text(
     lookup = RunnerCandidateLookup(client, cle["resolver"])
 
     bounds = client.query_rows(
-        "SELECT min(id) AS lo, max(id) AS hi FROM cases WHERE 'CJEU' = ANY(sources)"
+        "SELECT min(case_id) AS lo, max(case_id) AS hi FROM cjeu_document"
     )[0]
     if bounds["lo"] is None:
         return {"mode": "cjeu_text", "scanned": 0}
     hi = to_id if to_id is not None else int(bounds["hi"])
-    cursor_id = max(0, from_id - 1) if from_id > 0 else 0
+    cursor_id = max(int(bounds["lo"]) - 1, from_id - 1) if from_id > 0 else int(bounds["lo"]) - 1
 
     stats: Counter[str] = Counter()
     scanned = 0
@@ -918,11 +927,11 @@ def run_cjeu_text(
             break
         case_rows = client.query_rows(
             """
-            SELECT id, ecli, celex_id, item_id, date_decision, sources
-              FROM cases
-             WHERE 'CJEU' = ANY(sources)
-               AND id > %s AND id <= %s
-             ORDER BY id
+            SELECT c.id, c.ecli, c.celex_id, c.item_id, c.date_decision, c.sources
+              FROM cjeu_document d
+              JOIN cases c ON c.id = d.case_id
+             WHERE d.case_id > %s AND d.case_id <= %s
+             ORDER BY d.case_id
              LIMIT %s
             """,
             params=[cursor_id, hi, lim],

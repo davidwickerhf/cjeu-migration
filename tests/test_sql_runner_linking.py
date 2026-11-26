@@ -461,8 +461,10 @@ def test_step3_text_links_modes_and_resolved_only():
         if path == "/execute":
             writes.append((sql, payload["params"]))
             return 200, {"ok": True, "row_count": len(payload["params"][0]), "rows": []}
-        if "SELECT min(id) AS lo, max(id) AS hi FROM cases" in sql:
+        if "SELECT min(" in sql and "AS lo, max(" in sql:
             return 200, {"ok": True, "rows": [{"lo": 1, "hi": 30}]}
+        if "SELECT DISTINCT case_id" in sql and "FROM echr_document" in sql:
+            return 200, {"ok": True, "rows": [{"case_id": 20}]}
         if "AND ct.source = 'RECHTSPRAAK'" in sql:
             return 200, {
                 "ok": True,
@@ -503,7 +505,7 @@ def test_step3_text_links_modes_and_resolved_only():
                     }
                 ],
             }
-        if "WHERE 'CJEU' = ANY(sources)" in sql:
+        if "FROM cjeu_document d" in sql:
             return 200, {
                 "ok": True,
                 "rows": [
