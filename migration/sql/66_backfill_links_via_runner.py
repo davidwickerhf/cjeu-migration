@@ -49,6 +49,7 @@ MODE_DATASETS = {
     "echr_text": ("echr_text_cjeu", "echr_text_rs"),
     "cjeu_text": ("cjeu_text_echr",),
     "cellar_referrals": ("cellar_national_judgement",),
+    "cellar_relations": ("cellar_relation_resolved",),
 }
 
 INSERT_RESOLVED_SQL = """
@@ -126,6 +127,7 @@ def _load_cle(cle_checkout: Path):
         ag_opinions,
         artifact,
         cellar_referrals,
+        cellar_relations,
         cjeu_text,
         echr_text,
         identifiers,
@@ -139,6 +141,7 @@ def _load_cle(cle_checkout: Path):
         "ag_opinions": ag_opinions,
         "artifact": artifact,
         "cellar_referrals": cellar_referrals,
+        "cellar_relations": cellar_relations,
         "identifiers": identifiers,
         "identifier_loader": identifier_loader,
         "rs_text": rs_text,
@@ -1202,12 +1205,163 @@ def run_cellar_referrals(
     }
 
 
+def run_cellar_relations(
+    client: SqlRunnerClient,
+    cle: dict[str, Any],
+    *,
+    uuid_dossier_path: Path,
+    uuid_celex_path: Path,
+    chunk_size: int,
+    dry_run: bool,
+    explain_sql: bool,
+) -> dict[str, Any]:
+    rel_mod = cle["cellar_relations"]
+    id_mod = cle["identifiers"]
+    lookup = RunnerCandidateLookup(client, cle["resolver"])
+
+    uuid_dossier = rel_mod.load_uuid_map(str(uuid_dossier_path)) if uuid_dossier_path.exists() else {}
+    uuid_celex = rel_mod.load_uuid_map(str(uuid_celex_path)) if uuid_celex_path.exists() else {}
+
+    stats: Counter[str] = Counter()
+    last_cid = 0
+    scanned = 0
+    ins_res = ins_ue = ins_ur = 0
+    explained = [False]
+    rel_types = sorted(rel_mod.RELATIONS)
+
+    while True:
+        rows = client.query_rows(
+            """
+            SELECT cc.id, cc.relation_type, COALESCE(cc.target_celex_raw, cc.target_ecli_raw) AS raw_target,
+                   s.id AS s_id, s.ecli AS s_ecli, COALESCE(sd.celex_id, s.celex_id) AS s_celex,
+                   s.item_id AS s_item, s.date_decision AS s_date,
+                   t.id AS t_id, t.ecli AS t_ecli, COALESCE(td.celex_id, t.celex_id) AS t_celex,
+                   t.item_id AS t_item, t.date_decision AS t_date
+              FROM case_citation cc
+              JOIN cases s ON s.id = cc.source_case_id
+              LEFT JOIN cjeu_document sd ON sd.case_id = s.id
+              LEFT JOIN cases t ON t.id = cc.target_case_id
+              LEFT JOIN cjeu_document td ON td.case_id = t.id
+             WHERE cc.source_dataset = 'cellar_sparql'
+               AND cc.relation_type = ANY(%s::text[])
+               AND cc.id > %s
+             ORDER BY cc.id
+             LIMIT 500
+            """,
+            params=[rel_types, last_cid],
+        )
+        if not rows:
+            break
+        scanned += len(rows)
+        last_cid = int(rows[-1]["id"])
+
+        batch = []
+        numbers: set[str] = set()
+        celexes: set[str] = set()
+        eclis: set[str] = set()
+        for r in rows:
+            sdoc = rel_mod.Document(
+                int(r["s_id"]), r.get("s_ecli"), r.get("s_celex"), r.get("s_item"), _parse_date(r.get("s_date"))
+            )
+            tdoc = (
+                rel_mod.Document(
+                    int(r["t_id"]), r.get("t_ecli"), r.get("t_celex"), r.get("t_item"), _parse_date(r.get("t_date"))
+                )
+                if r.get("t_id")
+                else None
+            )
+            crow = rel_mod.CellarRow(int(r["id"]), r["relation_type"], r.get("raw_target"), sdoc, tdoc)
+            batch.append(crow)
+            if tdoc is None and crow.raw_target:
+                ref = rel_mod.parse_reference(crow.raw_target)
+                if ref.kind == "uuid":
+                    for v in uuid_dossier.get(ref.value, ()):
+                        parsed = rel_mod.parse_dossier(v)
+                        if parsed:
+                            numbers.add(parsed.value)
+                    for v in uuid_celex.get(ref.value, ()):
+                        cx = id_mod.normalize_celex(v)
+                        if cx:
+                            celexes.add(cx)
+                elif ref.kind == "case_number":
+                    numbers.add(ref.value)
+                elif ref.kind == "celex":
+                    celexes.add(ref.value)
+                elif ref.kind == "ecli":
+                    eclis.add(ref.value)
+
+        by_celex: dict[str, Any] = {}
+        by_ecli: dict[str, Any] = {}
+        if celexes or eclis:
+            drows = client.query_rows(
+                """
+                SELECT c.id, c.ecli, COALESCE(d.celex_id, c.celex_id) AS celex_id, c.item_id, c.date_decision
+                  FROM cases c
+                  LEFT JOIN cjeu_document d ON d.case_id = c.id
+                 WHERE c.celex_id = ANY(%s::text[]) OR d.celex_id = ANY(%s::text[]) OR c.ecli = ANY(%s::text[])
+                """,
+                params=[sorted(celexes), sorted(celexes), sorted(eclis)],
+            )
+            for dr in drows:
+                doc = rel_mod.Document(
+                    int(dr["id"]), dr.get("ecli"), dr.get("celex_id"), dr.get("item_id"), _parse_date(dr.get("date_decision"))
+                )
+                if dr.get("celex_id") in celexes:
+                    by_celex[dr["celex_id"]] = doc
+                if dr.get("ecli") in eclis:
+                    by_ecli[dr["ecli"]] = doc
+        by_number = lookup.get("cjeu_case_number", sorted(numbers)) if numbers else {}
+        lookups = rel_mod.Lookups(uuid_dossier, uuid_celex, by_celex, by_ecli, by_number)
+        recs, _idents = rel_mod.links_for_rows(batch, lookups, stats)
+
+        if recs:
+            lookup.prefetch_case_keys([r.source for r in recs] + [r.target for r in recs if r.target is not None])
+            records_with_src = []
+            for rec in recs:
+                src_hit = lookup.resolve_case_key(rec.source)
+                if src_hit is None:
+                    stats["source_missing"] += 1
+                    continue
+                records_with_src.append((src_hit[0], src_hit[1], rec))
+            r1, r2, r3 = _flush_link_records(
+                client, lookup, records_with_src,
+                resolved_only=False, chunk_size=chunk_size,
+                dry_run=dry_run, explain_sql=explain_sql,
+                explained_flag=explained, stats=stats,
+            )
+            ins_res += r1
+            ins_ue += r2
+            ins_ur += r3
+
+        if len(rows) < 500:
+            break
+
+    return {
+        "mode": "cellar_relations",
+        "scanned": scanned,
+        "inserted_resolved": ins_res,
+        "inserted_unresolved_ecli": ins_ue,
+        "inserted_unresolved_ref": ins_ur,
+        "stats": dict(sorted(stats.items())),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--mode",
-        choices=("ag_opinions", "rs_text", "echr_text", "cjeu_text", "cellar_referrals"),
+        choices=("ag_opinions", "rs_text", "echr_text", "cjeu_text", "cellar_referrals", "cellar_relations"),
         required=True,
+    )
+    parser.add_argument(
+        "--uuid-dossier",
+        type=Path,
+        default=Path("/home/agent/projects/cjeu-migration-roadmap/migration/verify/research-2026-11-24/cjeu/uuid_dossier.json"),
+    )
+    parser.add_argument(
+        "--uuid-celex",
+        type=Path,
+        default=Path("/home/agent/projects/cjeu-migration-roadmap/migration/verify/research-2026-11-24/cjeu/uuid_map.json"),
     )
     parser.add_argument("--cle-checkout", type=Path, default=Path("/home/agent/projects/cle-law-and-context"))
     parser.add_argument("--from-id", type=int, default=0)
@@ -1254,12 +1408,20 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=dry_run, explain_sql=args.explain,
             max_cases=args.max_cases, resolved_only=args.resolved_only,
         )
-    else:
+    elif args.mode == "cellar_referrals":
         summary = run_cellar_referrals(
             client, cle, from_id=args.from_id, to_id=args.to_id,
             page_size=args.page_size, chunk_size=args.chunk_size,
             dry_run=dry_run, explain_sql=args.explain,
             max_cases=args.max_cases,
+        )
+    else:
+        summary = run_cellar_relations(
+            client, cle,
+            uuid_dossier_path=args.uuid_dossier,
+            uuid_celex_path=args.uuid_celex,
+            chunk_size=args.chunk_size,
+            dry_run=dry_run, explain_sql=args.explain,
         )
 
     after = counts_checksum(client)
