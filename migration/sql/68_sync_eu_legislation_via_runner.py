@@ -270,18 +270,22 @@ def load_all_unresolved_celexes(client: SqlRunnerClient, eu_law) -> tuple[list[s
         if len(rows) < 900:
             break
 
+    celex_token_re = re.compile(r"^[0-9CE]\d{4}[A-Z]", re.I)
     raw_to_cands: dict[str, list[str]] = {}
     all_cands: set[str] = set()
     for raw in raws:
+        if not raw or not celex_token_re.match(raw.strip()):
+            continue
+        raw_clean = raw.strip()
         cands: list[str] = []
-        tgt = eu_law.cellar_target(raw)
+        tgt = eu_law.cellar_target(raw_clean)
         if tgt is not None:
             cands.append(tgt.identifier)
             for alt in tgt.alternatives or ():
                 if alt not in cands:
                     cands.append(alt)
-        if raw not in cands:
-            cands.append(raw)
+        if raw_clean not in cands:
+            cands.append(raw_clean)
         raw_to_cands[raw] = cands
         all_cands.update(cands)
     return sorted(all_cands), raw_to_cands
