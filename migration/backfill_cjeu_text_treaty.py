@@ -25,11 +25,31 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 
-CLE_DAGS = Path("/home/agent/projects/cle-law-and-context/airflow/dags")
-if str(CLE_DAGS) not in sys.path:
-    sys.path.insert(0, str(CLE_DAGS))
 
-from data_extraction.linking import cjeu_treaty  # noqa: E402
+def resolve_cle_dags(cle_checkout: Optional[str] = None) -> Path:
+    """Resolve case-law-explorer's airflow/dags path and add it to sys.path."""
+    candidates: List[Path] = []
+    explicit = cle_checkout or os.getenv("CLE_CHECKOUT")
+    if explicit:
+        candidates.append(Path(explicit))
+    else:
+        repo_parent = Path(__file__).resolve().parents[2]
+        candidates.extend([
+            repo_parent / "cle-law-and-context",
+            repo_parent / "case-law-explorer",
+            Path("/home/agent/projects/cle-law-and-context"),
+        ])
+    for root in candidates:
+        dags = root / "airflow" / "dags"
+        if dags.is_dir():
+            if str(dags) not in sys.path:
+                sys.path.insert(0, str(dags))
+            return dags
+    tried = ", ".join(str(p / "airflow" / "dags") for p in candidates)
+    raise SystemExit(
+        f"Could not find case-law-explorer airflow/dags (tried: {tried}). "
+        "Pass --cle-checkout PATH or set CLE_CHECKOUT."
+    )
 
 
 class SqlRunnerClient:
@@ -80,11 +100,15 @@ class SqlRunnerClient:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Backfill cjeu_text_treaty via sql-runner")
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
+    ap.add_argument("--cle-checkout", default=None, help="Path to case-law-explorer checkout (or CLE_CHECKOUT env)")
     ap.add_argument("--batch-cases", type=int, default=8, help="CJEU cases fetched per text query")
     ap.add_argument("--start-id", type=int, default=0, help="Resume scanning cjeu_document.case_id > start-id")
     ap.add_argument("--limit-cases", type=int, default=0, help="Max candidate cases (0 = all)")
     ap.add_argument("--apply", action="store_true", help="Write resolved rows into cle_v2.case_law_reference")
     args = ap.parse_args()
+
+    resolve_cle_dags(args.cle_checkout)
+    from data_extraction.linking import cjeu_treaty
 
     token = os.getenv("SQL_RUNNER_TOKEN")
     if not token:

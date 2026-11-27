@@ -20,13 +20,10 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-CLE_DAGS = Path("/home/agent/projects/cle-law-and-context/airflow/dags")
-if str(CLE_DAGS) not in sys.path:
-    sys.path.insert(0, str(CLE_DAGS))
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from data_extraction.linking import echr_edge_v2, echr_text_echr  # noqa: E402
-from data_extraction.linking.artifact import CaseKey  # noqa: E402
-from migration.backfill_cjeu_text_treaty import SqlRunnerClient  # noqa: E402
+from migration.backfill_cjeu_text_treaty import SqlRunnerClient, resolve_cle_dags  # noqa: E402
 
 
 _TARGET_CANDIDATES_POS_SQL = """
@@ -76,13 +73,15 @@ _TARGET_CANDIDATES_POS_SQL = """
 
 def fetch_target_candidates_http(
     client: SqlRunnerClient, norm_appnos: Set[str]
-) -> Dict[str, List[echr_edge_v2.TargetCandidate]]:
+) -> Dict[str, List[Any]]:
+    from data_extraction.linking import echr_edge_v2
+
     if not norm_appnos:
         return {}
     norm_sorted = sorted(norm_appnos)
     raw_variants = echr_edge_v2._appno_raw_variants(norm_sorted)
     rows = client.query(_TARGET_CANDIDATES_POS_SQL, [raw_variants, norm_sorted])
-    appno_index: Dict[str, List[echr_edge_v2.TargetCandidate]] = defaultdict(list)
+    appno_index: Dict[str, List[Any]] = defaultdict(list)
     for r in rows:
         kind = echr_edge_v2.classify_target_kind(
             bool(r["has_jud"]), bool(r["has_dec"]), bool(r["has_com"])
@@ -118,6 +117,7 @@ def fetch_target_candidates_http(
 def main() -> int:
     ap = argparse.ArgumentParser(description="Backfill echr_text_echr via sql-runner")
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
+    ap.add_argument("--cle-checkout", default=None, help="Path to case-law-explorer checkout (or CLE_CHECKOUT env)")
     ap.add_argument("--batch-cases", type=int, default=8, help="Empty-scl ECHR cases per batch")
     ap.add_argument("--start-id", type=int, default=0, help="Resume scanning cases.id > start-id")
     ap.add_argument("--newest-first", action="store_true", help="Scan newest empty-scl cases first")
@@ -125,6 +125,10 @@ def main() -> int:
     ap.add_argument("--sample", type=int, default=15, help="Number of sample edges to print")
     ap.add_argument("--apply", action="store_true", help="Write resolved rows into cle_v2.case_citation")
     args = ap.parse_args()
+
+    resolve_cle_dags(args.cle_checkout)
+    from data_extraction.linking import echr_edge_v2, echr_text_echr
+    from data_extraction.linking.artifact import CaseKey
 
     token = os.getenv("SQL_RUNNER_TOKEN")
     if not token:

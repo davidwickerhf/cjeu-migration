@@ -18,17 +18,16 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-CLE_DAGS = Path("/home/agent/projects/cle-law-and-context/airflow/dags")
-if str(CLE_DAGS) not in sys.path:
-    sys.path.insert(0, str(CLE_DAGS))
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from data_extraction.linking import echr_treaty  # noqa: E402
-from migration.backfill_cjeu_text_treaty import SqlRunnerClient  # noqa: E402
+from migration.backfill_cjeu_text_treaty import SqlRunnerClient, resolve_cle_dags  # noqa: E402
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Backfill echr_text_treaty via sql-runner")
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
+    ap.add_argument("--cle-checkout", default=None, help="Path to case-law-explorer checkout (or CLE_CHECKOUT env)")
     ap.add_argument("--batch-cases", type=int, default=6, help="ECHR cases fetched per text query")
     ap.add_argument("--start-id", type=int, default=0, help="Resume scanning cases.id > start-id")
     ap.add_argument("--newest-first", action="store_true", help="Scan newest ECHR cases first (for sampling)")
@@ -36,6 +35,9 @@ def main() -> int:
     ap.add_argument("--sample", type=int, default=10, help="Number of sample hits to print")
     ap.add_argument("--apply", action="store_true", help="Write resolved rows into cle_v2.case_law_reference")
     args = ap.parse_args()
+
+    resolve_cle_dags(args.cle_checkout)
+    from data_extraction.linking import echr_treaty
 
     token = os.getenv("SQL_RUNNER_TOKEN")
     if not token:
