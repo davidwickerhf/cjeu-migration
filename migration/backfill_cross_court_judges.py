@@ -44,13 +44,35 @@ _CORPUS_SPECS: Dict[str, Tuple[Optional[str], str, str]] = {
 }
 
 
+_REQUIRED_CASE_JUDGE_COLUMNS = ("source_dataset", "extractor_version", "confidence")
+
+
+def verify_case_judge_provenance_columns(client: SqlRunnerClient) -> None:
+    """Verify migration 0017 provenance columns exist on cle_v2.case_judge before writes."""
+    rows = client.query(
+        "SELECT column_name "
+        "  FROM information_schema.columns "
+        " WHERE table_schema = 'cle_v2' "
+        "   AND table_name = 'case_judge' "
+        "   AND column_name = ANY(%s)",
+        [list(_REQUIRED_CASE_JUDGE_COLUMNS)],
+    )
+    present = {r["column_name"] for r in rows}
+    missing = [col for col in _REQUIRED_CASE_JUDGE_COLUMNS if col not in present]
+    if missing:
+        raise SystemExit(
+            f"cle_v2.case_judge is missing required provenance column(s): {', '.join(missing)}. "
+            "Apply caselaw-coolify migration 0017_legislation_fulltext_and_judges.sql before running --apply."
+        )
+
+
 def run_corpus(
     client: SqlRunnerClient,
     judges_mod: Any,
     corpus: str,
     *,
     batch_cases: int,
-    start_id: int,
+    start_id: Optional[int],
     newest_first: bool,
     limit_cases: int,
     sample_limit: int,
@@ -58,6 +80,9 @@ def run_corpus(
 ) -> Dict[str, Any]:
     court_code, text_source, slice_expr = _CORPUS_SPECS[corpus]
     is_echr = corpus == "echr"
+
+    if apply:
+        verify_case_judge_provenance_columns(client)
 
     court_id: Optional[int] = None
     if court_code is not None:
@@ -74,7 +99,10 @@ def run_corpus(
     by_dataset: Counter = Counter()
     samples: List[Dict[str, Any]] = []
 
-    cursor_id = start_id if not newest_first else 10**12
+    if start_id is not None:
+        cursor_id = start_id
+    else:
+        cursor_id = 10**12 if newest_first else 0
     cmp_op = "<" if newest_first else ">"
     order_dir = "DESC" if newest_first else "ASC"
 
@@ -240,7 +268,12 @@ def main() -> int:
         help="Target corpus ('all' runs echr, rs-phr, rs-hr in sequence)",
     )
     ap.add_argument("--batch-cases", type=int, default=150, help="Cases fetched per HTTP batch (LEFT/RIGHT slice)")
-    ap.add_argument("--start-id", type=int, default=0, help="Resume scanning cases.id > start-id (single corpus)")
+    ap.add_argument(
+        "--start-id",
+        type=int,
+        default=None,
+        help="Resume cursor: scans cases.id > start-id (or < start-id with --newest-first)",
+    )
     ap.add_argument("--newest-first", action="store_true", help="Scan newest cases first (for sampling/quick sweep)")
     ap.add_argument("--limit-cases", type=int, default=0, help="Max cases per corpus (0 = all)")
     ap.add_argument("--sample", type=int, default=10, help="Number of sample hits to print per corpus")
