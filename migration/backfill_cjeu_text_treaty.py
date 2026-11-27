@@ -221,7 +221,9 @@ def main() -> int:
         chunk_matched.sort(reverse=args.newest_first)
         candidate_ids.extend(chunk_matched)
         if args.limit_cases and len(candidate_ids) >= args.limit_cases:
-            candidate_ids = candidate_ids[: args.limit_cases]
+            if len(candidate_ids) > args.limit_cases:
+                candidate_ids = candidate_ids[: args.limit_cases]
+                cursor_id = candidate_ids[-1]
             break
 
     print(
