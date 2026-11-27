@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Historical backfill for cross-court judges & Advocates General (ECtHR + Rechtspraak).
+"""Historical backfill for cross-court judges & Advocates General (ECtHR, Hoge Raad, PHR only).
 
 Uses the exact same parsers as case-law-explorer's weekly enrichment_sync_etl task
 (data_extraction.case_context.judges) over cle_v2.case_text via sql-runner, fetching
-only LEFT(fulltext, 4000) for ECtHR and RIGHT(fulltext, 3000) for Rechtspraak so
+only LEFT(fulltext, 4000) for ECtHR and RIGHT(fulltext, 3000) for Hoge Raad / PHR so
 batches of 150-200 cases run cleanly over HTTP.
+
+Lower Dutch courts (non-HR/PHR ECLI:NL:*) and French courts (ECLI:FR:*, Art. 33
+Loi n° 2019-222) are explicitly prohibited and rejected before any extraction or write.
 
 Default mode is read-only (--dry-run); pass --apply only after owner go-ahead.
 """
@@ -25,8 +28,8 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
 from migration.backfill_cjeu_text_treaty import SqlRunnerClient, resolve_cle_dags  # noqa: E402
 
 
-_CORPUS_SPECS: Dict[str, Tuple[Optional[str], str, str]] = {
-    # corpus -> (court.code or None for rs_document, case_text.source, slice_expr)
+_CORPUS_SPECS: Dict[str, Tuple[str, str, str]] = {
+    # corpus -> (court.code, case_text.source, slice_expr)
     "echr": ("ECTHR", "HUDOC", "LEFT(ct.fulltext, 4000)"),
     "rs-phr": (
         "RS:Parket bij de Hoge Raad",
@@ -34,14 +37,42 @@ _CORPUS_SPECS: Dict[str, Tuple[Optional[str], str, str]] = {
         "LEFT(ct.fulltext, 1500) || E'\\n\\n' || RIGHT(ct.fulltext, 3000)",
     ),
     "rs-hr": ("RS:Hoge Raad", "RECHTSPRAAK", "RIGHT(ct.fulltext, 3000)"),
-    "rs-all": (
-        None,
-        "RECHTSPRAAK",
-        "CASE WHEN c.ecli LIKE 'ECLI:NL:PHR:%%' "
-        "THEN LEFT(ct.fulltext, 1500) || E'\\n\\n' || RIGHT(ct.fulltext, 3000) "
-        "ELSE RIGHT(ct.fulltext, 3000) END",
-    ),
 }
+
+
+_ALLOWED_NL_ECLI_PREFIXES = ("ECLI:NL:HR:", "ECLI:NL:PHR:")
+_CORPUS_ECLI_PREFIXES: Dict[str, str] = {
+    "rs-hr": "ECLI:NL:HR:",
+    "rs-phr": "ECLI:NL:PHR:",
+}
+
+
+def validate_ecli_allowed(ecli: str, corpus: Optional[str] = None) -> None:
+    """Defensive guard refusing lower Dutch courts (non-HR/PHR) and all French courts.
+
+    Raises ValueError before any extraction or database write when:
+      * ECLI starts with ``ECLI:FR:`` (France Art. 33 Loi n° 2019-222 prohibition).
+      * ECLI starts with ``ECLI:NL:`` and is neither ``ECLI:NL:HR:`` nor ``ECLI:NL:PHR:``.
+      * ``corpus`` is ``rs-hr`` or ``rs-phr`` and a non-empty ECLI does not match that
+        supreme court's ECLI prefix.
+    """
+    norm = (ecli or "").strip().upper()
+    if norm.startswith("ECLI:FR:"):
+        raise ValueError(
+            f"Refusing French court ECLI {ecli!r}: judge extraction is prohibited "
+            "under Art. 33 Loi n° 2019-222."
+        )
+    if norm.startswith("ECLI:NL:") and not norm.startswith(_ALLOWED_NL_ECLI_PREFIXES):
+        raise ValueError(
+            f"Refusing non-HR/PHR Dutch court ECLI {ecli!r}: lower Dutch court judge "
+            "extraction is prohibited; only ECLI:NL:HR:* and ECLI:NL:PHR:* are allowed."
+        )
+    if corpus in _CORPUS_ECLI_PREFIXES and norm:
+        required = _CORPUS_ECLI_PREFIXES[corpus]
+        if not norm.startswith(required):
+            raise ValueError(
+                f"Refusing ECLI {ecli!r} for corpus {corpus!r}: expected prefix {required!r}."
+            )
 
 
 _REQUIRED_CASE_JUDGE_COLUMNS = ("source_dataset", "extractor_version", "confidence")
@@ -78,18 +109,20 @@ def run_corpus(
     sample_limit: int,
     apply: bool,
 ) -> Dict[str, Any]:
+    if corpus not in _CORPUS_SPECS:
+        raise ValueError(
+            f"Unsupported corpus {corpus!r}; allowed corpora: {', '.join(sorted(_CORPUS_SPECS))}"
+        )
     court_code, text_source, slice_expr = _CORPUS_SPECS[corpus]
     is_echr = corpus == "echr"
 
     if apply:
         verify_case_judge_provenance_columns(client)
 
-    court_id: Optional[int] = None
-    if court_code is not None:
-        crows = client.query("SELECT id FROM cle_v2.court WHERE code = %s LIMIT 1", [court_code])
-        if not crows:
-            raise RuntimeError(f"Court code {court_code!r} not found in cle_v2.court")
-        court_id = int(crows[0]["id"])
+    crows = client.query("SELECT id FROM cle_v2.court WHERE code = %s LIMIT 1", [court_code])
+    if not crows:
+        raise RuntimeError(f"Court code {court_code!r} not found in cle_v2.court")
+    court_id = int(crows[0]["id"])
 
     cases_scanned = 0
     cases_with_hits = 0
@@ -114,46 +147,32 @@ def run_corpus(
 
         # Step 1: fast indexed keyset page of candidate case IDs (materialized court_id
         # lookup prevents Postgres from walking cases_pkey across 1.5M unrelated rows).
-        if court_id is not None:
-            id_rows = client.query(
-                "WITH pool AS MATERIALIZED ("
-                "    SELECT c.id, c.ecli "
-                "      FROM cle_v2.cases c "
-                "     WHERE c.court_id = %s "
-                f"      AND c.id {cmp_op} %s"
-                ") "
-                "SELECT p.id, p.ecli "
-                "  FROM pool p "
-                " WHERE NOT EXISTS (SELECT 1 FROM cle_v2.case_judge cj WHERE cj.case_id = p.id) "
-                "   AND EXISTS ("
-                "       SELECT 1 FROM cle_v2.case_text ct "
-                "        WHERE ct.case_id = p.id AND ct.source = %s AND ct.fulltext IS NOT NULL"
-                "   ) "
-                f"ORDER BY p.id {order_dir} "
-                "LIMIT %s",
-                [court_id, cursor_id, text_source, fetch_n],
-            )
-        else:
-            id_rows = client.query(
-                "SELECT c.id, c.ecli "
-                "  FROM cle_v2.rs_document rd "
-                "  JOIN cle_v2.cases c ON c.id = rd.case_id "
-                f"WHERE rd.case_id {cmp_op} %s "
-                "  AND NOT EXISTS (SELECT 1 FROM cle_v2.case_judge cj WHERE cj.case_id = rd.case_id) "
-                "  AND EXISTS ("
-                "      SELECT 1 FROM cle_v2.case_text ct "
-                "       WHERE ct.case_id = rd.case_id AND ct.source = %s AND ct.fulltext IS NOT NULL"
-                "  ) "
-                f"ORDER BY rd.case_id {order_dir} "
-                "LIMIT %s",
-                [cursor_id, text_source, fetch_n],
-            )
+        id_rows = client.query(
+            "WITH pool AS MATERIALIZED ("
+            "    SELECT c.id, c.ecli "
+            "      FROM cle_v2.cases c "
+            "     WHERE c.court_id = %s "
+            f"      AND c.id {cmp_op} %s"
+            ") "
+            "SELECT p.id, p.ecli "
+            "  FROM pool p "
+            " WHERE NOT EXISTS (SELECT 1 FROM cle_v2.case_judge cj WHERE cj.case_id = p.id) "
+            "   AND EXISTS ("
+            "       SELECT 1 FROM cle_v2.case_text ct "
+            "        WHERE ct.case_id = p.id AND ct.source = %s AND ct.fulltext IS NOT NULL"
+            "   ) "
+            f"ORDER BY p.id {order_dir} "
+            "LIMIT %s",
+            [court_id, cursor_id, text_source, fetch_n],
+        )
 
         if not id_rows:
             break
 
         batch_ids = [int(r["id"]) for r in id_rows]
         ecli_by_id = {int(r["id"]): (r["ecli"] or "") for r in id_rows}
+        for ecli in ecli_by_id.values():
+            validate_ecli_allowed(ecli, corpus=corpus)
         cursor_id = batch_ids[-1]
         cases_scanned += len(batch_ids)
 
@@ -186,6 +205,7 @@ def run_corpus(
         for r in text_rows:
             cid = int(r["case_id"])
             ecli = ecli_by_id.get(cid, "")
+            validate_ecli_allowed(ecli, corpus=corpus)
             snippet = r["snippet"] or ""
             recs = (
                 judges_mod.extract_echr_judges(snippet, ecli)
@@ -216,6 +236,8 @@ def run_corpus(
                 })
 
         if apply and link_payload:
+            for item in link_payload:
+                validate_ecli_allowed(ecli_by_id.get(int(item["case_id"]), ""), corpus=corpus)
             res_j = client.execute(
                 "INSERT INTO cle_v2.judge (full_name) "
                 "SELECT DISTINCT v "
@@ -257,13 +279,15 @@ def run_corpus(
     }
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Backfill ECtHR & Rechtspraak judges/AGs via sql-runner")
+def main(argv: Optional[List[str]] = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Backfill ECtHR, Hoge Raad, & PHR judges/AGs via sql-runner"
+    )
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
     ap.add_argument("--cle-checkout", default=None, help="Path to case-law-explorer checkout (or CLE_CHECKOUT env)")
     ap.add_argument(
         "--corpus",
-        choices=("all", "echr", "rs-phr", "rs-hr", "rs-all"),
+        choices=("all", "echr", "rs-phr", "rs-hr"),
         default="all",
         help="Target corpus ('all' runs echr, rs-phr, rs-hr in sequence)",
     )
@@ -278,7 +302,7 @@ def main() -> int:
     ap.add_argument("--limit-cases", type=int, default=0, help="Max cases per corpus (0 = all)")
     ap.add_argument("--sample", type=int, default=10, help="Number of sample hits to print per corpus")
     ap.add_argument("--apply", action="store_true", help="Write rows into cle_v2.judge and cle_v2.case_judge")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     resolve_cle_dags(args.cle_checkout)
     from data_extraction.case_context import judges
