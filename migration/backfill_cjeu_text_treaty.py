@@ -5,7 +5,7 @@ Uses the exact same scanner as case-law-explorer's weekly enrichment_sync_etl ta
 (data_extraction.linking.cjeu_treaty) over cle_v2.case_text via sql-runner.
 
 Default mode is read-only (--dry-run); pass --apply only after migration 0018
-(case_law_reference_uk_cjeu_treaty) is applied and owner go-ahead is confirmed.
+(case_law_reference_uk_text_treaty) is applied and owner go-ahead is confirmed.
 """
 
 from __future__ import annotations
@@ -80,7 +80,8 @@ class SqlRunnerClient:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Backfill cjeu_text_treaty via sql-runner")
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
-    ap.add_argument("--batch-cases", type=int, default=20, help="CJEU cases fetched per text query")
+    ap.add_argument("--batch-cases", type=int, default=8, help="CJEU cases fetched per text query")
+    ap.add_argument("--start-id", type=int, default=0, help="Resume scanning cjeu_document.case_id > start-id")
     ap.add_argument("--limit-cases", type=int, default=0, help="Max candidate cases (0 = all)")
     ap.add_argument("--apply", action="store_true", help="Write resolved rows into cle_v2.case_law_reference")
     args = ap.parse_args()
@@ -112,7 +113,7 @@ def main() -> int:
     # 2. Keyset-paginate CJEU cases via cjeu_document (~44k rows) and filter each
     #    chunk against case_text.fulltext_tsv (sub-second per chunk, avoids GIN timeout).
     tsq = cjeu_treaty._CANDIDATE_TSQUERY
-    last_id = 0
+    last_id = args.start_id
     candidate_ids: List[int] = []
     while True:
         chunk_rows = client.query(
@@ -205,7 +206,7 @@ def main() -> int:
                 "FROM jsonb_array_elements(%s::jsonb) AS x "
                 "ON CONFLICT (case_id, raw_scheme, raw_resource, COALESCE(raw_subdivision, ''), role, source_dataset) "
                 "WHERE raw_resource IS NOT NULL AND (legislation_id IS NOT NULL OR provision_id IS NOT NULL) "
-                "  AND source_dataset = 'cjeu_text_treaty' "
+                "  AND source_dataset IN ('cjeu_text_treaty', 'echr_text_treaty') "
                 "DO NOTHING",
                 [json.dumps(insert_payload)],
             )
