@@ -108,6 +108,45 @@ def resolve_cellar_uris_via_sparql(
     return resolved
 
 
+_PROVENANCE_COLS = ("source_dataset", "extractor_version", "confidence")
+_DELETE_CHUNK_SIZE = 2000
+
+
+def _detect_case_judge_extra_cols(client: SqlRunnerClient) -> List[str]:
+    """Return whichever optional provenance columns exist on cle_v2.case_judge."""
+    rows = client.query(
+        "SELECT column_name "
+        "  FROM information_schema.columns "
+        " WHERE table_schema = 'cle_v2' "
+        "   AND table_name = 'case_judge' "
+        "   AND column_name = ANY(%s)",
+        [list(_PROVENANCE_COLS)],
+    )
+    present = {r["column_name"] for r in rows}
+    return [c for c in _PROVENANCE_COLS if c in present]
+
+
+def _delete_case_judge_chunked(client: SqlRunnerClient, judge_ids: List[int]) -> int:
+    """Delete case_judge rows for judge_ids in bounded chunks below sql-runner's 10k row limit."""
+    total = 0
+    for jid in judge_ids:
+        while True:
+            res = client.execute(
+                "DELETE FROM cle_v2.case_judge "
+                " WHERE ctid IN ("
+                "     SELECT ctid FROM cle_v2.case_judge "
+                "      WHERE judge_id = %s "
+                "      LIMIT %s"
+                " )",
+                [jid, _DELETE_CHUNK_SIZE],
+            )
+            deleted = int(res.get("row_count") or 0)
+            total += deleted
+            if deleted < _DELETE_CHUNK_SIZE:
+                break
+    return total
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Resolve raw CELLAR URIs in cle_v2.judge via EUR-Lex SPARQL")
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
@@ -170,6 +209,10 @@ def main() -> int:
     applied_merges = 0
     applied_splits = 0
     if args.apply:
+        extra_cols = _detect_case_judge_extra_cols(client)
+        insert_cols_sql = ", ".join(["case_id", "judge_id", "role", *extra_cols])
+        select_extra_sql = "".join(f", cj.{c}" for c in extra_cols)
+
         # 1. Apply in-place renames first so newly canonicalized rows exist before merges/splits.
         if renames:
             payload = [{"id": jid, "full_name": name} for jid, _uri, name in renames]
@@ -184,30 +227,25 @@ def main() -> int:
 
         # 2. Merge duplicate single-name URI judge rows into their canonical judge_id.
         if merges:
-            payload = [{"old_id": old_id, "new_id": new_id} for old_id, new_id, _u, _n in merges]
-            pj = json.dumps(payload)
-            client.execute(
-                "INSERT INTO cle_v2.case_judge ("
-                "  case_id, judge_id, role, source_dataset, extractor_version, confidence"
-                ") "
-                "SELECT cj.case_id, (x->>'new_id')::bigint, cj.role, "
-                "       cj.source_dataset, cj.extractor_version, cj.confidence "
-                "  FROM jsonb_array_elements(%s::jsonb) AS x "
-                "  JOIN cle_v2.case_judge cj ON cj.judge_id = (x->>'old_id')::bigint "
-                "ON CONFLICT (case_id, judge_id, role) DO NOTHING",
-                [pj],
-            )
-            client.execute(
-                "DELETE FROM cle_v2.case_judge "
-                " WHERE judge_id IN (SELECT (x->>'old_id')::bigint FROM jsonb_array_elements(%s::jsonb) AS x)",
-                [pj],
-            )
-            res_del = client.execute(
-                "DELETE FROM cle_v2.judge "
-                " WHERE id IN (SELECT (x->>'old_id')::bigint FROM jsonb_array_elements(%s::jsonb) AS x)",
-                [pj],
-            )
-            applied_merges = int(res_del.get("row_count") or 0)
+            for offset in range(0, len(merges), 20):
+                batch = merges[offset : offset + 20]
+                payload = [{"old_id": old_id, "new_id": new_id} for old_id, new_id, _u, _n in batch]
+                pj = json.dumps(payload)
+                client.execute(
+                    f"INSERT INTO cle_v2.case_judge ({insert_cols_sql}) "
+                    f"SELECT cj.case_id, (x->>'new_id')::bigint, cj.role{select_extra_sql} "
+                    "  FROM jsonb_array_elements(%s::jsonb) AS x "
+                    "  JOIN cle_v2.case_judge cj ON cj.judge_id = (x->>'old_id')::bigint "
+                    "ON CONFLICT (case_id, judge_id, role) DO NOTHING",
+                    [pj],
+                )
+                old_ids = [old_id for old_id, _new_id, _u, _n in batch]
+                _delete_case_judge_chunked(client, old_ids)
+                res_del = client.execute(
+                    "DELETE FROM cle_v2.judge WHERE id = ANY(%s)",
+                    [old_ids],
+                )
+                applied_merges += int(res_del.get("row_count") or 0)
 
         # 3. Split multi-person URIs ("Lecourt ; Hammes") into individual judges and drop the URI row.
         if splits:
@@ -219,37 +257,33 @@ def main() -> int:
                 "WHERE NOT EXISTS (SELECT 1 FROM cle_v2.judge j WHERE lower(j.full_name) = lower(v))",
                 [json.dumps(split_names, ensure_ascii=False)],
             )
-            split_pairs = [
-                {"old_id": jid, "name": p}
-                for jid, _u, parts in splits
-                for p in parts
-            ]
-            client.execute(
-                "INSERT INTO cle_v2.case_judge ("
-                "  case_id, judge_id, role, source_dataset, extractor_version, confidence"
-                ") "
-                "SELECT cj.case_id, j.id, cj.role, "
-                "       cj.source_dataset, cj.extractor_version, cj.confidence "
-                "  FROM jsonb_array_elements(%s::jsonb) AS x "
-                "  JOIN cle_v2.case_judge cj ON cj.judge_id = (x->>'old_id')::bigint "
-                "  JOIN LATERAL ("
-                "      SELECT id FROM cle_v2.judge j2 "
-                "       WHERE lower(j2.full_name) = lower(x->>'name') "
-                "       ORDER BY id LIMIT 1"
-                "  ) j ON true "
-                "ON CONFLICT (case_id, judge_id, role) DO NOTHING",
-                [json.dumps(split_pairs, ensure_ascii=False)],
-            )
-            old_ids = [jid for jid, _u, _parts in splits]
-            client.execute(
-                "DELETE FROM cle_v2.case_judge WHERE judge_id = ANY(%s)",
-                [old_ids],
-            )
-            res_sdel = client.execute(
-                "DELETE FROM cle_v2.judge WHERE id = ANY(%s)",
-                [old_ids],
-            )
-            applied_splits = int(res_sdel.get("row_count") or 0)
+            for offset in range(0, len(splits), 10):
+                batch = splits[offset : offset + 10]
+                split_pairs = [
+                    {"old_id": jid, "name": p}
+                    for jid, _u, parts in batch
+                    for p in parts
+                ]
+                client.execute(
+                    f"INSERT INTO cle_v2.case_judge ({insert_cols_sql}) "
+                    f"SELECT cj.case_id, j.id, cj.role{select_extra_sql} "
+                    "  FROM jsonb_array_elements(%s::jsonb) AS x "
+                    "  JOIN cle_v2.case_judge cj ON cj.judge_id = (x->>'old_id')::bigint "
+                    "  JOIN LATERAL ("
+                    "      SELECT id FROM cle_v2.judge j2 "
+                    "       WHERE lower(j2.full_name) = lower(x->>'name') "
+                    "       ORDER BY id LIMIT 1"
+                    "  ) j ON true "
+                    "ON CONFLICT (case_id, judge_id, role) DO NOTHING",
+                    [json.dumps(split_pairs, ensure_ascii=False)],
+                )
+                old_ids = [jid for jid, _u, _parts in batch]
+                _delete_case_judge_chunked(client, old_ids)
+                res_sdel = client.execute(
+                    "DELETE FROM cle_v2.judge WHERE id = ANY(%s)",
+                    [old_ids],
+                )
+                applied_splits += int(res_sdel.get("row_count") or 0)
 
     print(json.dumps({
         "mode": "APPLIED" if args.apply else "DRY-RUN",
