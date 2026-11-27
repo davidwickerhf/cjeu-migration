@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""One-shot historical backfill for CJEU -> ECHR / Protocol / UN treaty citations.
+"""One-shot historical backfill for CJEU -> international treaty citations.
 
 Uses the exact same scanner as case-law-explorer's weekly enrichment_sync_etl task
-(data_extraction.linking.cjeu_treaty) over cle_v2.case_text via sql-runner.
+(data_extraction.linking.cjeu_treaty + treaty_matcher over treaties_catalog.json)
+against cle_v2.case_text via sql-runner.
 
-Default mode is read-only (--dry-run); pass --apply only after migration 0018
-(case_law_reference_uk_cjeu_treaty) is applied and owner go-ahead is confirmed.
+Default mode is read-only (--dry-run); pass --apply only after migrations 0018
+(case_law_reference_uk_cjeu_treaty) and 0021 (international treaty catalog) are
+applied and owner go-ahead is confirmed.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from urllib.parse import urljoin, urlparse
 
 
@@ -97,18 +99,65 @@ class SqlRunnerClient:
         return self._call("/execute", payload)
 
 
+def load_catalog_maps(
+    client: SqlRunnerClient,
+    catalog_entries: Sequence[Any],
+) -> Tuple[Dict[Tuple[str, str], int], Dict[Tuple[int, str], int]]:
+    """Load legislation.id & article provision_id maps scoped to treaties_catalog.json keys."""
+    keys = sorted({(e.scheme, e.identifier) for e in catalog_entries})
+    schemes = [k[0] for k in keys]
+    idents = [k[1] for k in keys]
+    leg_rows = client.query(
+        "SELECT l.id, l.scheme, l.identifier "
+        "FROM cle_v2.legislation l "
+        "JOIN unnest(%s::text[], %s::text[]) AS k(scheme, identifier) "
+        "  ON l.scheme = k.scheme AND l.identifier = k.identifier",
+        [schemes, idents],
+    )
+    leg_map: Dict[Tuple[str, str], int] = {
+        (r["scheme"], r["identifier"]): int(r["id"]) for r in leg_rows
+    }
+    prov_map: Dict[Tuple[int, str], int] = {}
+    if leg_map:
+        prov_rows = client.query(
+            "SELECT id, legislation_id, lower(article_label) AS art "
+            "FROM cle_v2.legal_provision "
+            "WHERE legislation_id = ANY(%s) AND element_type = 'article'",
+            [sorted(set(leg_map.values()))],
+        )
+        prov_map = {
+            (int(r["legislation_id"]), r["art"]): int(r["id"]) for r in prov_rows
+        }
+    return leg_map, prov_map
+
+
+def select_tsquery_groups(
+    all_groups: Sequence[str],
+    group_index: Optional[int],
+) -> List[str]:
+    if group_index is None:
+        return list(all_groups)
+    if not (0 <= group_index < len(all_groups)):
+        raise SystemExit(f"--group must be between 0 and {len(all_groups) - 1} (got {group_index})")
+    return [all_groups[group_index]]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Backfill cjeu_text_treaty via sql-runner")
     ap.add_argument("--url", default="https://demo-psql.caselawexplorer.tech")
     ap.add_argument("--cle-checkout", default=None, help="Path to case-law-explorer checkout (or CLE_CHECKOUT env)")
     ap.add_argument("--batch-cases", type=int, default=8, help="CJEU cases fetched per text query")
-    ap.add_argument("--start-id", type=int, default=0, help="Resume scanning cjeu_document.case_id > start-id")
+    ap.add_argument("--start-id", type=int, default=None, help="Resume scanning cjeu_document.case_id (> or < start-id)")
+    ap.add_argument("--newest-first", action="store_true", help="Scan newest CJEU cases first (for sampling)")
+    ap.add_argument("--group", type=int, default=None, help="Optional single tsquery group index (default: all groups)")
     ap.add_argument("--limit-cases", type=int, default=0, help="Max candidate cases (0 = all)")
+    ap.add_argument("--sample", type=int, default=15, help="Number of sample hits to print")
+    ap.add_argument("--allow-partial-catalog", action="store_true", help="Allow --apply even before migration 0021 seeds intl_treaty")
     ap.add_argument("--apply", action="store_true", help="Write resolved rows into cle_v2.case_law_reference")
     args = ap.parse_args()
 
     resolve_cle_dags(args.cle_checkout)
-    from data_extraction.linking import cjeu_treaty
+    from data_extraction.linking import cjeu_treaty, treaty_matcher
 
     token = os.getenv("SQL_RUNNER_TOKEN")
     if not token:
@@ -117,56 +166,75 @@ def main() -> int:
 
     client = SqlRunnerClient(args.url, token)
 
-    # 1. Load legislation & provision lookup maps for coe_treaty / un_treaty.
-    leg_rows = client.query(
-        "SELECT id, scheme, identifier FROM cle_v2.legislation WHERE scheme IN ('coe_treaty', 'un_treaty')"
-    )
-    leg_map: Dict[Tuple[str, str], int] = {
-        (r["scheme"], r["identifier"]): int(r["id"]) for r in leg_rows
-    }
-    prov_rows = client.query(
-        "SELECT id, legislation_id, lower(article_label) AS art "
-        "FROM cle_v2.legal_provision "
-        "WHERE legislation_id = ANY(%s) AND element_type = 'article'",
-        [sorted(set(leg_map.values()))],
-    )
-    prov_map: Dict[Tuple[int, str], int] = {
-        (int(r["legislation_id"]), r["art"]): int(r["id"]) for r in prov_rows
-    }
+    # 1. Load catalog-scoped legislation & provision lookup maps across all treaty schemes.
+    catalog_entries = treaty_matcher.load_catalog()
+    leg_map, prov_map = load_catalog_maps(client, catalog_entries)
+    if args.apply and not args.allow_partial_catalog:
+        has_intl = any(scheme == "intl_treaty" for scheme, _ in leg_map)
+        if not has_intl:
+            raise SystemExit(
+                "cle_v2.legislation has no 'intl_treaty' rows yet. Apply migration "
+                "0021_international_treaty_catalog.sql first, or pass --allow-partial-catalog."
+            )
 
     # 2. Keyset-paginate CJEU cases via cjeu_document (~44k rows) and filter each
-    #    chunk against case_text.fulltext_tsv (sub-second per chunk, avoids GIN timeout).
-    tsq = cjeu_treaty._CANDIDATE_TSQUERY
-    last_id = args.start_id
+    #    chunk against case_text.fulltext_tsv across all selected tsquery groups.
+    tsq_groups = select_tsquery_groups(
+        treaty_matcher.candidate_tsquery_groups(skip_echr_core=False),
+        args.group,
+    )
+    if args.start_id is not None:
+        cursor_id = args.start_id
+    else:
+        cursor_id = 10**12 if args.newest_first else 0
+    cmp_op = "<" if args.newest_first else ">"
+    order_dir = "DESC" if args.newest_first else "ASC"
+
     candidate_ids: List[int] = []
+    seen_cids: Set[int] = set()
+    chunks_scanned = 0
     while True:
         chunk_rows = client.query(
-            "SELECT cd.case_id FROM cle_v2.cjeu_document cd "
-            "WHERE cd.case_id > %s ORDER BY cd.case_id LIMIT 2000",
-            [last_id],
+            f"SELECT cd.case_id FROM cle_v2.cjeu_document cd "
+            f"WHERE cd.case_id {cmp_op} %s ORDER BY cd.case_id {order_dir} LIMIT 2000",
+            [cursor_id],
         )
         if not chunk_rows:
             break
+        chunks_scanned += 1
         chunk = [int(r["case_id"]) for r in chunk_rows]
-        last_id = chunk[-1]
-        matched = client.query(
-            "SELECT DISTINCT ct.case_id "
-            "FROM cle_v2.case_text ct "
-            "WHERE ct.case_id = ANY(%s) "
-            "  AND ct.fulltext_tsv @@ to_tsquery('simple', %s) "
-            "ORDER BY ct.case_id",
-            [chunk, tsq],
-        )
-        candidate_ids.extend(int(r["case_id"]) for r in matched)
+        cursor_id = chunk[-1]
+        chunk_matched: List[int] = []
+        for tsq in tsq_groups:
+            matched = client.query(
+                "SELECT DISTINCT ct.case_id "
+                "FROM cle_v2.case_text ct "
+                "WHERE ct.case_id = ANY(%s) "
+                "  AND ct.fulltext_tsv @@ to_tsquery('simple', %s)",
+                [chunk, tsq],
+            )
+            for r in matched:
+                cid = int(r["case_id"])
+                if cid not in seen_cids:
+                    seen_cids.add(cid)
+                    chunk_matched.append(cid)
+        chunk_matched.sort(reverse=args.newest_first)
+        candidate_ids.extend(chunk_matched)
         if args.limit_cases and len(candidate_ids) >= args.limit_cases:
             candidate_ids = candidate_ids[: args.limit_cases]
             break
 
-    print(f"Candidate CJEU cases matching treaty keywords: {len(candidate_ids)}")
+    print(
+        f"Candidate CJEU cases matching treaty keywords: {len(candidate_ids)} "
+        f"(groups={len(tsq_groups)}, chunks={chunks_scanned}, catalog_in_db={len(leg_map)}/{len(catalog_entries)})"
+    )
 
     treaty_counts: Counter = Counter()
+    pending_counts: Counter = Counter()
+    samples: List[Dict[str, Any]] = []
     cases_with_hits = 0
     total_records = 0
+    total_pending = 0
     total_inserted = 0
 
     for offset in range(0, len(candidate_ids), args.batch_cases):
@@ -195,11 +263,30 @@ def main() -> int:
             cases_with_hits += 1
             for rec in recs:
                 lid = leg_map.get((rec.scheme, rec.identifier))
+                treaty_key = f"{rec.scheme}/{rec.identifier}"
                 if lid is None:
+                    total_pending += 1
+                    pending_counts[treaty_key] += 1
+                    if len(samples) < args.sample:
+                        samples.append({
+                            "ecli": ecli,
+                            "treaty": treaty_key,
+                            "subdivision": rec.raw_subdivision,
+                            "in_db": False,
+                            "raw_reference": rec.raw_reference,
+                        })
                     continue
                 pid = prov_map.get((lid, rec.article.lower())) if rec.article else None
                 total_records += 1
-                treaty_counts[f"{rec.scheme}/{rec.identifier}"] += 1
+                treaty_counts[treaty_key] += 1
+                if len(samples) < args.sample:
+                    samples.append({
+                        "ecli": ecli,
+                        "treaty": treaty_key,
+                        "subdivision": rec.raw_subdivision,
+                        "in_db": True,
+                        "raw_reference": rec.raw_reference,
+                    })
                 insert_payload.append({
                     "case_id": cid,
                     "legislation_id": lid,
@@ -239,12 +326,16 @@ def main() -> int:
     mode = "APPLIED" if args.apply else "DRY-RUN"
     print(json.dumps({
         "mode": mode,
+        "last_cursor_id": cursor_id,
         "candidates": len(candidate_ids),
         "cases_with_hits": cases_with_hits,
-        "records": total_records,
+        "records_resolved_in_db": total_records,
+        "records_pending_0021": total_pending,
         "inserted": total_inserted,
-        "by_treaty": dict(treaty_counts.most_common()),
-    }, indent=2))
+        "by_treaty_in_db": dict(treaty_counts.most_common()),
+        "by_treaty_pending_0021": dict(pending_counts.most_common()),
+        "samples": samples,
+    }, indent=2, ensure_ascii=False))
     return 0
 
 
