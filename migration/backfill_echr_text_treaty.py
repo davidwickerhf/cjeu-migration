@@ -4,8 +4,8 @@
 Uses the exact same scanner as case-law-explorer's weekly enrichment_sync_etl task
 (data_extraction.linking.echr_treaty) over cle_v2.case_text via sql-runner.
 
-Default mode is read-only (--dry-run); pass --apply only after migration 0018
-(case_law_reference_uk_text_treaty) is applied and owner go-ahead is confirmed.
+Default mode is read-only (--dry-run); pass --apply only after migration 0020
+(case_law_reference_uk_echr_treaty) is applied and owner go-ahead is confirmed.
 """
 
 from __future__ import annotations
@@ -177,7 +177,7 @@ def main() -> int:
                 "FROM jsonb_array_elements(%s::jsonb) AS x "
                 "ON CONFLICT (case_id, raw_scheme, raw_resource, COALESCE(raw_subdivision, ''), role, source_dataset) "
                 "WHERE raw_resource IS NOT NULL AND (legislation_id IS NOT NULL OR provision_id IS NOT NULL) "
-                "  AND source_dataset IN ('cjeu_text_treaty', 'echr_text_treaty') "
+                "  AND source_dataset = 'echr_text_treaty' "
                 "DO NOTHING",
                 [json.dumps(insert_payload)],
             )

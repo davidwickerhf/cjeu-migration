@@ -5,7 +5,7 @@ Uses the exact same extractor & target resolver as case-law-explorer's weekly
 enrichment_sync_etl task (data_extraction.linking.echr_text_echr + echr_edge_v2)
 over cle_v2.case_text via sql-runner.
 
-Default mode is read-only (--dry-run); pass --apply only after migration 0018
+Default mode is read-only (--dry-run); pass --apply only after migration 0020
 (citation_source_dataset registration for echr_text_echr) is applied and owner
 go-ahead is confirmed.
 """
